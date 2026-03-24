@@ -466,6 +466,7 @@ export function GenerationPanel() {
     replaceOutputsWithPostprocess &&
     displayPostprocessConfig?.on_failure === "show_error" &&
     Boolean(displayJob?.postprocessError);
+  const showRunningCancelControls = canInterruptCurrentGeneration;
   const shouldShowRawOutputs =
     displayJob && displayJob.outputs.length > 0
       ? !replaceOutputsWithPostprocess ||
@@ -830,8 +831,9 @@ export function GenerationPanel() {
                   sx={{
                     borderBottomLeftRadius: 0,
                     borderLeft: "1px solid rgba(255, 255, 255, 0.2)",
-                    borderRadius: 0,
+                    borderBottomRightRadius: showRunningCancelControls ? 0 : 4,
                     borderTopLeftRadius: 0,
+                    borderTopRightRadius: showRunningCancelControls ? 0 : 4,
                     minWidth: 44,
                     px: 1,
                   }}
@@ -842,37 +844,49 @@ export function GenerationPanel() {
               </Box>
             </span>
           </Tooltip>
-          <Button
-            aria-label="Interrupt current generation"
-            color="warning"
-            disabled={!canInterruptCurrentGeneration}
-            onClick={handleInterruptCurrent}
-            sx={{
-              borderLeft: "1px solid rgba(255, 255, 255, 0.2)",
-              borderRadius: 0,
-              minWidth: 48,
-              px: 1,
-            }}
-            variant="contained"
-          >
-            <Close />
-          </Button>
-          <Button
-            aria-label="Stop all generations"
-            color="error"
-            disabled={!canStopAllGenerations}
-            onClick={handleCancel}
-            sx={{
-              borderBottomLeftRadius: 0,
-              borderLeft: "1px solid rgba(255, 255, 255, 0.2)",
-              borderTopLeftRadius: 0,
-              minWidth: 48,
-              px: 1,
-            }}
-            variant="contained"
-          >
-            <Stop />
-          </Button>
+          {showRunningCancelControls ? (
+            <>
+              <Tooltip title="Cancel current generation" arrow>
+                <span style={{ display: "flex" }}>
+                  <Button
+                    aria-label="Cancel current generation"
+                    color="warning"
+                    disabled={!canInterruptCurrentGeneration}
+                    onClick={handleInterruptCurrent}
+                    sx={{
+                      borderLeft: "1px solid rgba(255, 255, 255, 0.2)",
+                      borderRadius: 0,
+                      minWidth: 48,
+                      px: 1,
+                    }}
+                    variant="contained"
+                  >
+                    <Close />
+                  </Button>
+                </span>
+              </Tooltip>
+              <Tooltip title="Cancel all generations" arrow>
+                <span style={{ display: "flex" }}>
+                  <Button
+                    aria-label="Cancel all generations"
+                    color="error"
+                    disabled={!canStopAllGenerations}
+                    onClick={handleCancel}
+                    sx={{
+                      borderBottomLeftRadius: 0,
+                      borderLeft: "1px solid rgba(255, 255, 255, 0.2)",
+                      borderTopLeftRadius: 0,
+                      minWidth: 48,
+                      px: 1,
+                    }}
+                    variant="contained"
+                  >
+                    <Stop />
+                  </Button>
+                </span>
+              </Tooltip>
+            </>
+          ) : null}
         </Box>
         {pipelineStatusText ? (
           <Typography

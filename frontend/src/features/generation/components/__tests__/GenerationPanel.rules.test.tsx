@@ -249,10 +249,10 @@ describe("GenerationPanel workflow rule hints", () => {
     render(<GenerationPanel />);
     expect(screen.getByRole("button", { name: "Generate" })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Interrupt current generation" }),
+      screen.getByRole("button", { name: "Cancel current generation" }),
     ).toBeEnabled();
     expect(
-      screen.getByRole("button", { name: "Stop all generations" }),
+      screen.getByRole("button", { name: "Cancel all generations" }),
     ).toBeEnabled();
     expect(screen.getByText("Preparing asset")).toBeInTheDocument();
   });
@@ -273,9 +273,9 @@ describe("GenerationPanel workflow rule hints", () => {
     render(<GenerationPanel />);
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Interrupt current generation" }),
+      screen.getByRole("button", { name: "Cancel current generation" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Stop all generations" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel all generations" }));
 
     expect(handleInterruptCurrent).toHaveBeenCalledTimes(1);
     expect(handleCancel).toHaveBeenCalledTimes(1);
@@ -321,6 +321,12 @@ describe("GenerationPanel workflow rule hints", () => {
     expect(
       screen.getByRole("button", { name: "Generate" }),
     ).toBeEnabled();
+    expect(
+      screen.queryByRole("button", { name: "Cancel current generation" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Cancel all generations" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Rendering generation")).toBeInTheDocument();
   });
 
