@@ -6,6 +6,7 @@ const defaultProps = {
   maskMode: "apply" as const,
   maskInverted: false,
   maskLabel: "Mask 1",
+  sam2PointMode: "add" as const,
   points: [],
   currentFramePointsCount: 0,
   isSam2Available: true,
@@ -23,6 +24,7 @@ const defaultProps = {
   hasMaskAsset: false,
   onSetMaskMode: vi.fn(),
   onSetMaskInverted: vi.fn(),
+  onSetSam2PointMode: vi.fn(),
 };
 
 describe("Sam2MaskPanel", () => {

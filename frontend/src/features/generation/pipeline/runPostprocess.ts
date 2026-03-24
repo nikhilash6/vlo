@@ -14,17 +14,23 @@ function normalizePostprocessingConfig(
   postprocessing: FrontendPostprocessOptions["postprocessing"],
 ): WorkflowPostprocessingConfig {
   const requestedStitchFps = toPositiveFps(postprocessing?.stitch_fps);
+  const config: WorkflowPostprocessingConfig = {
+    mode: postprocessing?.mode ?? DEFAULT_WORKFLOW_POSTPROCESSING.mode ?? "auto",
+    panel_preview:
+      postprocessing?.panel_preview ??
+      DEFAULT_WORKFLOW_POSTPROCESSING.panel_preview ??
+      "raw_outputs",
+    on_failure:
+      postprocessing?.on_failure ??
+      DEFAULT_WORKFLOW_POSTPROCESSING.on_failure ??
+      "fallback_raw",
+  };
 
-  if (!postprocessing) {
-    return { ...DEFAULT_WORKFLOW_POSTPROCESSING };
+  if (requestedStitchFps !== null) {
+    config.stitch_fps = requestedStitchFps;
   }
 
-  return {
-    mode: postprocessing.mode,
-    panel_preview: postprocessing.panel_preview,
-    on_failure: postprocessing.on_failure,
-    ...(requestedStitchFps !== null ? { stitch_fps: requestedStitchFps } : {}),
-  };
+  return config;
 }
 
 /**

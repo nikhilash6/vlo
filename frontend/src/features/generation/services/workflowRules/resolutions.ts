@@ -9,7 +9,7 @@ export function getSupportedWorkflowResolutions(
 
   const seen = new Set<number>();
   const supported: number[] = [];
-  for (const resolution of rawResolutions.resolutions) {
+  for (const resolution of rawResolutions.resolutions ?? []) {
     const normalized = toPositiveInteger(resolution);
     if (normalized === null || seen.has(normalized)) continue;
     seen.add(normalized);

@@ -107,7 +107,7 @@ function resolveActiveNodeName(
   return (
     normalizeNodeName(workflowMeta?.title) ??
     resolveGraphNodeName(graphData, nodeId) ??
-    normalizeNodeName(workflowRules?.nodes[nodeId]?.node_title) ??
+    normalizeNodeName(workflowRules?.nodes?.[nodeId]?.node_title) ??
     normalizeNodeName(workflowNodeRecord?.class_type)
   );
 }

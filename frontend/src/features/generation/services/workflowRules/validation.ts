@@ -11,13 +11,13 @@ export function isWorkflowInputRequired(
   rules: WorkflowRules | null | undefined,
   inputId: string,
 ): boolean {
-  return rules?.nodes[inputId]?.present?.required !== false;
+  return rules?.nodes?.[inputId]?.present?.required !== false;
 }
 
 function hasExplicitInputValidation(
   rules: WorkflowRules | null | undefined,
 ): boolean {
-  return Boolean(rules?.validation?.inputs.length);
+  return Boolean(rules?.validation?.inputs?.length);
 }
 
 function resolveInputValidationRules(
@@ -27,14 +27,14 @@ function resolveInputValidationRules(
     return [];
   }
 
-  if (rules.validation?.inputs.length) {
+  if (rules.validation?.inputs?.length) {
     return rules.validation.inputs;
   }
 
   const conditions = rules.input_conditions ?? [];
   return conditions.map((condition) => ({
     kind: "at_least_n" as const,
-    inputs: condition.inputs,
+    inputs: condition.inputs ?? [],
     min: 1,
     ...(condition.message ? { message: condition.message } : {}),
   }));
@@ -50,7 +50,7 @@ function messageForValidationRule(rule: WorkflowInputValidationRule): string {
   }
 
   if (rule.kind === "at_least_n") {
-    const listedInputs = rule.inputs.join(", ");
+    const listedInputs = (rule.inputs ?? []).join(", ");
     if (rule.min === 1) {
       return `Provide at least one of the following inputs: ${listedInputs}`;
     }
@@ -83,7 +83,8 @@ export function findUnsatisfiedInputValidationRules(
         ];
       }
 
-      const provided = rule.inputs.filter((inputId) =>
+      const ruleInputs = rule.inputs ?? [];
+      const provided = ruleInputs.filter((inputId) =>
         providedInputIds.has(inputId),
       ).length;
       if (provided >= rule.min) {
@@ -93,7 +94,7 @@ export function findUnsatisfiedInputValidationRules(
       return [
         {
           kind: rule.kind,
-          inputs: rule.inputs,
+          inputs: ruleInputs,
           min: rule.min,
           provided,
           message: messageForValidationRule(rule),
@@ -179,7 +180,9 @@ export function findUnsatisfiedInputConditions(
     if (condition.kind !== "at_least_one") {
       return false;
     }
-    return !condition.inputs.some((inputId) => providedInputIds.has(inputId));
+    return !(condition.inputs ?? []).some((inputId) =>
+      providedInputIds.has(inputId),
+    );
   });
 }
 

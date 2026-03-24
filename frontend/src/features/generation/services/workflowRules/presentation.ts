@@ -16,7 +16,7 @@ import { isRecord } from "../parsers";
 import { buildWorkflowInputId, getWorkflowInputId } from "../../utils/workflowInputs";
 
 function hasPresentOverrides(
-  present: WorkflowRuleNodePresent | undefined,
+  present: WorkflowRuleNodePresent | null | undefined,
 ): boolean {
   if (!present) return false;
   const keys = Object.keys(present);
@@ -167,11 +167,12 @@ export function resolvePresentedInputsFromRules(
   const conditioningRoles = resolveConditioningRoles(inferredInputs, workflow);
   const resolved: WorkflowInput[] = [];
   const derivedMaskMappings: DerivedMaskMapping[] = [];
+  const ruleNodes = rules.nodes ?? {};
 
   for (const inferred of inferredInputs) {
-    const nodeRule = rules.nodes[inferred.nodeId];
+    const nodeRule = ruleNodes[inferred.nodeId];
     const present = nodeRule?.present;
-    const selectionConfig = toSelectionConfig(nodeRule?.selection);
+    const selectionConfig = toSelectionConfig(nodeRule?.selection ?? undefined);
     if (nodeRule?.ignore) {
       continue;
     }
@@ -254,10 +255,10 @@ export function resolvePresentedInputsFromRules(
     resolved.push(nextInput);
   }
 
-  for (const [nodeId, nodeRule] of Object.entries(rules.nodes)) {
+  for (const [nodeId, nodeRule] of Object.entries(ruleNodes)) {
     if (inferredMap.has(nodeId) || nodeRule.ignore) continue;
     const present = nodeRule.present;
-    const selectionConfig = toSelectionConfig(nodeRule.selection);
+    const selectionConfig = toSelectionConfig(nodeRule.selection ?? undefined);
     if (!present || present.enabled === false) continue;
     if (!present.input_type) {
       presentationWarnings.push(

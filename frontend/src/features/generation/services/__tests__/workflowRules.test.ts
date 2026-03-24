@@ -209,7 +209,7 @@ describe("resolvePresentedInputs", () => {
       ],
     });
 
-    expect(rules.nodes["68"]?.present?.required).toBe(false);
+    expect(rules.nodes?.["68"]?.present?.required).toBe(false);
     expect(rules.input_conditions).toEqual([
       {
         kind: "at_least_one",

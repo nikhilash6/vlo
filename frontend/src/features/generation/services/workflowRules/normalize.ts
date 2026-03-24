@@ -505,7 +505,7 @@ function normalizeInputConditions(
     return undefined;
   }
 
-  if (validation.inputs.length === 0) {
+  if ((validation.inputs ?? []).length === 0) {
     validation.inputs = normalizedConditions.map((condition) => ({
       kind: "at_least_n",
       inputs: condition.inputs,
@@ -700,11 +700,11 @@ function normalizeAspectRatioProcessing(
     postprocess: {
       enabled: arpPostprocess.enabled !== false,
       mode:
-        typeof arpPostprocess.mode === "string"
+        arpPostprocess.mode === "stretch_exact"
           ? arpPostprocess.mode
           : "stretch_exact",
       apply_to:
-        typeof arpPostprocess.apply_to === "string"
+        arpPostprocess.apply_to === "all_visual_outputs"
           ? arpPostprocess.apply_to
           : "all_visual_outputs",
     },

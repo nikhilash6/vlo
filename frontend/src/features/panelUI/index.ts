@@ -14,7 +14,7 @@ export { AssetDropSlot } from "./components/AssetDropSlot";
 export type {
   AssetDropSlotProps,
   AssetDropSlotValue,
-} from "./components/AssetDropSlot";
+} from "./components/assetDropSlotTypes";
 export { BufferedInput } from "./components/BufferedInput";
 export {
   TextInput,

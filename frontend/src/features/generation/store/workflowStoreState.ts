@@ -32,8 +32,6 @@ import {
   upsertTempWorkflowOption,
   upsertWorkflowOption,
 } from "./workflowCatalog";
-import type { WorkflowInput } from "../types";
-
 interface WorkflowStoreStateOptions {
   getNextWorkflowLoadRequestId: () => number;
   isCurrentWorkflowLoadRequestId: (requestId: number) => boolean;
@@ -362,7 +360,7 @@ export function buildWorkflowStoreState(
           activeWorkflowRules: rules,
           rulesWorkflowSourceId: rulesSourceId,
           activeRulesWarnings: rulesWarnings,
-          maskCropMode: rules.mask_cropping.mode,
+          maskCropMode: rules.mask_cropping?.mode ?? "crop",
         });
 
         if (isTempWorkflow && tempWorkflow) {

@@ -21,27 +21,27 @@ export const test = base.extend<{
     /** An EditorComponent instance without project setup — for tests that need the landing page. */
     editorNoSetup: EditorComponent;
 }>({
-    editor: async ({ page }, use) => {
+    editor: async ({ page }, runFixture) => {
         const editor = new EditorComponent(page);
         await editor.setup();
-        await use(editor);
+        await runFixture(editor);
     },
 
-    editorWithClips: async ({ page }, use) => {
+    editorWithClips: async ({ page }, runFixture) => {
         const editor = new EditorComponent(page);
         await editor.setup('project_v2_with_clips');
-        await use(editor);
+        await runFixture(editor);
     },
 
-    editorWithAudioTrack: async ({ page }, use) => {
+    editorWithAudioTrack: async ({ page }, runFixture) => {
         const editor = new EditorComponent(page);
         await editor.setup('project_v3_with_audio_track');
-        await use(editor);
+        await runFixture(editor);
     },
 
-    editorNoSetup: async ({ page }, use) => {
+    editorNoSetup: async ({ page }, runFixture) => {
         const editor = new EditorComponent(page);
-        await use(editor);
+        await runFixture(editor);
     },
 });
 

@@ -52,7 +52,7 @@ export async function installWebSocketMock(page: Page) {
                 readyState: 0, // CONNECTING
                 binaryType: 'blob',
 
-                send(_data: unknown) {
+                send() {
                     // No-op: mock swallows outbound messages
                 },
 

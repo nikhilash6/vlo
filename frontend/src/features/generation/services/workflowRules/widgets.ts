@@ -36,6 +36,20 @@ function getDerivedWidgetNodeId(derivedWidgetId: string): string {
   return `${DERIVED_WIDGET_NODE_ID_PREFIX}${derivedWidgetId}`;
 }
 
+function toOptionalString(value: string | null | undefined): string | undefined {
+  return value ?? undefined;
+}
+
+function toOptionalNumber(value: number | null | undefined): number | undefined {
+  return value ?? undefined;
+}
+
+function toOptionalBoolean(
+  value: boolean | null | undefined,
+): boolean | undefined {
+  return value ?? undefined;
+}
+
 function resolveDualSamplerDenoiseWidget(
   workflow: Record<string, unknown>,
   rule: WorkflowDualSamplerDenoiseRule,
@@ -91,9 +105,9 @@ function resolveDualSamplerDenoiseWidget(
       step,
       control: "slider",
       valueType: "float",
-      groupId: rule.group_id,
-      groupTitle: rule.group_title,
-      groupOrder: rule.group_order,
+      groupId: toOptionalString(rule.group_id),
+      groupTitle: toOptionalString(rule.group_title),
+      groupOrder: toOptionalNumber(rule.group_order),
     },
   };
 }
@@ -122,7 +136,8 @@ export function resolveWidgetInputsFromRules(
     return [];
   }
 
-  const nodesWithWidgets = Object.entries(rules.nodes).filter(
+  const ruleNodes = rules.nodes ?? {};
+  const nodesWithWidgets = Object.entries(ruleNodes).filter(
     ([, nodeRule]) => nodeRule.widgets && Object.keys(nodeRule.widgets).length > 0,
   );
   console.info(
@@ -138,7 +153,7 @@ export function resolveWidgetInputsFromRules(
 
   const rawWidgets: WorkflowWidgetInput[] = [];
 
-  for (const [nodeId, nodeRule] of Object.entries(rules.nodes)) {
+  for (const [nodeId, nodeRule] of Object.entries(ruleNodes)) {
     if (nodeRule.ignore) continue;
     const widgetDefs = nodeRule.widgets;
     if (!widgetDefs) continue;
@@ -169,18 +184,18 @@ export function resolveWidgetInputsFromRules(
       const config: WidgetInputConfig = {
         label: entry.label ?? param,
         controlAfterGenerate: entry.control_after_generate ?? false,
-        defaultRandomize: entry.default_randomize,
-        frontendOnly: entry.frontend_only,
-        hidden: entry.hidden,
-        groupId: entry.group_id,
-        groupTitle: entry.group_title,
-        groupOrder: entry.group_order,
-        min: entry.min,
-        max: entry.max,
+        defaultRandomize: toOptionalBoolean(entry.default_randomize),
+        frontendOnly: toOptionalBoolean(entry.frontend_only),
+        hidden: toOptionalBoolean(entry.hidden),
+        groupId: toOptionalString(entry.group_id),
+        groupTitle: toOptionalString(entry.group_title),
+        groupOrder: toOptionalNumber(entry.group_order),
+        min: toOptionalNumber(entry.min),
+        max: toOptionalNumber(entry.max),
         defaultValue: entry.default,
-        nodeTitle: nodeRule.node_title,
-        valueType: entry.value_type,
-        options: entry.options,
+        nodeTitle: toOptionalString(nodeRule.node_title),
+        valueType: entry.value_type ?? undefined,
+        options: entry.options ?? undefined,
       };
       if (config.hidden) {
         continue;

@@ -104,7 +104,6 @@ export const collectVideoInputs: Processor<FrontendPreprocessContext> = {
     for (const [inputId, value] of Object.entries(ctx.slotValues)) {
       throwIfAborted(ctx.signal);
       const input = inputById.get(inputId);
-      const dispatch = input?.dispatch;
 
       if (value.type !== "video" && value.type !== "video_selection") {
         continue;
@@ -146,8 +145,8 @@ export const collectVideoInputs: Processor<FrontendPreprocessContext> = {
         } else {
           ctx.videoInputs[getNodeInputRequestKey(input, inputById)] =
             await normalizeVideoSelection(
-            value.selection,
-            value.preparedVideoFile,
+              value.selection,
+              value.preparedVideoFile,
             );
           throwIfAborted(ctx.signal);
         }

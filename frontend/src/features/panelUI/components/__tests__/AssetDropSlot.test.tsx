@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { getExternalFileDragHighlight } from "../AssetDropSlot";
+import { getExternalFileDragHighlight } from "../assetDropSlotUtils";
+
+function createDragData(type: string): Pick<DataTransfer, "types" | "items" | "files"> {
+  return {
+    types: ["Files"],
+    items: [{ kind: "file", type }],
+    files: [],
+  } as unknown as Pick<DataTransfer, "types" | "items" | "files">;
+}
 
 describe("getExternalFileDragHighlight", () => {
   it("treats matching typed file items as compatible", () => {
     const highlight = getExternalFileDragHighlight(
-      {
-        types: ["Files"],
-        items: [{ kind: "file", type: "image/png" }] as DataTransferItem[],
-        files: [] as FileList,
-      },
+      createDragData("image/png"),
       ["image"],
     );
 
@@ -18,11 +22,7 @@ describe("getExternalFileDragHighlight", () => {
 
   it("treats known mismatched file items as incompatible", () => {
     const highlight = getExternalFileDragHighlight(
-      {
-        types: ["Files"],
-        items: [{ kind: "file", type: "video/mp4" }] as DataTransferItem[],
-        files: [] as FileList,
-      },
+      createDragData("video/mp4"),
       ["image"],
     );
 
@@ -31,11 +31,7 @@ describe("getExternalFileDragHighlight", () => {
 
   it("falls back to a neutral highlight when file items expose no type yet", () => {
     const highlight = getExternalFileDragHighlight(
-      {
-        types: ["Files"],
-        items: [{ kind: "file", type: "" }] as DataTransferItem[],
-        files: [] as FileList,
-      },
+      createDragData(""),
       ["image"],
     );
 

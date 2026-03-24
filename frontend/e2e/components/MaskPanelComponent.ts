@@ -1,4 +1,4 @@
-import { Page, Locator } from '@playwright/test';
+import { Page } from '@playwright/test';
 
 type MaskType = 'Circle' | 'Rectangle' | 'Triangle' | 'Sam2';
 type MaskMode = 'Apply' | 'Preview' | 'Off';

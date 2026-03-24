@@ -78,6 +78,7 @@ describe("MaskPanel", () => {
   const mockSelectMask = vi.fn();
   const mockSetMaskMode = vi.fn();
   const mockSetMaskInverted = vi.fn();
+  const mockSetSam2PointMode = vi.fn();
   const mockClearSam2Points = vi.fn();
   const mockClearSam2CurrentFramePoints = vi.fn();
   const mockGenerateSam2FramePreview = vi.fn();
@@ -101,6 +102,8 @@ describe("MaskPanel", () => {
       setMaskMode: mockSetMaskMode,
       maskInverted: false,
       setMaskInverted: mockSetMaskInverted,
+      sam2PointMode: "add",
+      setSam2PointMode: mockSetSam2PointMode,
       sam2Points: [],
       sam2CurrentFramePointsCount: 0,
       isSam2EditorOpen: false,
