@@ -160,6 +160,7 @@ export interface GenerationExecutionState {
     count?: number,
   ) => Promise<void>;
   processGenerationQueue: () => Promise<void>;
+  clearGenerationQueue: () => void;
   interruptCurrentGeneration: () => Promise<void>;
   cancelGeneration: () => Promise<void>;
 }

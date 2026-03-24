@@ -914,4 +914,66 @@ describe("useGenerationStore pipeline phases", () => {
     expect(useGenerationStore.getState().generationQueue).toHaveLength(1);
     expect(mockInterrupt).toHaveBeenCalledTimes(1);
   });
+
+  it("clears queued future generations without interrupting the active one", () => {
+    const runningJob = {
+      ...makeQueuedJob("prompt-running"),
+      status: "running" as const,
+    };
+    useGenerationStore.setState({
+      jobs: new Map([[runningJob.id, runningJob]]),
+      activeJobId: runningJob.id,
+      generationQueue: [
+        {
+          id: "queued-1",
+          createdAt: Date.now(),
+          workflow: {
+            workflow: {},
+            graphData: null,
+            workflowId: "wf.json",
+            workflowInputs: [],
+          },
+          preprocess: {
+            slotValues: {},
+            derivedMaskMappings: [],
+            projectConfig: {
+              aspectRatio: "16:9",
+              fps: 24,
+            },
+            targetResolution: 1080,
+            maskCropMode: "crop",
+            maskCropDilation: 0.1,
+          },
+          submission: {
+            widgetInputs: {},
+            widgetModes: {},
+            derivedWidgetInputs: {},
+          },
+          metadata: {
+            generationMetadata: {
+              source: "generated",
+              workflowName: "Workflow Display Name",
+              inputs: [],
+              targetResolution: 1080,
+            },
+            workflowWarnings: [],
+          },
+          postprocess: {
+            config: {
+              mode: "auto",
+              panel_preview: "raw_outputs",
+              on_failure: "fallback_raw",
+            },
+          },
+        },
+      ],
+    });
+
+    useGenerationStore.getState().clearGenerationQueue();
+
+    const state = useGenerationStore.getState();
+    expect(state.generationQueue).toHaveLength(0);
+    expect(state.activeJobId).toBe(runningJob.id);
+    expect(mockInterrupt).not.toHaveBeenCalled();
+  });
 });

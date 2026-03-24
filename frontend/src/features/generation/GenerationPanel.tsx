@@ -244,7 +244,7 @@ export function GenerationPanel() {
     inputValidationFailures,
     isRunning,
     canInterruptCurrentGeneration,
-    canStopAllGenerations,
+    canClearQueuedGenerations,
     pipelineStatusText,
     isExtractingSelection,
     generateButtonLabel,
@@ -256,7 +256,7 @@ export function GenerationPanel() {
     // Handlers
     handleGenerate,
     handleInterruptCurrent,
-    handleCancel,
+    handleClearQueue,
     handleUrlSave,
     handleWorkflowChange,
     handleRetryWorkflow,
@@ -865,13 +865,13 @@ export function GenerationPanel() {
                   </Button>
                 </span>
               </Tooltip>
-              <Tooltip title="Cancel all generations" arrow>
+              <Tooltip title="Clear queue" arrow>
                 <span style={{ display: "flex" }}>
                   <Button
-                    aria-label="Cancel all generations"
+                    aria-label="Clear queue"
                     color="error"
-                    disabled={!canStopAllGenerations}
-                    onClick={handleCancel}
+                    disabled={!canClearQueuedGenerations}
+                    onClick={handleClearQueue}
                     sx={{
                       borderBottomLeftRadius: 0,
                       borderLeft: "1px solid rgba(255, 255, 255, 0.2)",

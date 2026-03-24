@@ -42,7 +42,7 @@ function makeHookState(overrides: Record<string, unknown> = {}) {
     isRunning: false,
     isPipelineBusy: false,
     canInterruptCurrentGeneration: false,
-    canStopAllGenerations: false,
+    canClearQueuedGenerations: false,
     isPipelineInterruptible: false,
     isPostprocessing: false,
     pipelineStatusText: null,
@@ -55,7 +55,7 @@ function makeHookState(overrides: Record<string, unknown> = {}) {
     handleRetryWorkflow: vi.fn(),
     handleGenerate: vi.fn(),
     handleInterruptCurrent: vi.fn(),
-    handleCancel: vi.fn(),
+    handleClearQueue: vi.fn(),
     handleUrlSave: vi.fn(),
     handleWorkflowChange: vi.fn(),
     handleDismissWorkflowWarning: vi.fn(),
@@ -240,7 +240,7 @@ describe("GenerationPanel workflow rule hints", () => {
       makeHookState({
         isPipelineBusy: true,
         canInterruptCurrentGeneration: true,
-        canStopAllGenerations: true,
+        canClearQueuedGenerations: true,
         isPipelineInterruptible: true,
         pipelineStatusText: "Preparing asset",
       }),
@@ -252,21 +252,21 @@ describe("GenerationPanel workflow rule hints", () => {
       screen.getByRole("button", { name: "Cancel current generation" }),
     ).toBeEnabled();
     expect(
-      screen.getByRole("button", { name: "Cancel all generations" }),
+      screen.getByRole("button", { name: "Clear queue" }),
     ).toBeEnabled();
     expect(screen.getByText("Preparing asset")).toBeInTheDocument();
   });
 
-  it("routes current interrupt and stop-all actions separately", () => {
+  it("routes current interrupt and clear-queue actions separately", () => {
     const handleInterruptCurrent = vi.fn();
-    const handleCancel = vi.fn();
+    const handleClearQueue = vi.fn();
     (useGenerationPanel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
       makeHookState({
         canGenerate: true,
         canInterruptCurrentGeneration: true,
-        canStopAllGenerations: true,
+        canClearQueuedGenerations: true,
         handleInterruptCurrent,
-        handleCancel,
+        handleClearQueue,
       }),
     );
 
@@ -275,10 +275,10 @@ describe("GenerationPanel workflow rule hints", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Cancel current generation" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Cancel all generations" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear queue" }));
 
     expect(handleInterruptCurrent).toHaveBeenCalledTimes(1);
-    expect(handleCancel).toHaveBeenCalledTimes(1);
+    expect(handleClearQueue).toHaveBeenCalledTimes(1);
   });
 
   it("shows the active node name while running", () => {
@@ -325,7 +325,7 @@ describe("GenerationPanel workflow rule hints", () => {
       screen.queryByRole("button", { name: "Cancel current generation" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Cancel all generations" }),
+      screen.queryByRole("button", { name: "Clear queue" }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Rendering generation")).toBeInTheDocument();
   });

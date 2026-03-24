@@ -436,6 +436,10 @@ export function buildExecutionStoreState(
 
     processGenerationQueue,
 
+    clearGenerationQueue: () => {
+      set({ generationQueue: [] });
+    },
+
     interruptCurrentGeneration: async () => {
       await interruptGeneration({ clearQueue: false });
     },

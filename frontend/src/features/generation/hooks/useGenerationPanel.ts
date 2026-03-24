@@ -127,6 +127,7 @@ export function useGenerationPanel() {
   const postprocessingCount = useGenerationStore(
     (s) => s.postprocessingJobIds.length,
   );
+  const clearGenerationQueue = useGenerationStore((s) => s.clearGenerationQueue);
   const interruptCurrentGeneration = useGenerationStore(
     (s) => s.interruptCurrentGeneration,
   );
@@ -416,9 +417,9 @@ export function useGenerationPanel() {
     derivedMaskMappings,
   ]);
 
-  const handleCancel = useCallback(() => {
-    useGenerationStore.getState().cancelGeneration();
-  }, []);
+  const handleClearQueue = useCallback(() => {
+    clearGenerationQueue();
+  }, [clearGenerationQueue]);
 
   const handleInterruptCurrent = useCallback(() => {
     void interruptCurrentGeneration();
@@ -774,7 +775,7 @@ export function useGenerationPanel() {
   const isPostprocessing = postprocessingCount > 0;
   const isPipelineBusy = isPreprocessing || isRunning || hasQueuedGenerations;
   const canInterruptCurrentGeneration = isPreprocessing || isRunning;
-  const canStopAllGenerations = isPipelineBusy;
+  const canClearQueuedGenerations = hasQueuedGenerations;
   const isPipelineInterruptible = isPipelineBusy;
   const queueStatusText = hasQueuedGenerations
     ? `${queuedGenerationCount} queued${isRunning || isPreprocessing ? " after current" : ""}`
@@ -939,7 +940,7 @@ export function useGenerationPanel() {
     isRunning,
     isPipelineBusy,
     canInterruptCurrentGeneration,
-    canStopAllGenerations,
+    canClearQueuedGenerations,
     isPipelineInterruptible,
     isPostprocessing,
     pipelineStatusText,
@@ -958,7 +959,7 @@ export function useGenerationPanel() {
     // Handlers
     handleGenerate,
     handleInterruptCurrent,
-    handleCancel,
+    handleClearQueue,
     handleUrlSave,
     handleWorkflowChange,
     handleRetryWorkflow,
