@@ -300,6 +300,67 @@ export function buildExecutionStoreState(
     }
   }
 
+  async function interruptGeneration(
+    options: { clearQueue: boolean },
+  ): Promise<void> {
+    const {
+      pipelineStatus,
+      preprocessAbortController,
+      pipelineRunToken,
+      activeJobId,
+      jobs,
+    } = get();
+
+    if (options.clearQueue) {
+      set({ generationQueue: [] });
+    }
+
+    if (pipelineStatus.phase === "preprocessing") {
+      preprocessAbortController?.abort();
+      set({
+        pipelineRunToken: pipelineRunToken + 1,
+        preprocessAbortController: null,
+        pipelineStatus: IDLE_PIPELINE_STATUS,
+      });
+      if (!options.clearQueue) {
+        void processGenerationQueue();
+      }
+      return;
+    }
+
+    const activeJob = activeJobId ? jobs.get(activeJobId) : null;
+    if (!isActiveGenerationJob(activeJob)) {
+      if (!options.clearQueue) {
+        void processGenerationQueue();
+      }
+      return;
+    }
+
+    try {
+      await comfyApi.interrupt();
+      set((state) =>
+        markActiveJobError(state, "Generation cancelled by user", {
+          completedAt: Date.now(),
+        }),
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? `Cancel failed: ${error.message}`
+          : "Cancel failed: ComfyUI is unreachable";
+      set((state) =>
+        markActiveJobError(state, message, {
+          nextConnectionStatus: "error",
+          completedAt: Date.now(),
+        }),
+      );
+    }
+
+    if (!options.clearQueue) {
+      void processGenerationQueue();
+    }
+  }
+
   return {
     pipelineStatus: IDLE_PIPELINE_STATUS,
     pipelineRunToken: 0,
@@ -375,51 +436,12 @@ export function buildExecutionStoreState(
 
     processGenerationQueue,
 
+    interruptCurrentGeneration: async () => {
+      await interruptGeneration({ clearQueue: false });
+    },
+
     cancelGeneration: async () => {
-      const {
-        pipelineStatus,
-        preprocessAbortController,
-        pipelineRunToken,
-        activeJobId,
-        jobs,
-      } = get();
-
-      set({ generationQueue: [] });
-
-      if (pipelineStatus.phase === "preprocessing") {
-        preprocessAbortController?.abort();
-        set({
-          pipelineRunToken: pipelineRunToken + 1,
-          preprocessAbortController: null,
-          pipelineStatus: IDLE_PIPELINE_STATUS,
-        });
-        return;
-      }
-
-      const activeJob = activeJobId ? jobs.get(activeJobId) : null;
-      if (!isActiveGenerationJob(activeJob)) {
-        return;
-      }
-
-      try {
-        await comfyApi.interrupt();
-        set((state) =>
-          markActiveJobError(state, "Generation cancelled by user", {
-            completedAt: Date.now(),
-          }),
-        );
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? `Cancel failed: ${error.message}`
-            : "Cancel failed: ComfyUI is unreachable";
-        set((state) =>
-          markActiveJobError(state, message, {
-            nextConnectionStatus: "error",
-            completedAt: Date.now(),
-          }),
-        );
-      }
+      await interruptGeneration({ clearQueue: true });
     },
   };
 }

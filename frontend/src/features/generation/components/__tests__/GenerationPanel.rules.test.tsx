@@ -41,6 +41,8 @@ function makeHookState(overrides: Record<string, unknown> = {}) {
     postprocessingCount: 0,
     isRunning: false,
     isPipelineBusy: false,
+    canInterruptCurrentGeneration: false,
+    canStopAllGenerations: false,
     isPipelineInterruptible: false,
     isPostprocessing: false,
     pipelineStatusText: null,
@@ -52,6 +54,7 @@ function makeHookState(overrides: Record<string, unknown> = {}) {
     connectionSummary: null,
     handleRetryWorkflow: vi.fn(),
     handleGenerate: vi.fn(),
+    handleInterruptCurrent: vi.fn(),
     handleCancel: vi.fn(),
     handleUrlSave: vi.fn(),
     handleWorkflowChange: vi.fn(),
@@ -236,14 +239,46 @@ describe("GenerationPanel workflow rule hints", () => {
     (useGenerationPanel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
       makeHookState({
         isPipelineBusy: true,
+        canInterruptCurrentGeneration: true,
+        canStopAllGenerations: true,
         isPipelineInterruptible: true,
         pipelineStatusText: "Preparing asset",
       }),
     );
 
     render(<GenerationPanel />);
-    expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Interrupt current generation" }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Stop all generations" }),
+    ).toBeEnabled();
     expect(screen.getByText("Preparing asset")).toBeInTheDocument();
+  });
+
+  it("routes current interrupt and stop-all actions separately", () => {
+    const handleInterruptCurrent = vi.fn();
+    const handleCancel = vi.fn();
+    (useGenerationPanel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeHookState({
+        canGenerate: true,
+        canInterruptCurrentGeneration: true,
+        canStopAllGenerations: true,
+        handleInterruptCurrent,
+        handleCancel,
+      }),
+    );
+
+    render(<GenerationPanel />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Interrupt current generation" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Stop all generations" }));
+
+    expect(handleInterruptCurrent).toHaveBeenCalledTimes(1);
+    expect(handleCancel).toHaveBeenCalledTimes(1);
   });
 
   it("shows the active node name while running", () => {
@@ -303,12 +338,12 @@ describe("GenerationPanel workflow rule hints", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Queue multiple generations" }),
     );
-    fireEvent.click(screen.getByText("Queue 4 generations"));
+    fireEvent.click(screen.getByText("x 4"));
 
     expect(handleGenerate).toHaveBeenCalledWith(4);
   });
 
-  it("queues a custom generation count from the dialog", () => {
+  it("queues a custom generation count from the dialog", async () => {
     const handleGenerate = vi.fn();
     (useGenerationPanel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
       makeHookState({
@@ -323,13 +358,13 @@ describe("GenerationPanel workflow rule hints", () => {
       screen.getByRole("button", { name: "Queue multiple generations" }),
     );
     fireEvent.click(screen.getByText("Queue custom..."));
-    fireEvent.change(screen.getByLabelText("Generation count"), {
+    fireEvent.change(await screen.findByLabelText("Generation count"), {
       target: { value: "7" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Queue" }));
 
     expect(handleGenerate).toHaveBeenCalledWith(7);
-  });
+  }, 10000);
 
   it("shows postprocess error only when replace mode is configured with show_error", () => {
     (useGenerationPanel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(

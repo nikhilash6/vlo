@@ -1,8 +1,6 @@
 import {
-  useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type MouseEvent,
 } from "react";
@@ -33,6 +31,7 @@ import {
   Stop,
   PlayArrow,
   ArrowDropDown,
+  Close,
   OpenInNew,
   Timeline,
 } from "@mui/icons-material";
@@ -145,21 +144,38 @@ function LivePreview({
   animation: PreviewAnimation | null;
   fallbackUrl: string | null;
 }) {
-  const [tick, setTick] = useState(0);
-  const tickRef = useRef(0);
+  const animationKey = animation
+    ? `${animation.frameRate}:${animation.totalFrames}:${animation.frameUrls
+        .map((url) => url ?? "")
+        .join("|")}`
+    : fallbackUrl ?? "fallback";
 
-  const advanceTick = useCallback(() => {
-    tickRef.current += 1;
-    setTick(tickRef.current);
-  }, []);
+  return (
+    <LivePreviewPlayback
+      key={animationKey}
+      animation={animation}
+      fallbackUrl={fallbackUrl}
+    />
+  );
+}
+
+function LivePreviewPlayback({
+  animation,
+  fallbackUrl,
+}: {
+  animation: PreviewAnimation | null;
+  fallbackUrl: string | null;
+}) {
+  const [tick, setTick] = useState(0);
+  const animationFrameRate = animation?.frameRate ?? 0;
 
   useEffect(() => {
-    if (!animation || animation.frameRate <= 0) return;
-    tickRef.current = 0;
-    setTick(0);
-    const interval = setInterval(advanceTick, 1000 / animation.frameRate);
+    if (animationFrameRate <= 0) return;
+    const interval = setInterval(() => {
+      setTick((currentTick) => currentTick + 1);
+    }, 1000 / animationFrameRate);
     return () => clearInterval(interval);
-  }, [animation?.frameRate, animation?.totalFrames, advanceTick]);
+  }, [animationFrameRate]);
 
   if (animation) {
     const populated = animation.frameUrls.filter((u): u is string => u != null);
@@ -227,8 +243,8 @@ export function GenerationPanel() {
     workflowRuleWarnings,
     inputValidationFailures,
     isRunning,
-    isPipelineBusy,
-    isPipelineInterruptible,
+    canInterruptCurrentGeneration,
+    canStopAllGenerations,
     pipelineStatusText,
     isExtractingSelection,
     generateButtonLabel,
@@ -239,6 +255,7 @@ export function GenerationPanel() {
 
     // Handlers
     handleGenerate,
+    handleInterruptCurrent,
     handleCancel,
     handleUrlSave,
     handleWorkflowChange,
@@ -772,19 +789,7 @@ export function GenerationPanel() {
 
       {/* Generate / Cancel Button */}
       <Box sx={{ px: 2, py: 2 }}>
-        {isPipelineInterruptible ? (
-          <Button
-            data-testid="generation-generate-button"
-            fullWidth
-            variant="contained"
-            color="error"
-            startIcon={<Stop />}
-            onClick={handleCancel}
-            sx={{ textTransform: "none" }}
-          >
-            Stop
-          </Button>
-        ) : (
+        <Box sx={{ display: "flex", width: "100%" }}>
           <Tooltip
             title={
               !canGenerate && inputValidationFailures.length > 0
@@ -800,8 +805,8 @@ export function GenerationPanel() {
               tooltip: { sx: { whiteSpace: "pre-line" } },
             }}
           >
-            <span style={{ display: "block", width: "100%" }}>
-              <Box sx={{ display: "flex", width: "100%" }}>
+            <span style={{ display: "flex", flex: 1, minWidth: 0 }}>
+              <Box sx={{ display: "flex", flex: 1, minWidth: 0 }}>
                 <Button
                   data-testid="generation-generate-button"
                   fullWidth
@@ -825,6 +830,7 @@ export function GenerationPanel() {
                   sx={{
                     borderBottomLeftRadius: 0,
                     borderLeft: "1px solid rgba(255, 255, 255, 0.2)",
+                    borderRadius: 0,
                     borderTopLeftRadius: 0,
                     minWidth: 44,
                     px: 1,
@@ -836,7 +842,38 @@ export function GenerationPanel() {
               </Box>
             </span>
           </Tooltip>
-        )}
+          <Button
+            aria-label="Interrupt current generation"
+            color="warning"
+            disabled={!canInterruptCurrentGeneration}
+            onClick={handleInterruptCurrent}
+            sx={{
+              borderLeft: "1px solid rgba(255, 255, 255, 0.2)",
+              borderRadius: 0,
+              minWidth: 48,
+              px: 1,
+            }}
+            variant="contained"
+          >
+            <Close />
+          </Button>
+          <Button
+            aria-label="Stop all generations"
+            color="error"
+            disabled={!canStopAllGenerations}
+            onClick={handleCancel}
+            sx={{
+              borderBottomLeftRadius: 0,
+              borderLeft: "1px solid rgba(255, 255, 255, 0.2)",
+              borderTopLeftRadius: 0,
+              minWidth: 48,
+              px: 1,
+            }}
+            variant="contained"
+          >
+            <Stop />
+          </Button>
+        </Box>
         {pipelineStatusText ? (
           <Typography
             variant="caption"

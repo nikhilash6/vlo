@@ -92,6 +92,8 @@ function makeHookState(
     postprocessingCount: 0,
     isRunning: false,
     isPipelineBusy: false,
+    canInterruptCurrentGeneration: false,
+    canStopAllGenerations: false,
     isPipelineInterruptible: false,
     isPostprocessing: false,
     pipelineStatusText: null,
@@ -102,6 +104,7 @@ function makeHookState(
     connectionChipColor: "success",
     connectionSummary: null,
     handleGenerate: vi.fn(),
+    handleInterruptCurrent: vi.fn(),
     handleCancel: vi.fn(),
     handleUrlSave: vi.fn(),
     handleWorkflowChange: vi.fn(),
@@ -158,7 +161,7 @@ describe("GenerationPanel workflow save prompt", () => {
     );
 
     render(<GenerationPanel />);
-    fireEvent.click(screen.getByRole("button", { name: "Close editor" }));
+    fireEvent.click(screen.getByText("Close editor"));
 
     expect(setEditorOpen).toHaveBeenCalledWith(false);
     expect(screen.queryByText("Save workflow changes?")).not.toBeInTheDocument();

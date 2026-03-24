@@ -127,6 +127,9 @@ export function useGenerationPanel() {
   const postprocessingCount = useGenerationStore(
     (s) => s.postprocessingJobIds.length,
   );
+  const interruptCurrentGeneration = useGenerationStore(
+    (s) => s.interruptCurrentGeneration,
+  );
   const availableWorkflows = useGenerationStore((s) => s.availableWorkflows);
   const selectedWorkflowId = useGenerationStore((s) => s.selectedWorkflowId);
   const isWorkflowLoading = useGenerationStore((s) => s.isWorkflowLoading);
@@ -416,6 +419,10 @@ export function useGenerationPanel() {
   const handleCancel = useCallback(() => {
     useGenerationStore.getState().cancelGeneration();
   }, []);
+
+  const handleInterruptCurrent = useCallback(() => {
+    void interruptCurrentGeneration();
+  }, [interruptCurrentGeneration]);
 
   const handleUrlSave = useCallback(async () => {
     if (urlInput) {
@@ -722,7 +729,6 @@ export function useGenerationPanel() {
       setMediaInputFrame,
       setMediaInputTimelineSelection,
       workflowInputById,
-      workflowInputs,
     ],
   );
 
@@ -767,6 +773,8 @@ export function useGenerationPanel() {
   const hasQueuedGenerations = queuedGenerationCount > 0;
   const isPostprocessing = postprocessingCount > 0;
   const isPipelineBusy = isPreprocessing || isRunning || hasQueuedGenerations;
+  const canInterruptCurrentGeneration = isPreprocessing || isRunning;
+  const canStopAllGenerations = isPipelineBusy;
   const isPipelineInterruptible = isPipelineBusy;
   const queueStatusText = hasQueuedGenerations
     ? `${queuedGenerationCount} queued${isRunning || isPreprocessing ? " after current" : ""}`
@@ -930,6 +938,8 @@ export function useGenerationPanel() {
     postprocessingCount,
     isRunning,
     isPipelineBusy,
+    canInterruptCurrentGeneration,
+    canStopAllGenerations,
     isPipelineInterruptible,
     isPostprocessing,
     pipelineStatusText,
@@ -947,6 +957,7 @@ export function useGenerationPanel() {
 
     // Handlers
     handleGenerate,
+    handleInterruptCurrent,
     handleCancel,
     handleUrlSave,
     handleWorkflowChange,
