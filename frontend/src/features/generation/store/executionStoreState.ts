@@ -1,302 +1,379 @@
 import * as comfyApi from "../services/comfyuiApi";
-import {
-  DEFAULT_WORKFLOW_POSTPROCESSING,
-  type WorkflowRuleWarning,
-} from "../services/workflowRules";
+import { useProjectStore } from "../../project";
 import { mergeRuleWarnings } from "../services/warnings";
-import { frontendPreprocess } from "../utils/pipeline";
+import {
+  buildSubmittedGeneration,
+  createGenerationPlan,
+  prepareGenerationPlan,
+} from "../pipeline/generationPlan";
+import type { GenerationPlan, SlotValue } from "../pipeline/types";
 import { isAbortError } from "../pipeline/utils/abort";
+import type { WorkflowPostprocessingConfig } from "../types";
 import { createSubmissionErrorJob } from "./submission";
-import { buildGeneratedCreationMetadata, findPreparedMaskFallback } from "./metadata";
 import { IDLE_PIPELINE_STATUS, TEMP_WORKFLOW_ID } from "./constants";
 import {
   isActiveGenerationJob,
   markActiveJobError,
 } from "./jobMutations";
-import {
-  resolveWorkflowDisplayName,
-} from "./workflowCatalog";
+import { resolveWorkflowDisplayName } from "./workflowCatalog";
 import type {
   GenerationExecutionState,
   GenerationStoreGet,
   GenerationStoreSet,
 } from "./types";
 
-function getSaveImageWebsocketNodeIds(
-  workflow: Record<string, unknown> | null,
-): Set<string> {
-  const ids = new Set<string>();
-  if (!workflow) return ids;
+function resolvePostprocessConfig(
+  postprocessing:
+    | import("../services/workflowRules").WorkflowPostprocessingConfig
+    | null
+    | undefined,
+): WorkflowPostprocessingConfig {
+  const fallback: WorkflowPostprocessingConfig = {
+    mode: "auto",
+    panel_preview: "raw_outputs",
+    on_failure: "fallback_raw",
+  };
+  return {
+    mode: postprocessing?.mode ?? fallback.mode,
+    panel_preview: postprocessing?.panel_preview ?? fallback.panel_preview,
+    on_failure: postprocessing?.on_failure ?? fallback.on_failure,
+    ...(postprocessing?.stitch_fps != null
+      ? { stitch_fps: postprocessing.stitch_fps }
+      : {}),
+  };
+}
 
-  for (const [nodeId, node] of Object.entries(workflow)) {
-    if (typeof node !== "object" || node === null || Array.isArray(node)) {
-      continue;
-    }
-    const nodeClassType = (node as { class_type?: unknown }).class_type;
-    if (nodeClassType === "SaveImageWebsocket") {
-      ids.add(nodeId);
-    }
-  }
+function isComfyReadyForDispatch(
+  state: ReturnType<GenerationStoreGet>,
+): boolean {
+  return (
+    state.runtimeStatus?.comfyui.status === "connected" ||
+    state.connectionStatus === "connected"
+  );
+}
 
-  return ids;
+function buildGenerationPlanFromState(
+  state: ReturnType<GenerationStoreGet>,
+  slotValues: Record<string, SlotValue>,
+  widgetInputs: Record<string, string>,
+  widgetModes: Record<string, "fixed" | "randomize">,
+  derivedWidgetInputs: Record<string, string>,
+): GenerationPlan {
+  const workflowId =
+    state.selectedWorkflowId === TEMP_WORKFLOW_ID
+      ? state.rulesWorkflowSourceId
+      : state.selectedWorkflowId;
+  const workflowName = resolveWorkflowDisplayName(
+    state.availableWorkflows,
+    state.selectedWorkflowId,
+    workflowId,
+  );
+
+  return createGenerationPlan({
+    workflow: state.syncedWorkflow,
+    graphData: state.syncedGraphData,
+    workflowId,
+    workflowInputs: state.workflowInputs,
+    workflowName,
+    mediaInputs: state.mediaInputs,
+    slotValues,
+    derivedMaskMappings: state.derivedMaskMappings,
+    targetResolution: state.targetResolution,
+    maskCropMode: state.maskCropMode,
+    maskCropDilation: state.maskCropDilation,
+    widgetInputs,
+    widgetModes,
+    derivedWidgetInputs,
+    postprocessConfig: resolvePostprocessConfig(
+      state.activeWorkflowRules?.postprocessing,
+    ),
+    workflowWarnings: state.activeRulesWarnings,
+    projectConfig: {
+      aspectRatio: useProjectStore.getState().config.aspectRatio,
+      fps: useProjectStore.getState().config.fps,
+    },
+  });
+}
+
+function buildSubmissionErrorPatch(
+  get: GenerationStoreGet,
+  set: GenerationStoreSet,
+  error: unknown,
+): string {
+  const errorJob = createSubmissionErrorJob(error);
+  const updated = new Map(get().jobs);
+  updated.set(errorJob.id, errorJob);
+  set({
+    jobs: updated,
+    activeJobId: errorJob.id,
+    lastAppliedWidgetValues: {},
+    pipelineStatus: IDLE_PIPELINE_STATUS,
+    preprocessAbortController: null,
+  });
+  return errorJob.id;
 }
 
 export function buildExecutionStoreState(
   set: GenerationStoreSet,
   get: GenerationStoreGet,
 ): GenerationExecutionState {
+  let isProcessingQueue = false;
+
+  async function dispatchGenerationPlan(
+    plan: GenerationPlan,
+  ): Promise<string | null> {
+    const pipelineRunToken = get().pipelineRunToken + 1;
+    const preprocessAbortController = new AbortController();
+    set({
+      lastAppliedWidgetValues: {},
+      pipelineRunToken,
+      preprocessAbortController,
+      pipelineStatus: {
+        phase: "preprocessing",
+        message: "Preparing asset",
+        interruptible: true,
+      },
+    });
+
+    try {
+      const state = get();
+      const { wsClient, runtimeStatus, runtimeStatusError, connectionStatus } =
+        state;
+      if (!wsClient) {
+        throw new Error("Not connected to ComfyUI");
+      }
+      if (
+        runtimeStatus?.comfyui.status !== "connected" &&
+        connectionStatus !== "connected"
+      ) {
+        throw new Error(
+          runtimeStatusError ??
+            runtimeStatus?.comfyui.error ??
+            "ComfyUI is unavailable",
+        );
+      }
+
+      const prepared = await prepareGenerationPlan(plan, {
+        clientId: wsClient.currentClientId,
+        signal: preprocessAbortController.signal,
+      });
+      if (get().pipelineRunToken !== pipelineRunToken) {
+        return null;
+      }
+
+      const response = await comfyApi.generate(prepared.request, {
+        signal: preprocessAbortController.signal,
+      });
+      if (get().pipelineRunToken !== pipelineRunToken) {
+        return null;
+      }
+
+      const submitted = buildSubmittedGeneration(prepared, response);
+      set({
+        workflowRuleWarnings: mergeRuleWarnings(
+          plan.metadata.workflowWarnings,
+          submitted.responseWarnings,
+        ),
+        lastAppliedWidgetValues: submitted.appliedWidgetValues,
+      });
+
+      const newJob: import("../types").GenerationJob = {
+        id: submitted.promptId,
+        status: "queued",
+        progress: 0,
+        currentNode: null,
+        outputs: [],
+        error: null,
+        submittedAt: Date.now(),
+        completedAt: null,
+        postprocessConfig: plan.postprocess.config,
+        aspectRatioProcessing: submitted.aspectRatioProcessing,
+        generationMetadata: submitted.generationMetadata,
+        postprocessedPreview: null,
+        postprocessError: null,
+        usesSaveImageWebsocketOutputs: submitted.usesSaveImageWebsocketOutputs,
+        saveImageWebsocketNodeIds: submitted.saveImageWebsocketNodeIds,
+        preparedMaskFile: submitted.preparedMaskFile,
+      };
+
+      const updated = new Map(get().jobs);
+      updated.set(submitted.promptId, newJob);
+      set((state) => {
+        if (state.pipelineRunToken !== pipelineRunToken) {
+          return {};
+        }
+
+        const nextPreviewFrames = new Map(state.jobPreviewFrames);
+        const previewMode = newJob.postprocessConfig?.mode ?? "auto";
+        if (
+          newJob.usesSaveImageWebsocketOutputs &&
+          (previewMode === "auto" ||
+            previewMode === "stitch_frames_with_audio")
+        ) {
+          nextPreviewFrames.set(submitted.promptId, []);
+        } else {
+          nextPreviewFrames.delete(submitted.promptId);
+        }
+
+        return {
+          jobs: updated,
+          jobPreviewFrames: nextPreviewFrames,
+          activeJobId: submitted.promptId,
+          pipelineStatus: IDLE_PIPELINE_STATUS,
+          preprocessAbortController: null,
+        };
+      });
+
+      return submitted.promptId;
+    } catch (error) {
+      if (
+        isAbortError(error) ||
+        preprocessAbortController.signal.aborted ||
+        get().pipelineRunToken !== pipelineRunToken
+      ) {
+        set((state) => {
+          if (
+            state.pipelineRunToken !== pipelineRunToken &&
+            state.preprocessAbortController !== preprocessAbortController
+          ) {
+            return {};
+          }
+
+          return {
+            preprocessAbortController: null,
+            ...(state.pipelineStatus.phase === "preprocessing"
+              ? { pipelineStatus: IDLE_PIPELINE_STATUS }
+              : {}),
+          };
+        });
+        return null;
+      }
+
+      return buildSubmissionErrorPatch(get, set, error);
+    }
+  }
+
+  async function processGenerationQueue(): Promise<void> {
+    if (isProcessingQueue) {
+      return;
+    }
+
+    isProcessingQueue = true;
+    try {
+      while (true) {
+        const state = get();
+        const activeJob = state.activeJobId
+          ? state.jobs.get(state.activeJobId)
+          : null;
+        if (
+          state.pipelineStatus.phase === "preprocessing" ||
+          isActiveGenerationJob(activeJob)
+        ) {
+          return;
+        }
+        if (!state.wsClient || !isComfyReadyForDispatch(state)) {
+          return;
+        }
+
+        const [nextPlan, ...remainingQueue] = state.generationQueue;
+        if (!nextPlan) {
+          return;
+        }
+
+        set({ generationQueue: remainingQueue });
+        await dispatchGenerationPlan(nextPlan);
+      }
+    } finally {
+      isProcessingQueue = false;
+
+      const state = get();
+      const activeJob = state.activeJobId ? state.jobs.get(state.activeJobId) : null;
+      if (
+        state.generationQueue.length > 0 &&
+        state.pipelineStatus.phase !== "preprocessing" &&
+        !isActiveGenerationJob(activeJob) &&
+        state.wsClient &&
+        isComfyReadyForDispatch(state)
+      ) {
+        void processGenerationQueue();
+      }
+    }
+  }
+
   return {
     pipelineStatus: IDLE_PIPELINE_STATUS,
     pipelineRunToken: 0,
     preprocessAbortController: null,
     lastAppliedWidgetValues: {},
+    generationQueue: [],
+    postprocessingJobIds: [],
 
     submitGeneration: async (
       slotValues,
-      widgetInputs,
-      widgetModes,
-      derivedWidgetInputs,
+      widgetInputs = {},
+      widgetModes = {},
+      derivedWidgetInputs = {},
     ) => {
       const currentState = get();
       const activeJob = currentState.activeJobId
         ? currentState.jobs.get(currentState.activeJobId)
         : null;
       if (
-        currentState.pipelineStatus.phase !== "idle" ||
+        currentState.generationQueue.length > 0 ||
+        currentState.pipelineStatus.phase === "preprocessing" ||
         isActiveGenerationJob(activeJob)
       ) {
         return null;
       }
-
-      const pipelineRunToken = currentState.pipelineRunToken + 1;
-      const preprocessAbortController = new AbortController();
-      set({
-        lastAppliedWidgetValues: {},
-        pipelineRunToken,
-        preprocessAbortController,
-        pipelineStatus: {
-          phase: "preprocessing",
-          message: "Preparing asset",
-          interruptible: true,
-        },
-      });
-
-      try {
-        const {
-          wsClient,
-          syncedWorkflow,
-          syncedGraphData,
-          workflowInputs,
-          mediaInputs,
-          selectedWorkflowId,
-          availableWorkflows,
-          rulesWorkflowSourceId,
-          activeWorkflowRules,
-          activeRulesWarnings,
-          derivedMaskMappings,
-          isWorkflowLoading,
-          isWorkflowReady,
-          maskCropMode,
-          runtimeStatus,
-          runtimeStatusError,
-          targetResolution,
-        } = get();
-        if (!wsClient) throw new Error("Not connected to ComfyUI");
-        if (
-          runtimeStatus?.comfyui.status !== "connected" &&
-          currentState.connectionStatus !== "connected"
-        ) {
-          throw new Error(
-            runtimeStatusError ??
-              runtimeStatus?.comfyui.error ??
-              "ComfyUI is unavailable",
-          );
-        }
-        if (isWorkflowLoading || !isWorkflowReady) {
-          throw new Error("Workflow is still loading");
-        }
-        const workflowId =
-          selectedWorkflowId === TEMP_WORKFLOW_ID
-            ? rulesWorkflowSourceId
-            : selectedWorkflowId;
-        const workflowName = resolveWorkflowDisplayName(
-          availableWorkflows,
-          selectedWorkflowId,
-          workflowId,
+      if (currentState.isWorkflowLoading || !currentState.isWorkflowReady) {
+        return buildSubmissionErrorPatch(
+          get,
+          set,
+          new Error("Workflow is still loading"),
         );
-        const generationMetadata = buildGeneratedCreationMetadata(
-          workflowName,
-          workflowInputs,
-          mediaInputs,
-          targetResolution,
-        );
-
-        const request = await frontendPreprocess(
-          syncedWorkflow,
-          workflowId,
-          workflowInputs,
-          slotValues,
-          wsClient.currentClientId,
-          derivedMaskMappings,
-          get().maskCropDilation,
-          {
-            maskCropMode,
-            targetResolution,
-            signal: preprocessAbortController.signal,
-          },
-          syncedGraphData,
-        );
-        if (get().pipelineRunToken !== pipelineRunToken) {
-          return null;
-        }
-        if (widgetInputs && Object.keys(widgetInputs).length > 0) {
-          request.widgetInputs = widgetInputs;
-        }
-        if (widgetModes && Object.keys(widgetModes).length > 0) {
-          request.widgetModes = widgetModes;
-        }
-        if (derivedWidgetInputs && Object.keys(derivedWidgetInputs).length > 0) {
-          request.derivedWidgetInputs = derivedWidgetInputs;
-        }
-        const response = await comfyApi.generate(request, {
-          signal: preprocessAbortController.signal,
-        });
-        if (get().pipelineRunToken !== pipelineRunToken) {
-          return null;
-        }
-        const responseWarnings: WorkflowRuleWarning[] = Array.isArray(
-          response.workflow_warnings,
-        )
-          ? response.workflow_warnings
-          : [];
-        const appliedWidgetValues = response.applied_widget_values ?? {};
-        const aspectRatioProcessing = response.aspect_ratio_processing ?? null;
-        if (response.mask_crop_metadata) {
-          generationMetadata.maskCropMetadata = response.mask_crop_metadata;
-        }
-        if (response.comfyui_prompt) {
-          generationMetadata.comfyuiPrompt = response.comfyui_prompt;
-        }
-        if (response.comfyui_workflow) {
-          generationMetadata.comfyuiWorkflow = response.comfyui_workflow;
-        }
-
-        let preparedMaskFile = findPreparedMaskFallback(
-          slotValues,
-          derivedMaskMappings,
-          workflowInputs,
-        );
-        if (response.processed_mask_video) {
-          const binaryStr = atob(response.processed_mask_video);
-          const bytes = new Uint8Array(binaryStr.length);
-          for (let i = 0; i < binaryStr.length; i += 1) {
-            bytes[i] = binaryStr.charCodeAt(i);
-          }
-          preparedMaskFile = new File(
-            [bytes],
-            `generation-mask-${crypto.randomUUID()}.webm`,
-            {
-              type: "video/webm",
-            },
-          );
-        }
-        const saveImageWebsocketNodeIds = getSaveImageWebsocketNodeIds(
-          request.workflow,
-        );
-        const usesSaveImageWebsocketOutputs = saveImageWebsocketNodeIds.size > 0;
-        set({
-          workflowRuleWarnings: mergeRuleWarnings(
-            activeRulesWarnings,
-            responseWarnings,
-          ),
-          lastAppliedWidgetValues: appliedWidgetValues,
-        });
-
-        const newJob: import("../types").GenerationJob = {
-          id: response.prompt_id,
-          status: "queued",
-          progress: 0,
-          currentNode: null,
-          outputs: [],
-          error: null,
-          submittedAt: Date.now(),
-          completedAt: null,
-          postprocessConfig: activeWorkflowRules?.postprocessing ?? {
-            ...DEFAULT_WORKFLOW_POSTPROCESSING,
-          },
-          aspectRatioProcessing,
-          generationMetadata,
-          postprocessedPreview: null,
-          postprocessError: null,
-          usesSaveImageWebsocketOutputs,
-          saveImageWebsocketNodeIds,
-          preparedMaskFile,
-        };
-
-        const updated = new Map(get().jobs);
-        updated.set(response.prompt_id, newJob);
-        set((state) => {
-          if (state.pipelineRunToken !== pipelineRunToken) {
-            return {};
-          }
-          const nextPreviewFrames = new Map(state.jobPreviewFrames);
-          const previewMode = newJob.postprocessConfig?.mode ?? "auto";
-          if (
-            newJob.usesSaveImageWebsocketOutputs &&
-            (previewMode === "auto" ||
-              previewMode === "stitch_frames_with_audio")
-          ) {
-            nextPreviewFrames.set(response.prompt_id, []);
-          } else {
-            nextPreviewFrames.delete(response.prompt_id);
-          }
-          return {
-            jobs: updated,
-            jobPreviewFrames: nextPreviewFrames,
-            activeJobId: response.prompt_id,
-            pipelineStatus: IDLE_PIPELINE_STATUS,
-            preprocessAbortController: null,
-          };
-        });
-
-        return response.prompt_id;
-      } catch (error) {
-        if (
-          isAbortError(error) ||
-          preprocessAbortController.signal.aborted ||
-          get().pipelineRunToken !== pipelineRunToken
-        ) {
-          set((state) => {
-            if (
-              state.pipelineRunToken !== pipelineRunToken &&
-              state.preprocessAbortController !== preprocessAbortController
-            ) {
-              return {};
-            }
-
-            return {
-              preprocessAbortController: null,
-              ...(state.pipelineStatus.phase === "preprocessing"
-                ? { pipelineStatus: IDLE_PIPELINE_STATUS }
-                : {}),
-            };
-          });
-          return null;
-        }
-
-        const errorJob = createSubmissionErrorJob(error);
-        const updated = new Map(get().jobs);
-        updated.set(errorJob.id, errorJob);
-        set({
-          jobs: updated,
-          activeJobId: errorJob.id,
-          lastAppliedWidgetValues: {},
-          pipelineStatus: IDLE_PIPELINE_STATUS,
-          preprocessAbortController: null,
-        });
-        return errorJob.id;
       }
+
+      const plan = buildGenerationPlanFromState(
+        currentState,
+        slotValues,
+        widgetInputs,
+        widgetModes,
+        derivedWidgetInputs,
+      );
+      return dispatchGenerationPlan(plan);
     },
+
+    queueGeneration: async (
+      slotValues,
+      widgetInputs = {},
+      widgetModes = {},
+      derivedWidgetInputs = {},
+      count = 1,
+    ) => {
+      const safeCount = Math.max(1, Math.floor(count));
+      const currentState = get();
+      if (currentState.isWorkflowLoading || !currentState.isWorkflowReady) {
+        buildSubmissionErrorPatch(get, set, new Error("Workflow is still loading"));
+        return;
+      }
+
+      const plans = Array.from({ length: safeCount }, () =>
+        buildGenerationPlanFromState(
+          currentState,
+          slotValues,
+          widgetInputs,
+          widgetModes,
+          derivedWidgetInputs,
+        ),
+      );
+
+      set((state) => ({
+        generationQueue: [...state.generationQueue, ...plans],
+      }));
+      await processGenerationQueue();
+    },
+
+    processGenerationQueue,
 
     cancelGeneration: async () => {
       const {
@@ -306,6 +383,9 @@ export function buildExecutionStoreState(
         activeJobId,
         jobs,
       } = get();
+
+      set({ generationQueue: [] });
+
       if (pipelineStatus.phase === "preprocessing") {
         preprocessAbortController?.abort();
         set({
@@ -313,10 +393,6 @@ export function buildExecutionStoreState(
           preprocessAbortController: null,
           pipelineStatus: IDLE_PIPELINE_STATUS,
         });
-        return;
-      }
-
-      if (pipelineStatus.phase === "postprocessing") {
         return;
       }
 

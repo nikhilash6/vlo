@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../hooks/useGenerationPanel", () => ({
@@ -23,6 +23,7 @@ function makeHookState(overrides: Record<string, unknown> = {}) {
     handleTextValueCommit: vi.fn(),
     mediaInputs: {},
     latestPreviewUrl: null,
+    previewAnimation: null,
     comfyuiDirectUrl: "http://localhost:8188",
     workflowInputs: [],
     activeJob: null,
@@ -36,6 +37,8 @@ function makeHookState(overrides: Record<string, unknown> = {}) {
     workflowWarning: null,
     hasInferredInputs: false,
     workflowRuleWarnings: [],
+    queuedGenerationCount: 0,
+    postprocessingCount: 0,
     isRunning: false,
     isPipelineBusy: false,
     isPipelineInterruptible: false,
@@ -239,7 +242,7 @@ describe("GenerationPanel workflow rule hints", () => {
     );
 
     render(<GenerationPanel />);
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument();
     expect(screen.getByText("Preparing asset")).toBeInTheDocument();
   });
 
@@ -269,21 +272,63 @@ describe("GenerationPanel workflow rule hints", () => {
     expect(screen.getByText("42% — Node: Main sampler")).toBeInTheDocument();
   });
 
-  it("locks the button and shows rendering-generation status during postprocess", () => {
+  it("keeps generate available and shows rendering status during postprocess", () => {
     (useGenerationPanel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
       makeHookState({
-        isPipelineBusy: true,
         isPostprocessing: true,
+        postprocessingCount: 1,
         pipelineStatusText: "Rendering generation",
-        generateButtonLabel: "Rendering generation",
+        canGenerate: true,
       }),
     );
 
     render(<GenerationPanel />);
     expect(
-      screen.getByRole("button", { name: "Rendering generation" }),
-    ).toBeDisabled();
-    expect(screen.getAllByText("Rendering generation")).toHaveLength(2);
+      screen.getByRole("button", { name: "Generate" }),
+    ).toBeEnabled();
+    expect(screen.getByText("Rendering generation")).toBeInTheDocument();
+  });
+
+  it("opens the queue menu and dispatches a preset count", () => {
+    const handleGenerate = vi.fn();
+    (useGenerationPanel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeHookState({
+        canGenerate: true,
+        handleGenerate,
+      }),
+    );
+
+    render(<GenerationPanel />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Queue multiple generations" }),
+    );
+    fireEvent.click(screen.getByText("Queue 4 generations"));
+
+    expect(handleGenerate).toHaveBeenCalledWith(4);
+  });
+
+  it("queues a custom generation count from the dialog", () => {
+    const handleGenerate = vi.fn();
+    (useGenerationPanel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeHookState({
+        canGenerate: true,
+        handleGenerate,
+      }),
+    );
+
+    render(<GenerationPanel />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Queue multiple generations" }),
+    );
+    fireEvent.click(screen.getByText("Queue custom..."));
+    fireEvent.change(screen.getByLabelText("Generation count"), {
+      target: { value: "7" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Queue" }));
+
+    expect(handleGenerate).toHaveBeenCalledWith(7);
   });
 
   it("shows postprocess error only when replace mode is configured with show_error", () => {

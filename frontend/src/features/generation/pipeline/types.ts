@@ -9,6 +9,7 @@ import type {
 import type { DerivedMaskSourceVideoTreatment } from "../derivedMaskVideoTreatment";
 import type { GeneratedCreationMetadata } from "../../../types/Asset";
 import type { TimelineSelection } from "../../../types/TimelineTypes";
+import type { WorkflowRuleWarning } from "../services/workflowRules";
 
 // ---------------------------------------------------------------------------
 // Derived mask metadata
@@ -90,6 +91,47 @@ export interface ProjectConfig {
   aspectRatio: string;
 }
 
+export interface GenerationWorkflowSnapshot {
+  workflow: Record<string, unknown> | null;
+  graphData: Record<string, unknown> | null;
+  workflowId: string | null;
+  workflowInputs: WorkflowInput[];
+}
+
+export interface GenerationPreprocessPlan {
+  slotValues: Record<string, SlotValue>;
+  derivedMaskMappings: DerivedMaskMapping[];
+  projectConfig: ProjectConfig;
+  targetResolution: number;
+  maskCropDilation: number;
+  maskCropMode: WorkflowMaskCroppingMode;
+}
+
+export interface GenerationSubmissionPlan {
+  widgetInputs: Record<string, string>;
+  derivedWidgetInputs: Record<string, string>;
+  widgetModes: Record<string, "fixed" | "randomize">;
+}
+
+export interface GenerationMetadataPlan {
+  generationMetadata: GeneratedCreationMetadata;
+  workflowWarnings: WorkflowRuleWarning[];
+}
+
+export interface GenerationPostprocessPlan {
+  config: WorkflowPostprocessingConfig;
+}
+
+export interface GenerationPlan {
+  id: string;
+  createdAt: number;
+  workflow: GenerationWorkflowSnapshot;
+  preprocess: GenerationPreprocessPlan;
+  submission: GenerationSubmissionPlan;
+  metadata: GenerationMetadataPlan;
+  postprocess: GenerationPostprocessPlan;
+}
+
 export interface FrontendPreprocessContext {
   // --- Inputs (populated before the runner starts) ---
   readonly syncedWorkflow: Record<string, unknown> | null;
@@ -130,6 +172,23 @@ export interface GenerationRequest {
   maskCropDilation?: number;
   maskCropMode?: WorkflowMaskCroppingMode;
   clientId: string;
+}
+
+export interface PreparedGeneration {
+  plan: GenerationPlan;
+  request: GenerationRequest;
+}
+
+export interface SubmittedGeneration {
+  prepared: PreparedGeneration;
+  promptId: string;
+  responseWarnings: WorkflowRuleWarning[];
+  appliedWidgetValues: Record<string, string>;
+  aspectRatioProcessing: AspectRatioProcessingMetadata | null;
+  generationMetadata: GeneratedCreationMetadata;
+  preparedMaskFile: File | null;
+  usesSaveImageWebsocketOutputs: boolean;
+  saveImageWebsocketNodeIds: ReadonlySet<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +234,7 @@ export interface FrontendPreprocessOptions {
   signal?: AbortSignal;
   maskCropMode?: WorkflowMaskCroppingMode;
   targetResolution?: number;
+  projectConfig?: ProjectConfig;
 }
 
 // ---------------------------------------------------------------------------

@@ -211,6 +211,7 @@ function makeReadyStoreState(): void {
     derivedMaskMappings: [],
     targetResolution: 1080,
     maskCropMode: "crop",
+    maskCropDilation: 0.1,
     isWorkflowLoading: false,
     workflowLoadState: "ready",
     isWorkflowReady: true,
@@ -220,6 +221,8 @@ function makeReadyStoreState(): void {
     previewAnimation: null,
     workflowRuleWarnings: [],
     lastAppliedWidgetValues: {},
+    generationQueue: [],
+    postprocessingJobIds: [],
   });
 }
 
@@ -363,6 +366,7 @@ describe("useGenerationStore pipeline phases", () => {
       derivedMaskMappings: [],
       targetResolution: 1080,
       maskCropMode: "crop",
+      maskCropDilation: 0.1,
       isWorkflowLoading: false,
       workflowLoadState: "idle",
       isWorkflowReady: false,
@@ -373,6 +377,8 @@ describe("useGenerationStore pipeline phases", () => {
       workflowRuleWarnings: [],
       lastAppliedWidgetValues: {},
       latestPreviewUrl: null,
+      generationQueue: [],
+      postprocessingJobIds: [],
     });
   });
 
@@ -501,7 +507,7 @@ describe("useGenerationStore pipeline phases", () => {
     expect(useGenerationStore.getState().jobs.size).toBe(0);
   });
 
-  it("enters postprocessing after completion and clears once postprocess finishes", async () => {
+  it("tracks postprocessing jobs after completion and clears once postprocess finishes", async () => {
     const postprocessDeferred = createDeferred<{
       postprocessedPreview: null;
       postprocessError: null;
@@ -526,11 +532,9 @@ describe("useGenerationStore pipeline phases", () => {
     });
     await flushMicrotasks();
 
-    expect(useGenerationStore.getState().pipelineStatus).toEqual({
-      phase: "postprocessing",
-      message: "Rendering generation",
-      interruptible: false,
-    });
+    expect(useGenerationStore.getState().postprocessingJobIds).toEqual([
+      "prompt-post",
+    ]);
 
     postprocessDeferred.resolve({
       postprocessedPreview: null,
@@ -540,10 +544,116 @@ describe("useGenerationStore pipeline phases", () => {
     await flushMicrotasks();
 
     const state = useGenerationStore.getState();
-    expect(state.pipelineStatus.phase).toBe("idle");
+    expect(state.postprocessingJobIds).toEqual([]);
     expect(state.jobs.get("prompt-post")?.importedAssetIds).toEqual([
       "asset-1",
     ]);
+  });
+
+  it("dispatches the next queued generation while the previous one is still postprocessing", async () => {
+    makeReadyStoreState();
+    useGenerationStore.setState({
+      wsClient: null,
+      connectionStatus: "disconnected",
+    });
+    const postprocessDeferred = createDeferred<{
+      postprocessedPreview: null;
+      postprocessError: null;
+      importedAssetIds: string[];
+    }>();
+    mockFrontendPostprocess.mockReturnValue(postprocessDeferred.promise);
+    mockGenerate
+      .mockResolvedValueOnce({
+        prompt_id: "prompt-1",
+        number: 1,
+        node_errors: {},
+      })
+      .mockResolvedValueOnce({
+        prompt_id: "prompt-2",
+        number: 2,
+        node_errors: {},
+      });
+
+    useGenerationStore.getState().connect();
+    await flushMicrotasks();
+    const client = getLatestClient();
+
+    await useGenerationStore.getState().queueGeneration({}, {}, {}, {}, 2);
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+    expect(useGenerationStore.getState().generationQueue).toHaveLength(1);
+
+    client.emitEvent({
+      type: "executing",
+      data: {
+        node: null,
+        prompt_id: "prompt-1",
+      },
+    });
+    await flushMicrotasks();
+    // Completion kicks off postprocess and the next queue dispatch on separate
+    // async hops, so we wait for both state transitions before asserting.
+    await flushMicrotasks();
+
+    const stateWhileOverlapped = useGenerationStore.getState();
+    expect(mockGenerate).toHaveBeenCalledTimes(2);
+    expect(stateWhileOverlapped.postprocessingJobIds).toEqual(["prompt-1"]);
+    expect(stateWhileOverlapped.activeJobId).toBe("prompt-2");
+    expect(stateWhileOverlapped.generationQueue).toHaveLength(0);
+
+    postprocessDeferred.resolve({
+      postprocessedPreview: null,
+      postprocessError: null,
+      importedAssetIds: ["asset-1"],
+    });
+    await flushMicrotasks();
+
+    expect(useGenerationStore.getState().postprocessingJobIds).toEqual([]);
+  });
+
+  it("queues generations when graph snapshots include non-serializable browser values", async () => {
+    const isBrowserEnv =
+      typeof window !== "undefined" && typeof document !== "undefined";
+    const expectedTransientSelection = isBrowserEnv ? [null, null] : [null];
+    makeReadyStoreState();
+    const nonSerializableArray = isBrowserEnv
+      ? [window, document.body]
+      : [() => "noop"];
+
+    useGenerationStore.setState({
+      syncedGraphData: {
+        nodes: [],
+        viewport: {
+          zoom: 1,
+        },
+        transientSelection: nonSerializableArray,
+      },
+    });
+
+    await expect(
+      useGenerationStore.getState().queueGeneration({}, {}, {}, {}, 1),
+    ).resolves.toBeUndefined();
+
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+    expect(mockFrontendPreprocess).toHaveBeenCalledWith(
+      {},
+      "wf.json",
+      [],
+      {},
+      "client-id",
+      [],
+      0.1,
+      expect.objectContaining({
+        maskCropMode: "crop",
+        targetResolution: 1080,
+      }),
+      {
+        nodes: [],
+        viewport: {
+          zoom: 1,
+        },
+        transientSelection: expectedTransientSelection,
+      },
+    );
   });
 
   it("refreshes runtime status when the websocket proxy emits an error", async () => {
@@ -670,20 +780,76 @@ describe("useGenerationStore pipeline phases", () => {
     expect(revokeSpy).toHaveBeenCalledWith("blob:vhs-frame-1");
   });
 
-  it("blocks new submissions while postprocessing is active", async () => {
+  it("allows new submissions while postprocessing is active", async () => {
     makeReadyStoreState();
     useGenerationStore.setState({
-      pipelineStatus: {
-        phase: "postprocessing",
-        message: "Rendering generation",
-        interruptible: false,
-      },
+      postprocessingJobIds: ["prompt-post"],
     });
 
     const jobId = await useGenerationStore.getState().submitGeneration({});
 
-    expect(jobId).toBeNull();
-    expect(mockFrontendPreprocess).not.toHaveBeenCalled();
-    expect(mockGenerate).not.toHaveBeenCalled();
+    expect(jobId).toBe("prompt-1");
+    expect(mockFrontendPreprocess).toHaveBeenCalledTimes(1);
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears queued future generations before interrupting the active one", async () => {
+    const runningJob = {
+      ...makeQueuedJob("prompt-running"),
+      status: "running" as const,
+    };
+    useGenerationStore.setState({
+      jobs: new Map([[runningJob.id, runningJob]]),
+      activeJobId: runningJob.id,
+      generationQueue: [
+        {
+          id: "queued-1",
+          createdAt: Date.now(),
+          workflow: {
+            workflow: {},
+            graphData: null,
+            workflowId: "wf.json",
+            workflowInputs: [],
+          },
+          preprocess: {
+            slotValues: {},
+            derivedMaskMappings: [],
+            projectConfig: {
+              aspectRatio: "16:9",
+              fps: 24,
+            },
+            targetResolution: 1080,
+            maskCropMode: "crop",
+            maskCropDilation: 0.1,
+          },
+          submission: {
+            widgetInputs: {},
+            widgetModes: {},
+            derivedWidgetInputs: {},
+          },
+          metadata: {
+            generationMetadata: {
+              source: "generated",
+              workflowName: "Workflow Display Name",
+              inputs: [],
+              targetResolution: 1080,
+            },
+            workflowWarnings: [],
+          },
+          postprocess: {
+            config: {
+              mode: "auto",
+              panel_preview: "raw_outputs",
+              on_failure: "fallback_raw",
+            },
+          },
+        },
+      ],
+    });
+
+    await useGenerationStore.getState().cancelGeneration();
+
+    expect(useGenerationStore.getState().generationQueue).toHaveLength(0);
+    expect(mockInterrupt).toHaveBeenCalledTimes(1);
   });
 });

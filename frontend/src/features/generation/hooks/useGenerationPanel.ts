@@ -121,6 +121,12 @@ export function useGenerationPanel() {
   const activeJobId = useGenerationStore((s) => s.activeJobId);
   const jobs = useGenerationStore((s) => s.jobs);
   const pipelineStatus = useGenerationStore((s) => s.pipelineStatus);
+  const queuedGenerationCount = useGenerationStore(
+    (s) => s.generationQueue.length,
+  );
+  const postprocessingCount = useGenerationStore(
+    (s) => s.postprocessingJobIds.length,
+  );
   const availableWorkflows = useGenerationStore((s) => s.availableWorkflows);
   const selectedWorkflowId = useGenerationStore((s) => s.selectedWorkflowId);
   const isWorkflowLoading = useGenerationStore((s) => s.isWorkflowLoading);
@@ -143,6 +149,7 @@ export function useGenerationPanel() {
     (s) => s.clearWorkflowLoadError,
   );
   const refreshRuntimeStatus = useGenerationStore((s) => s.refreshRuntimeStatus);
+  const queueGeneration = useGenerationStore((s) => s.queueGeneration);
   const fetchWorkflows = useGenerationStore((s) => s.fetchWorkflows);
   const setMediaInputAsset = useGenerationStore((s) => s.setMediaInputAsset);
   const setMediaInputFrame = useGenerationStore((s) => s.setMediaInputFrame);
@@ -284,7 +291,7 @@ export function useGenerationPanel() {
     };
   }, []);
 
-  const handleGenerate = useCallback(async () => {
+  const handleGenerate = useCallback(async (count = 1) => {
     const store = useGenerationStore.getState();
     const currentWidgetValues = widgetValuesRef.current;
     const currentDerivedMaskVideoTreatmentBySourceNodeId =
@@ -390,13 +397,15 @@ export function useGenerationPanel() {
       }
     }
 
-    await store.submitGeneration(
+    await queueGeneration(
       slotValues,
       widgetOverrides,
       widgetModes,
       derivedWidgetInputs,
+      count,
     );
   }, [
+    queueGeneration,
     workflowInputById,
     textValues,
     widgetInputs,
@@ -754,11 +763,23 @@ export function useGenerationPanel() {
 
   const isRunning =
     activeJob?.status === "running" || activeJob?.status === "queued";
-  const isPostprocessing = pipelineStatus.phase === "postprocessing";
-  const isPipelineBusy = pipelineStatus.phase !== "idle" || isRunning;
-  const isPipelineInterruptible =
-    pipelineStatus.interruptible || isRunning;
-  const pipelineStatusText = pipelineStatus.message;
+  const isPreprocessing = pipelineStatus.phase === "preprocessing";
+  const hasQueuedGenerations = queuedGenerationCount > 0;
+  const isPostprocessing = postprocessingCount > 0;
+  const isPipelineBusy = isPreprocessing || isRunning || hasQueuedGenerations;
+  const isPipelineInterruptible = isPipelineBusy;
+  const queueStatusText = hasQueuedGenerations
+    ? `${queuedGenerationCount} queued${isRunning || isPreprocessing ? " after current" : ""}`
+    : null;
+  const postprocessingStatusText = isPostprocessing
+    ? postprocessingCount === 1
+      ? "Rendering generation"
+      : `Rendering ${postprocessingCount} generations`
+    : null;
+  const pipelineStatusText = isPreprocessing
+    ? pipelineStatus.message
+    : [queueStatusText, postprocessingStatusText].filter(Boolean).join(" • ") ||
+      null;
   const isExtractingSelection = Object.values(mediaInputs).some(
     (value) => value?.kind === "timelineSelection" && value.isExtracting,
   );
@@ -805,15 +826,12 @@ export function useGenerationPanel() {
     comfyConnected &&
     isWorkflowReady &&
     !isWorkflowLoading &&
-    !isPipelineBusy &&
     !isExtractingSelection &&
     (workflowInputs.length > 0 || widgetInputs.length > 0) &&
     inputValidationSatisfied;
-  const generateButtonLabel = isPostprocessing
-    ? pipelineStatus.message ?? "Rendering generation"
-    : isExtractingSelection
-      ? "Extracting selection"
-      : "Generate";
+  const generateButtonLabel = isExtractingSelection
+    ? "Extracting selection"
+    : "Generate";
 
   const connectionChipLabel = runtimeStatusError
     ? "Backend unavailable"
@@ -908,6 +926,8 @@ export function useGenerationPanel() {
     hasInferredInputs,
     workflowRuleWarnings,
     inputValidationFailures,
+    queuedGenerationCount,
+    postprocessingCount,
     isRunning,
     isPipelineBusy,
     isPipelineInterruptible,

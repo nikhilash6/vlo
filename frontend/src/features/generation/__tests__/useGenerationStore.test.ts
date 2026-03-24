@@ -142,6 +142,8 @@ describe("useGenerationStore workflow rules", () => {
       jobs: new Map(),
       activeJobId: null,
       previewAnimation: null,
+      generationQueue: [],
+      postprocessingJobIds: [],
       targetResolution: 1080,
       maskCropMode: "crop",
       isWorkflowLoading: false,

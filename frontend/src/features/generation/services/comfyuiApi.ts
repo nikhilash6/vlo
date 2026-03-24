@@ -2,8 +2,8 @@ import { API_BASE_URL } from "../../../config";
 import type {
   AspectRatioProcessingMetadata,
   MaskCropMetadata,
-  WorkflowMaskCroppingMode,
 } from "../types";
+import type { GenerationRequest } from "../pipeline/types";
 import {
   createDefaultWorkflowRules,
 } from "./workflowRules";
@@ -31,6 +31,8 @@ export interface PromptResponse {
   aspect_ratio_processing?: AspectRatioProcessingMetadata;
   mask_crop_metadata?: MaskCropMetadata;
   processed_mask_video?: string; // base64-encoded video bytes
+  comfyui_prompt?: Record<string, unknown>;
+  comfyui_workflow?: Record<string, unknown>;
 }
 
 function extractNodeErrors(payload: unknown): Record<string, unknown> | null {
@@ -236,22 +238,8 @@ export function getOutputViewUrl(
   return `${COMFY_API}/api/view?${params}`;
 }
 
-export async function generate(request: {
-  workflow: Record<string, unknown> | null;
-  graphData?: Record<string, unknown> | null;
-  workflowId?: string | null;
-  targetAspectRatio: string;
-  targetResolution: number;
-  textInputs: Record<string, string>;
-  imageInputs: Record<string, File>;
-  videoInputs: Record<string, File>;
-  widgetInputs?: Record<string, string>;
-  derivedWidgetInputs?: Record<string, string>;
-  widgetModes?: Record<string, "fixed" | "randomize">;
-  maskCropDilation?: number;
-  maskCropMode?: WorkflowMaskCroppingMode;
-  clientId: string;
-},
+export async function generate(
+  request: GenerationRequest,
 options: { signal?: AbortSignal } = {},
 ): Promise<PromptResponse> {
   const formData = new FormData();

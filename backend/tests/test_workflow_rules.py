@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import sys
 from pathlib import Path
 from tempfile import SpooledTemporaryFile
@@ -2332,6 +2333,71 @@ async def test_generate_rejects_invalid_widget_override_values(
         }
     ]
     assert fake_comfy_client.prompt_payload is None
+
+
+@pytest.mark.anyio
+async def test_generate_randomize_mode_produces_fresh_seed_per_request(
+    tmp_path: Path,
+    monkeypatch,
+    fake_comfy_client,
+):
+    workflow_id = "workflow_randomized_seed.json"
+    workflow_path = tmp_path / workflow_id
+    workflow_path.write_text("{}")
+    sidecar_path = tmp_path / "workflow_randomized_seed.rules.json"
+    sidecar_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "nodes": {
+                    "145": {
+                        "widgets": {
+                            "seed": {
+                                "value_type": "int",
+                                "min": 1,
+                                "max": 999999,
+                                "control_after_generate": True,
+                            }
+                        }
+                    }
+                },
+            }
+        )
+    )
+    monkeypatch.setattr(comfyui, "WORKFLOWS_DIR", tmp_path)
+
+    seeded_values = iter([111111, 222222])
+    monkeypatch.setattr(random, "randint", lambda low, high: next(seeded_values))
+
+    workflow = {
+        "145": {"class_type": "KSampler", "inputs": {"seed": 123456, "steps": 20}},
+    }
+
+    def make_request() -> Request:
+        return _as_request(
+            FormData(
+                [
+                    ("workflow", json.dumps(workflow)),
+                    ("workflow_id", workflow_id),
+                    ("widget_mode_145_seed", "randomize"),
+                ]
+            )
+        )
+
+    first_response = await comfyui.generate(make_request())
+    assert first_response.status_code == 200
+    first_payload = _response_json(first_response)
+    first_prompt = fake_comfy_client.prompt_payload["prompt"]
+
+    second_response = await comfyui.generate(make_request())
+    assert second_response.status_code == 200
+    second_payload = _response_json(second_response)
+    second_prompt = fake_comfy_client.prompt_payload["prompt"]
+
+    assert first_payload["applied_widget_values"]["145:seed"] == "111111"
+    assert second_payload["applied_widget_values"]["145:seed"] == "222222"
+    assert first_prompt["145"]["inputs"]["seed"] == 111111
+    assert second_prompt["145"]["inputs"]["seed"] == 222222
 
 
 @pytest.mark.anyio

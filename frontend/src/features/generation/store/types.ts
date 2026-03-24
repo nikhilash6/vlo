@@ -2,7 +2,11 @@ import type { Asset } from "../../../types/Asset";
 import type { RuntimeStatus } from "../../../types/RuntimeStatus";
 import type { TimelineSelection } from "../../../types/TimelineTypes";
 import type { DerivedMaskSourceVideoTreatment } from "../derivedMaskVideoTreatment";
-import type { DerivedMaskMapping } from "../pipeline/types";
+import type {
+  DerivedMaskMapping,
+  GenerationPlan,
+  SlotValue,
+} from "../pipeline/types";
 import type { ComfyUIWebSocket } from "../services/ComfyUIWebSocket";
 import type { WorkflowWarningSummary } from "../services/workflowBridge";
 import type {
@@ -17,7 +21,6 @@ import type {
   WorkflowRuleWarning,
   WorkflowRules,
 } from "../services/workflowRules";
-import type { SlotValue } from "../utils/pipeline";
 
 export type ComfyUIConnectionStatus =
   | "disconnected"
@@ -141,12 +144,22 @@ export interface GenerationExecutionState {
   pipelineRunToken: number;
   preprocessAbortController: AbortController | null;
   lastAppliedWidgetValues: Record<string, string>;
+  generationQueue: GenerationPlan[];
+  postprocessingJobIds: string[];
   submitGeneration: (
     slotValues: Record<string, SlotValue>,
     widgetInputs?: Record<string, string>,
     widgetModes?: Record<string, "fixed" | "randomize">,
     derivedWidgetInputs?: Record<string, string>,
   ) => Promise<string | null>;
+  queueGeneration: (
+    slotValues: Record<string, SlotValue>,
+    widgetInputs?: Record<string, string>,
+    widgetModes?: Record<string, "fixed" | "randomize">,
+    derivedWidgetInputs?: Record<string, string>,
+    count?: number,
+  ) => Promise<void>;
+  processGenerationQueue: () => Promise<void>;
   cancelGeneration: () => Promise<void>;
 }
 

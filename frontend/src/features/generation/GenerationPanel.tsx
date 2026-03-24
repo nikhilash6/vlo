@@ -1,8 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 import {
   Box,
   Typography,
   Button,
+  Menu,
   LinearProgress,
   CircularProgress,
   Chip,
@@ -24,6 +32,7 @@ import {
 import {
   Stop,
   PlayArrow,
+  ArrowDropDown,
   OpenInNew,
   Timeline,
 } from "@mui/icons-material";
@@ -173,6 +182,11 @@ function LivePreview({
 
 export function GenerationPanel() {
   const [isBackendSavePending, setIsBackendSavePending] = useState(false);
+  const [generateMenuAnchorEl, setGenerateMenuAnchorEl] =
+    useState<HTMLElement | null>(null);
+  const [customGenerateDialogOpen, setCustomGenerateDialogOpen] =
+    useState(false);
+  const [customGenerateCount, setCustomGenerateCount] = useState("1");
   const [savePromptOpen, setSavePromptOpen] = useState(false);
   const [newWorkflowNamePromptOpen, setNewWorkflowNamePromptOpen] =
     useState(false);
@@ -214,10 +228,10 @@ export function GenerationPanel() {
     hasInferredInputs,
     workflowRuleWarnings,
     inputValidationFailures,
+    queuedGenerationCount,
     isRunning,
     isPipelineBusy,
     isPipelineInterruptible,
-    isPostprocessing,
     pipelineStatusText,
     isExtractingSelection,
     generateButtonLabel,
@@ -449,6 +463,51 @@ export function GenerationPanel() {
   const importedPreviewSrc = importedPreviewAsset
     ? importedPreviewAsset.src
     : "";
+  const customGenerateCountValue = Number.parseInt(customGenerateCount, 10);
+  const isCustomGenerateCountValid =
+    Number.isFinite(customGenerateCountValue) && customGenerateCountValue > 0;
+
+  function blurActiveElement(): void {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  }
+
+  function handleGenerateCount(count: number): void {
+    blurActiveElement();
+    void handleGenerate(count);
+  }
+
+  function handleOpenGenerateMenu(event: MouseEvent<HTMLElement>): void {
+    setGenerateMenuAnchorEl(event.currentTarget);
+  }
+
+  function handleCloseGenerateMenu(): void {
+    setGenerateMenuAnchorEl(null);
+  }
+
+  function handleSelectGenerateCount(count: number): void {
+    handleCloseGenerateMenu();
+    handleGenerateCount(count);
+  }
+
+  function handleOpenCustomGenerateDialog(): void {
+    handleCloseGenerateMenu();
+    setCustomGenerateCount("1");
+    setCustomGenerateDialogOpen(true);
+  }
+
+  function handleCloseCustomGenerateDialog(): void {
+    setCustomGenerateDialogOpen(false);
+  }
+
+  function handleSubmitCustomGenerateDialog(): void {
+    if (!isCustomGenerateCountValid) {
+      return;
+    }
+    setCustomGenerateDialogOpen(false);
+    handleGenerateCount(customGenerateCountValue);
+  }
 
   return (
     <Box
@@ -730,17 +789,7 @@ export function GenerationPanel() {
             onClick={handleCancel}
             sx={{ textTransform: "none" }}
           >
-            Cancel
-          </Button>
-        ) : isPostprocessing ? (
-          <Button
-            data-testid="generation-generate-button"
-            fullWidth
-            variant="contained"
-            disabled
-            sx={{ textTransform: "none" }}
-          >
-            {generateButtonLabel}
+            Stop
           </Button>
         ) : (
           <Tooltip
@@ -759,27 +808,43 @@ export function GenerationPanel() {
             }}
           >
             <span style={{ display: "block", width: "100%" }}>
-              <Button
-                data-testid="generation-generate-button"
-                fullWidth
-                variant="contained"
-                startIcon={isExtractingSelection ? undefined : <PlayArrow />}
-                disabled={!canGenerate}
-                onPointerDown={() => {
-                  // Force blur so CommittedTextInput commits its value before onClick fires
-                  if (document.activeElement instanceof HTMLElement) {
-                    document.activeElement.blur();
-                  }
-                }}
-                onClick={handleGenerate}
-                sx={{ textTransform: "none" }}
-              >
-                {generateButtonLabel}
-              </Button>
+              <Box sx={{ display: "flex", width: "100%" }}>
+                <Button
+                  data-testid="generation-generate-button"
+                  fullWidth
+                  variant="contained"
+                  startIcon={isExtractingSelection ? undefined : <PlayArrow />}
+                  disabled={!canGenerate}
+                  onPointerDown={blurActiveElement}
+                  onClick={() => handleGenerateCount(1)}
+                  sx={{
+                    borderBottomRightRadius: 0,
+                    borderTopRightRadius: 0,
+                    textTransform: "none",
+                  }}
+                >
+                  {generateButtonLabel}
+                </Button>
+                <Button
+                  aria-label="Queue multiple generations"
+                  disabled={!canGenerate}
+                  onClick={handleOpenGenerateMenu}
+                  sx={{
+                    borderBottomLeftRadius: 0,
+                    borderLeft: "1px solid rgba(255, 255, 255, 0.2)",
+                    borderTopLeftRadius: 0,
+                    minWidth: 44,
+                    px: 1,
+                  }}
+                  variant="contained"
+                >
+                  <ArrowDropDown />
+                </Button>
+              </Box>
             </span>
           </Tooltip>
         )}
-        {isPipelineBusy && pipelineStatusText ? (
+        {pipelineStatusText ? (
           <Typography
             variant="caption"
             sx={{ color: "text.secondary", display: "block", mt: 1 }}
@@ -788,6 +853,24 @@ export function GenerationPanel() {
           </Typography>
         ) : null}
       </Box>
+
+      <Menu
+        anchorEl={generateMenuAnchorEl}
+        open={Boolean(generateMenuAnchorEl)}
+        onClose={handleCloseGenerateMenu}
+      >
+        {[2, 4, 8, 16].map((count) => (
+          <MenuItem
+            key={count}
+            onClick={() => handleSelectGenerateCount(count)}
+          >
+            {`Queue ${count} generations`}
+          </MenuItem>
+        ))}
+        <MenuItem onClick={handleOpenCustomGenerateDialog}>
+          Queue custom...
+        </MenuItem>
+      </Menu>
 
       {/* Progress */}
       {isRunning && activeJob && (
@@ -802,6 +885,9 @@ export function GenerationPanel() {
             {activeJob.status === "queued"
               ? "Queued..."
               : `${activeJob.progress}%${activeNodeStatus ? ` — ${activeNodeStatus}` : ""}`}
+            {queuedGenerationCount > 0
+              ? ` • ${queuedGenerationCount} more queued`
+              : ""}
           </Typography>
         </Box>
       )}
@@ -974,6 +1060,43 @@ export function GenerationPanel() {
           </Typography>
         </Box>
       )}
+
+      <Dialog
+        open={customGenerateDialogOpen}
+        onClose={handleCloseCustomGenerateDialog}
+      >
+        <DialogTitle>Queue Custom Generations</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Generation count"
+            margin="dense"
+            type="number"
+            value={customGenerateCount}
+            onChange={(event) => setCustomGenerateCount(event.target.value)}
+            error={!isCustomGenerateCountValid}
+            helperText="Enter a positive whole number."
+            inputProps={{ min: 1, step: 1 }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                handleSubmitCustomGenerateDialog();
+              }
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseCustomGenerateDialog}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleSubmitCustomGenerateDialog}
+            disabled={!isCustomGenerateCountValid}
+          >
+            Queue
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={showWorkflowWarningDialog}

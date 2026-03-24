@@ -5,7 +5,6 @@ import type {
 } from "../services/ComfyUIWebSocket";
 import { parseNodeOutputItems } from "../services/parsers";
 import { frontendPostprocess } from "../utils/pipeline";
-import { IDLE_PIPELINE_STATUS } from "./constants";
 import { getHistoryOutputsWithRetry } from "./history";
 import {
   applyExecutingNode,
@@ -26,16 +25,25 @@ export function attachRuntimeClientHandlers(
 ): void {
   async function runJobPostprocess(
     jobSnapshot: import("../types").GenerationJob,
-  ) {
+  ): Promise<void> {
     const previewFrameFiles = jobSnapshot.usesSaveImageWebsocketOutputs
       ? get().jobPreviewFrames.get(jobSnapshot.id) ?? []
       : [];
     if (jobSnapshot.outputs.length === 0 && previewFrameFiles.length === 0) {
       set((state) => {
-        if (!state.jobPreviewFrames.has(jobSnapshot.id)) return {};
-        const nextPreviewFrames = new Map(state.jobPreviewFrames);
-        nextPreviewFrames.delete(jobSnapshot.id);
-        return { jobPreviewFrames: nextPreviewFrames };
+        const hadPreviewFrames = state.jobPreviewFrames.has(jobSnapshot.id);
+        const nextPreviewFrames = hadPreviewFrames
+          ? new Map(state.jobPreviewFrames)
+          : null;
+        nextPreviewFrames?.delete(jobSnapshot.id);
+        const nextPostprocessingJobIds = state.postprocessingJobIds.filter(
+          (jobId) => jobId !== jobSnapshot.id,
+        );
+
+        return {
+          ...(nextPreviewFrames ? { jobPreviewFrames: nextPreviewFrames } : {}),
+          postprocessingJobIds: nextPostprocessingJobIds,
+        };
       });
       return;
     }
@@ -46,12 +54,14 @@ export function attachRuntimeClientHandlers(
         inputs: [],
       };
 
-    set({
-      pipelineStatus: {
-        phase: "postprocessing",
-        message: "Rendering generation",
-        interruptible: false,
-      },
+    set((state) => {
+      if (state.postprocessingJobIds.includes(jobSnapshot.id)) {
+        return {};
+      }
+
+      return {
+        postprocessingJobIds: [...state.postprocessingJobIds, jobSnapshot.id],
+      };
     });
 
     try {
@@ -84,23 +94,22 @@ export function attachRuntimeClientHandlers(
     } finally {
       set((state) => {
         const hasPreviewFrames = state.jobPreviewFrames.has(jobSnapshot.id);
-        if (!hasPreviewFrames && state.pipelineStatus.phase !== "postprocessing") {
-          return {};
-        }
-
         const nextPreviewFrames = hasPreviewFrames
           ? new Map(state.jobPreviewFrames)
           : null;
         nextPreviewFrames?.delete(jobSnapshot.id);
-
         return {
           ...(nextPreviewFrames ? { jobPreviewFrames: nextPreviewFrames } : {}),
-          ...(state.pipelineStatus.phase === "postprocessing"
-            ? { pipelineStatus: IDLE_PIPELINE_STATUS }
-            : {}),
+          postprocessingJobIds: state.postprocessingJobIds.filter(
+            (jobId) => jobId !== jobSnapshot.id,
+          ),
         };
       });
     }
+  }
+
+  function resumeQueuedDispatch(): void {
+    void get().processGenerationQueue();
   }
 
   client.onEvent((event: ComfyUIEvent) => {
@@ -124,6 +133,7 @@ export function attachRuntimeClientHandlers(
           void get().fetchWorkflows();
           get().requestEditorReconnect();
         }
+        resumeQueuedDispatch();
         break;
       }
 
@@ -159,6 +169,7 @@ export function attachRuntimeClientHandlers(
                   completedJob = result.completedJob;
                   return result.patch;
                 });
+                resumeQueuedDispatch();
                 if (completedJob) {
                   void runJobPostprocess(completedJob);
                 }
@@ -173,6 +184,7 @@ export function attachRuntimeClientHandlers(
                   completedJob = result.completedJob;
                   return result.patch;
                 });
+                resumeQueuedDispatch();
                 if (completedJob) {
                   void runJobPostprocess(completedJob);
                 }
@@ -180,8 +192,9 @@ export function attachRuntimeClientHandlers(
             })();
           }
         } else {
+          const currentNode = event.data.node;
           set((state) =>
-            applyExecutingNode(state, event.data.prompt_id, event.data.node),
+            applyExecutingNode(state, event.data.prompt_id, currentNode),
           );
         }
         break;
@@ -205,6 +218,7 @@ export function attachRuntimeClientHandlers(
             event.data.node_id,
           ),
         );
+        resumeQueuedDispatch();
         break;
       }
 
@@ -217,6 +231,7 @@ export function attachRuntimeClientHandlers(
             completedAt: Date.now(),
           }),
         );
+        resumeQueuedDispatch();
         break;
       }
     }
@@ -232,6 +247,7 @@ export function attachRuntimeClientHandlers(
       if (get().connectionStatus !== "connected") {
         set({ connectionStatus: "connecting" });
       }
+      resumeQueuedDispatch();
     } else {
       set((state) => ({
         connectionStatus: "disconnected",

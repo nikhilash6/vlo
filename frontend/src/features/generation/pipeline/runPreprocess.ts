@@ -90,7 +90,7 @@ export async function runFrontendPreprocess(
   options: FrontendPreprocessOptions = {},
   syncedGraphData: Record<string, unknown> | null = null,
 ): Promise<GenerationRequest> {
-  const projectConfig = useProjectStore.getState().config;
+  const projectConfig = options.projectConfig ?? useProjectStore.getState().config;
 
   const ctx: FrontendPreprocessContext = {
     // Inputs
