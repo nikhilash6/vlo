@@ -24,6 +24,7 @@ import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 import type { AssetType } from "../../types/Asset";
 import { useAssetStore } from "./useAssetStore";
 import { AssetCard } from "./components/AssetCard";
+import { isAssetVisibleInBrowser } from "./utils/assetVisibility";
 
 type SortOption = "dateDesc" | "dateAsc" | "nameAsc";
 const ASSET_TYPE_PRIORITY: AssetType[] = ["video", "image", "audio"];
@@ -156,8 +157,7 @@ function AssetBrowserComponent() {
       (asset) =>
         asset.type === activeTab &&
         (!showFavouritesOnly || asset.favourite) &&
-        asset.creationMetadata?.source !== "sam2_mask" &&
-        asset.creationMetadata?.source !== "generation_mask",
+        isAssetVisibleInBrowser(asset),
     );
     return filtered.sort((a, b) => {
       switch (sortOption) {

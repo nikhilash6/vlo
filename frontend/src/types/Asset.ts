@@ -2,6 +2,11 @@ import type { TimelineSelection } from "./TimelineTypes";
 
 export type AssetType = "video" | "image" | "audio";
 
+export interface AssetFamily {
+  uuid: string;
+  hashes?: string[];
+}
+
 export type GeneratedCreationInput =
   | {
       nodeId: string;
@@ -63,6 +68,7 @@ export type CreationMetadata =
 export interface Asset {
   id: string;
   hash: string; // xxhash
+  family?: AssetFamily;
   name: string;
   type: AssetType;
   favourite?: boolean;
