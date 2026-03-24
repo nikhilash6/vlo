@@ -144,15 +144,8 @@ function LivePreview({
   animation: PreviewAnimation | null;
   fallbackUrl: string | null;
 }) {
-  const animationKey = animation
-    ? `${animation.frameRate}:${animation.totalFrames}:${animation.frameUrls
-        .map((url) => url ?? "")
-        .join("|")}`
-    : fallbackUrl ?? "fallback";
-
   return (
     <LivePreviewPlayback
-      key={animationKey}
       animation={animation}
       fallbackUrl={fallbackUrl}
     />
