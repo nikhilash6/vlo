@@ -162,9 +162,7 @@ function LivePreview({
   }, [animation?.frameRate, animation?.totalFrames, advanceTick]);
 
   if (animation) {
-    const populated = animation.frameUrls.filter(
-      (u): u is string => u != null,
-    );
+    const populated = animation.frameUrls.filter((u): u is string => u != null);
     if (populated.length > 0) {
       const url = populated[tick % populated.length];
       return <img src={url} alt="Generation preview" style={PREVIEW_STYLE} />;
@@ -228,7 +226,6 @@ export function GenerationPanel() {
     hasInferredInputs,
     workflowRuleWarnings,
     inputValidationFailures,
-    queuedGenerationCount,
     isRunning,
     isPipelineBusy,
     isPipelineInterruptible,
@@ -259,9 +256,7 @@ export function GenerationPanel() {
     handleSendToTimeline,
   } = useGenerationPanel();
 
-  const derivedMaskMappings = useGenerationStore(
-    (s) => s.derivedMaskMappings,
-  );
+  const derivedMaskMappings = useGenerationStore((s) => s.derivedMaskMappings);
   const activeWorkflowRules = useGenerationStore((s) => s.activeWorkflowRules);
   const targetResolution = useGenerationStore((s) => s.targetResolution);
   const setTargetResolution = useGenerationStore((s) => s.setTargetResolution);
@@ -768,9 +763,7 @@ export function GenerationPanel() {
                 min={0}
                 max={0.5}
                 step={0.01}
-                onChange={(_, value) =>
-                  setMaskCropDilation(value as number)
-                }
+                onChange={(_, value) => setMaskCropDilation(value as number)}
               />
             </>
           ) : null}
@@ -864,7 +857,7 @@ export function GenerationPanel() {
             key={count}
             onClick={() => handleSelectGenerateCount(count)}
           >
-            {`Queue ${count} generations`}
+            {`x ${count}`}
           </MenuItem>
         ))}
         <MenuItem onClick={handleOpenCustomGenerateDialog}>
@@ -885,9 +878,6 @@ export function GenerationPanel() {
             {activeJob.status === "queued"
               ? "Queued..."
               : `${activeJob.progress}%${activeNodeStatus ? ` — ${activeNodeStatus}` : ""}`}
-            {queuedGenerationCount > 0
-              ? ` • ${queuedGenerationCount} more queued`
-              : ""}
           </Typography>
         </Box>
       )}
@@ -1027,7 +1017,9 @@ export function GenerationPanel() {
             sx={{ color: "text.secondary", mt: 0.5, display: "block" }}
           >
             {importedPreviewAsset.name}
-            {importedAssets.length > 1 ? ` (+${importedAssets.length - 1} more)` : ""}
+            {importedAssets.length > 1
+              ? ` (+${importedAssets.length - 1} more)`
+              : ""}
           </Typography>
         </Box>
       )}
