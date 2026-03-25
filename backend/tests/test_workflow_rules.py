@@ -1163,7 +1163,6 @@ def test_apply_aspect_ratio_processing_clamps_to_supported_resolution():
         workflow,
         rules,
         "16:9",
-        True,
         1080,
     )
 
@@ -1179,7 +1178,7 @@ def test_apply_aspect_ratio_processing_clamps_to_supported_resolution():
     )
 
 
-def test_apply_aspect_ratio_processing_normalizes_off_grid_ratios_when_not_exact():
+def test_apply_aspect_ratio_processing_uses_provided_target_aspect_ratio():
     workflow = {
         "49": {
             "class_type": "WanVaceToVideo",
@@ -1213,14 +1212,13 @@ def test_apply_aspect_ratio_processing_normalizes_off_grid_ratios_when_not_exact
         workflow,
         rules,
         "179:100",
-        False,
         720,
     )
 
     assert warnings == []
     assert isinstance(metadata, dict)
-    assert metadata["requested"]["aspect_ratio"] == "16:9"
-    assert metadata["requested"]["width"] == 1280
+    assert metadata["requested"]["aspect_ratio"] == "179:100"
+    assert metadata["requested"]["width"] == 1289
     assert metadata["requested"]["height"] == 720
     assert workflow["49"]["inputs"]["width"] == metadata["strided"]["width"]
     assert workflow["49"]["inputs"]["height"] == metadata["strided"]["height"]
@@ -2686,7 +2684,7 @@ async def test_generate_applies_aspect_ratio_processing_and_returns_metadata(
 
 
 @pytest.mark.anyio
-async def test_generate_normalizes_target_aspect_ratio_when_exact_is_false(
+async def test_generate_uses_provided_target_aspect_ratio(
     tmp_path: Path,
     monkeypatch,
     fake_comfy_client,
@@ -2738,7 +2736,6 @@ async def test_generate_normalizes_target_aspect_ratio_when_exact_is_false(
                     ("workflow", json.dumps(workflow)),
                     ("workflow_id", workflow_id),
                     ("target_aspect_ratio", "179:100"),
-                    ("aspect_ratio_exact", "false"),
                     ("target_resolution", "720"),
                 ]
             )
@@ -2749,8 +2746,8 @@ async def test_generate_normalizes_target_aspect_ratio_when_exact_is_false(
     payload = _response_json(response)
     metadata = payload.get("aspect_ratio_processing")
     assert isinstance(metadata, dict)
-    assert metadata["requested"]["aspect_ratio"] == "16:9"
-    assert metadata["requested"]["width"] == 1280
+    assert metadata["requested"]["aspect_ratio"] == "179:100"
+    assert metadata["requested"]["width"] == 1289
     assert metadata["requested"]["height"] == 720
 
 

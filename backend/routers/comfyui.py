@@ -48,20 +48,6 @@ DEFAULT_WORKFLOWS_DIR = Path(__file__).parent.parent / "assets" / ".config" / "d
 router = APIRouter(prefix="/comfy", tags=["comfyui"])
 
 
-def _parse_optional_bool(value: Any) -> bool | None:
-    if isinstance(value, bool):
-        return value
-    if not isinstance(value, str):
-        return None
-
-    normalized = value.strip().lower()
-    if normalized in {"1", "true", "yes", "on"}:
-        return True
-    if normalized in {"0", "false", "no", "off"}:
-        return False
-    return None
-
-
 # ---------------------------------------------------------------------------
 # Health / Config
 # ---------------------------------------------------------------------------
@@ -589,10 +575,6 @@ async def generate(request: Request):
     target_aspect_ratio = (
         target_aspect_ratio_raw if isinstance(target_aspect_ratio_raw, str) else None
     )
-    exact_aspect_ratio_raw = form.get("aspect_ratio_exact")
-    exact_aspect_ratio = _parse_optional_bool(exact_aspect_ratio_raw)
-    if exact_aspect_ratio is None:
-        exact_aspect_ratio = True
     target_resolution_raw = form.get("target_resolution")
 
     # --- Load workflow (Expect frontend to provide it) ---
@@ -797,7 +779,6 @@ async def generate(request: Request):
         workflow=workflow,
         workflow_id=workflow_id,
         target_aspect_ratio=target_aspect_ratio,
-        exact_aspect_ratio=exact_aspect_ratio,
         target_resolution_raw=target_resolution_raw,
         mask_crop_dilation=mask_crop_dilation,
         mask_crop_mode=mask_crop_mode,

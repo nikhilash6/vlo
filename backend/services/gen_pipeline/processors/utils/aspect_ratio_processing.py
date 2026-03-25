@@ -3,10 +3,6 @@ from typing import Any
 
 from services.gen_pipeline.processors.utils.warning import pipeline_warning
 
-# Mirror the frontend project's supported aspect-ratio set. This lives in
-# Python because the backend cannot import the frontend TypeScript barrel.
-PROJECT_SUPPORTED_ASPECT_RATIOS = ("16:9", "4:3", "1:1", "3:4", "9:16")
-
 
 def _to_positive_int(value: Any) -> int | None:
     if isinstance(value, bool):
@@ -42,29 +38,6 @@ def _parse_aspect_ratio(value: str | None) -> tuple[float, float] | None:
     if width_part <= 0 or height_part <= 0:
         return None
     return width_part, height_part
-
-
-def _normalize_to_supported_project_aspect_ratio(value: str | None) -> str | None:
-    parsed = _parse_aspect_ratio(value)
-    if parsed is None:
-        return value
-
-    ratio = parsed[0] / parsed[1]
-    closest_aspect_ratio: str | None = None
-    closest_delta = math.inf
-
-    for candidate in PROJECT_SUPPORTED_ASPECT_RATIOS:
-        parsed_candidate = _parse_aspect_ratio(candidate)
-        if parsed_candidate is None:
-            continue
-
-        candidate_ratio = parsed_candidate[0] / parsed_candidate[1]
-        delta = abs(ratio - candidate_ratio)
-        if delta < closest_delta:
-            closest_delta = delta
-            closest_aspect_ratio = candidate
-
-    return closest_aspect_ratio or value
 
 
 def derive_true_dimensions_from_short_edge(
@@ -193,7 +166,6 @@ def apply_aspect_ratio_processing(
     workflow: dict[str, Any],
     rules: dict[str, Any],
     target_aspect_ratio: str | None,
-    exact: bool,
     target_resolution_raw: Any,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     warnings: list[dict[str, Any]] = []
@@ -211,11 +183,6 @@ def apply_aspect_ratio_processing(
             )
         )
         return None, warnings
-
-    if not exact:
-        target_aspect_ratio = _normalize_to_supported_project_aspect_ratio(
-            target_aspect_ratio,
-        )
 
     target_resolution = _to_positive_int(target_resolution_raw)
     if target_resolution is None:
