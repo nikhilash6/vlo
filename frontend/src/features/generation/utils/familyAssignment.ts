@@ -3,6 +3,10 @@ import type {
   AssetFamily,
   GeneratedCreationInput,
 } from "../../../types/Asset";
+import {
+  computeXxhash64Bytes,
+  computeXxhash64String,
+} from "../../../shared/utils/xxhash";
 import { getAssetById } from "../../userAssets/publicApi";
 import type { SlotValue } from "../pipeline/types";
 import type { WorkflowInput } from "../types";
@@ -22,26 +26,6 @@ interface BuildGenerationFamilyHashOptions {
 }
 
 const AUTO_FAMILY_HASH_PREFIX = "generation-family:v1:";
-const FNV_OFFSET_BASIS = 0xcbf29ce484222325n;
-const FNV_PRIME = 0x100000001b3n;
-
-function updateFnv1a64(hash: bigint, bytes: Uint8Array): bigint {
-  let nextHash = hash;
-  for (const byte of bytes) {
-    nextHash ^= BigInt(byte);
-    nextHash = BigInt.asUintN(64, nextHash * FNV_PRIME);
-  }
-  return nextHash;
-}
-
-function hashBytes(bytes: Uint8Array): string {
-  const hash = updateFnv1a64(FNV_OFFSET_BASIS, bytes);
-  return hash.toString(16).padStart(16, "0");
-}
-
-function hashString(value: string): string {
-  return hashBytes(new TextEncoder().encode(value));
-}
 
 function stableSerialize(value: unknown): string {
   if (value === null) {
@@ -84,7 +68,7 @@ function buildGeneratedInputLookup(
 }
 
 async function buildExternalFileSignature(file: File): Promise<string> {
-  return hashBytes(new Uint8Array(await file.arrayBuffer()));
+  return computeXxhash64Bytes(new Uint8Array(await file.arrayBuffer()));
 }
 
 async function buildMediaInputDescriptor(
@@ -198,7 +182,9 @@ export async function buildGenerationFamilyHash(
     mediaInputs,
   });
 
-  return `${AUTO_FAMILY_HASH_PREFIX}${hashString(signaturePayload)}`;
+  return `${AUTO_FAMILY_HASH_PREFIX}${await computeXxhash64String(
+    signaturePayload,
+  )}`;
 }
 
 export function resolveFamilyForGenerationHash(

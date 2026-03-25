@@ -1,4 +1,3 @@
-import xxhash from "xxhash-wasm";
 import {
   Input,
   BlobSource,
@@ -9,6 +8,7 @@ import {
   BufferTarget,
   Conversion,
 } from "mediabunny";
+import { createXxhash64 } from "../../../shared/utils/xxhash";
 import { CLIP_HEIGHT } from "../../timeline";
 import { sanitizeFilename } from "../utils/filenameSanitization";
 
@@ -236,14 +236,6 @@ export class MediaFileProcessor {
 }
 
 export class MediaProcessingService {
-  private hasher: Awaited<ReturnType<typeof xxhash>> | null = null;
-
-  async init() {
-    if (!this.hasher) {
-      this.hasher = await xxhash();
-    }
-  }
-
   createProcessor(file: File): MediaFileProcessor {
     return new MediaFileProcessor(file);
   }
@@ -253,11 +245,9 @@ export class MediaProcessingService {
    * (Stateless, efficient enough as is)
    */
   async computeChecksum(file: File): Promise<string> {
-    await this.init();
-
     const stream = file.stream();
     const reader = stream.getReader();
-    const h64 = this.hasher!.create64();
+    const h64 = await createXxhash64();
 
     try {
       while (true) {
