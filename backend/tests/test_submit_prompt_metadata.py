@@ -297,9 +297,76 @@ def test_project_prompt_to_graph_data_preserves_linked_widget_defaults():
     ]
     assert node_by_id["8"]["widgets_values"] == [512, 512, 1, 8355711]
     assert node_by_id["5"]["inputs"][0]["link"] == 12
-    assert node_by_id["4"]["outputs"][0]["links"] == [11, 13, 14, 15, 16, 20]
+    assert node_by_id["4"]["outputs"][0]["links"] == [11, 13, 14, 15, 16, 20, 17]
     assert node_by_id["6"]["outputs"][0]["links"] == [12]
     assert [12, 6, 0, 5, 0, "IMAGE"] in projected["links"]
+
+
+def test_project_prompt_to_graph_data_clears_stale_links_missing_from_prompt():
+    workflow = {
+        "67": {
+            "class_type": "WanFirstLastFrameToVideo",
+            "inputs": {
+                "start_image": ["62", 0],
+            },
+        },
+        "62": {
+            "class_type": "LoadImage",
+            "inputs": {"image": "start.png"},
+        },
+        "68": {
+            "class_type": "LoadImage",
+            "inputs": {"image": "example.png"},
+        },
+    }
+    graph_data = {
+        "last_link_id": 158,
+        "nodes": [
+            {
+                "id": 62,
+                "type": "LoadImage",
+                "inputs": [],
+                "outputs": [{"name": "IMAGE", "slot_index": 0, "links": [157]}],
+                "widgets_values": ["start.png", "image"],
+            },
+            {
+                "id": 68,
+                "type": "LoadImage",
+                "inputs": [],
+                "outputs": [{"name": "IMAGE", "slot_index": 0, "links": [158]}],
+                "widgets_values": ["example.png", "image"],
+            },
+            {
+                "id": 67,
+                "type": "WanFirstLastFrameToVideo",
+                "inputs": [
+                    {"name": "start_image", "type": "IMAGE", "link": 157},
+                    {"name": "end_image", "type": "IMAGE", "link": 158},
+                ],
+                "outputs": [],
+                "widgets_values": [],
+            },
+        ],
+        "links": [
+            [157, 62, 0, 67, 0, "IMAGE"],
+            [158, 68, 0, 67, 1, "IMAGE"],
+        ],
+    }
+
+    projected = project_prompt_to_graph_data(workflow, graph_data)
+
+    assert projected is not None
+    node_by_id = {
+        str(node["id"]): node
+        for node in projected["nodes"]
+        if isinstance(node, dict) and "id" in node
+    }
+
+    consumer_inputs = node_by_id["67"]["inputs"]
+    assert consumer_inputs[0]["link"] == 157
+    assert consumer_inputs[1]["link"] is None
+    assert projected["links"] == [[157, 62, 0, 67, 0, "IMAGE"]]
+    assert node_by_id["68"]["outputs"][0]["links"] is None
 
 
 @pytest.mark.anyio
