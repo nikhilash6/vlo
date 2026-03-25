@@ -24,6 +24,7 @@ interface CreateGenerationPlanOptions {
   mediaInputs: Record<string, GenerationMediaInputValue | null>;
   slotValues: Record<string, SlotValue>;
   derivedMaskMappings: DerivedMaskMapping[];
+  exactAspectRatio: boolean;
   targetResolution: number;
   maskCropMode: import("../types").WorkflowMaskCroppingMode;
   maskCropDilation: number;
@@ -190,6 +191,7 @@ export function createGenerationPlan(
         fps: options.projectConfig.fps,
         aspectRatio: options.projectConfig.aspectRatio,
       },
+      exactAspectRatio: options.exactAspectRatio,
       targetResolution: options.targetResolution,
       maskCropDilation: options.maskCropDilation,
       maskCropMode: options.maskCropMode,
@@ -236,6 +238,7 @@ export async function prepareGenerationPlan(
     plan.preprocess.derivedMaskMappings,
     plan.preprocess.maskCropDilation,
     {
+      exactAspectRatio: plan.preprocess.exactAspectRatio,
       maskCropMode: plan.preprocess.maskCropMode,
       projectConfig: plan.preprocess.projectConfig,
       signal: options.signal,

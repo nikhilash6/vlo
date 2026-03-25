@@ -256,6 +256,7 @@ options: { signal?: AbortSignal } = {},
     formData.append("graph_data", JSON.stringify(request.graphData));
   }
   formData.append("target_aspect_ratio", request.targetAspectRatio);
+  formData.append("aspect_ratio_exact", String(request.exactAspectRatio));
   formData.append("target_resolution", String(request.targetResolution));
 
   for (const [nodeId, text] of Object.entries(request.textInputs)) {

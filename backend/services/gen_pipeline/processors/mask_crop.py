@@ -42,6 +42,7 @@ class _MaskCropProcessor:
             "buffered_videos",
             "rules",
             "target_aspect_ratio",
+            "exact_aspect_ratio",
             "mask_crop_dilation",
         ),
         writes=("buffered_videos", "mask_crop_metadata", "processed_mask_bytes"),
@@ -78,6 +79,7 @@ class _MaskCropProcessor:
                 ctx.workflow,
                 ctx.rules,
                 ctx.target_aspect_ratio,
+                ctx.exact_aspect_ratio,
                 ctx.target_resolution,
             )
             ctx.warnings.extend(aspect_ratio_processing_warnings)

@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   captureFramePngAtTick: vi.fn(),
   renderTimelineSelectionToWebm: vi.fn(),
   renderTimelineSelectionToWebmWithMask: vi.fn(),
-  injectWorkflowAndRead: vi.fn(),
 }));
 
 vi.mock("../utils/inputSelection", () => ({
@@ -17,10 +16,6 @@ vi.mock("../utils/inputSelection", () => ({
   renderTimelineSelectionToWebm: mocks.renderTimelineSelectionToWebm,
   renderTimelineSelectionToWebmWithMask:
     mocks.renderTimelineSelectionToWebmWithMask,
-}));
-
-vi.mock("../services/workflowSyncController", () => ({
-  injectWorkflowAndRead: mocks.injectWorkflowAndRead,
 }));
 
 describe("useGenerationStore metadata replay", () => {
@@ -61,7 +56,6 @@ describe("useGenerationStore metadata replay", () => {
         type: "video/webm",
       }),
     });
-    mocks.injectWorkflowAndRead.mockReset();
   });
 
   it("matches sidecar presentation from saved workflow graph data and restores asset inputs", async () => {
@@ -259,120 +253,6 @@ describe("useGenerationStore metadata replay", () => {
       isExtracting: false,
       preparedVideoFile,
       thumbnailFile,
-    });
-  });
-
-  it("falls back to the saved workflow name when no workflow snapshot is stored", async () => {
-    const sourceAsset: Asset = {
-      id: "source-asset",
-      hash: "hash-source",
-      name: "source.png",
-      type: "image",
-      src: "source.png",
-      createdAt: Date.now(),
-    };
-    const graphData = {
-      nodes: [{ id: 145, type: "LoadImage", widgets_values: ["source.png"] }],
-    };
-    const generatedAsset: Asset = {
-      id: "generated-asset",
-      hash: "hash-generated",
-      name: "generated.png",
-      type: "image",
-      src: "generated.png",
-      createdAt: Date.now(),
-      creationMetadata: {
-        source: "generated",
-        workflowName: "Original Workflow",
-        targetResolution: 720,
-        inputs: [
-          {
-            nodeId: "145",
-            kind: "draggedAsset",
-            parentAssetId: sourceAsset.id,
-          },
-        ],
-      },
-    };
-
-    useAssetStore.setState({ assets: [sourceAsset, generatedAsset] });
-    useGenerationStore.setState({
-      editorRef: {} as HTMLIFrameElement,
-    });
-
-    vi.spyOn(comfyApi, "listWorkflows").mockResolvedValue([
-      { id: "original_workflow.json", name: "Original Workflow" },
-    ]);
-    vi.spyOn(comfyApi, "getWorkflowContent").mockResolvedValue(graphData);
-    vi.spyOn(comfyApi, "getWorkflowRules").mockResolvedValue({
-      workflow_id: "original_workflow.json",
-      has_sidecar: true,
-      rules: createDefaultWorkflowRules({
-        aspect_ratio_processing: {
-          enabled: true,
-          resolutions: [480, 720, 1080],
-        },
-        nodes: {
-          "145": {
-            present: {
-              label: "Source Image",
-              input_type: "image",
-              param: "image",
-              class_type: "LoadImage",
-            },
-          },
-        },
-      }),
-      warnings: [],
-    });
-    mocks.injectWorkflowAndRead.mockResolvedValue({
-      ok: true,
-      deferred: false,
-      reason: null,
-      warnings: null,
-      workflowResult: {
-        workflow: {
-          "145": {
-            class_type: "LoadImage",
-            inputs: { image: "source.png" },
-          },
-        },
-        graphData,
-        inputs: [
-          {
-            nodeId: "145",
-            classType: "LoadImage",
-            inputType: "image",
-            param: "image",
-            label: "Source Image",
-            currentValue: "source.png",
-            origin: "inferred",
-          },
-        ],
-        filename: "original_workflow.json",
-      },
-    });
-
-    await useGenerationStore
-      .getState()
-      .loadWorkflowFromAssetMetadata(generatedAsset);
-
-    const state = useGenerationStore.getState();
-    const restoredInput = Object.values(state.mediaInputs)[0];
-
-    expect(state.selectedWorkflowId).toBe("original_workflow.json");
-    expect(state.rulesWorkflowSourceId).toBe("original_workflow.json");
-    expect(state.targetResolution).toBe(720);
-    expect(mocks.injectWorkflowAndRead).toHaveBeenCalledWith(
-      state.editorRef,
-      graphData,
-      "original_workflow.json",
-      expect.any(Function),
-      null,
-    );
-    expect(restoredInput).toMatchObject({
-      kind: "asset",
-      asset: { id: sourceAsset.id },
     });
   });
 });

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AssetBrowser } from "../AssetBrowser";
 import { useAssetStore } from "../useAssetStore";
@@ -180,55 +180,6 @@ describe("AssetBrowser Component", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("falls back to per-asset cards when a family spans multiple media types", () => {
-    mockStore({
-      assets: [
-        {
-          id: "mixed-video",
-          type: "video",
-          name: "mixed.mp4",
-          src: "mixed.mp4",
-          hash: "mixed-video",
-          familyId: "mixed-family",
-          createdAt: 2,
-        },
-        {
-          id: "mixed-image",
-          type: "image",
-          name: "mixed.png",
-          src: "mixed.png",
-          hash: "mixed-image",
-          familyId: "mixed-family",
-          createdAt: 1,
-        },
-      ],
-      families: [
-        {
-          id: "mixed-family",
-          representativeAssetId: "mixed-video",
-          autoMatchKeys: ["generation-family:v1:mixed"],
-          compatibility: {
-            assetType: "video",
-            durationMs: 5000,
-            fpsMilli: 24000,
-          },
-          createdAt: 1,
-          updatedAt: 2,
-        },
-      ],
-    });
-
-    render(<AssetBrowser />);
-
-    expect(screen.getByText("mixed.mp4")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open family" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText("Images"));
-
-    expect(screen.getByText("mixed.png")).toBeInTheDocument();
-    expect(screen.queryByText("mixed.mp4")).not.toBeInTheDocument();
-  });
-
   it("triggers upload when files are selected", () => {
     mockStore({ assets: [] });
 
@@ -371,19 +322,10 @@ describe("AssetBrowser Component", () => {
 
     render(<AssetBrowser />);
 
-    expect(screen.getAllByRole("button", { name: "Open family" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Asset actions" })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Open family" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Asset actions" })).toBeInTheDocument();
 
-    const representativeCard = screen
-      .getByText("vacation.mp4")
-      .closest('[data-testid="asset-card"]');
-    expect(representativeCard).not.toBeNull();
-
-    fireEvent.click(
-      within(representativeCard as HTMLElement).getByRole("button", {
-        name: "Open family",
-      }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Open family" }));
 
     expect(
       screen.getByRole("dialog", { name: /Asset Family/i }),

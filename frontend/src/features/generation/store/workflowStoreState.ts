@@ -15,10 +15,6 @@ import {
   restoreMediaInputsFromMetadata,
 } from "./metadata";
 import {
-  canRegenerateFromAssetMetadata,
-  resolveMetadataWorkflowNameMatch,
-} from "../utils/metadataReplay";
-import {
   LOADED_WORKFLOW_DISPLAY_NAME,
   TEMP_WORKFLOW_ID,
 } from "./constants";
@@ -39,37 +35,6 @@ import {
 interface WorkflowStoreStateOptions {
   getNextWorkflowLoadRequestId: () => number;
   isCurrentWorkflowLoadRequestId: (requestId: number) => boolean;
-}
-
-const METADATA_REPLAY_INPUT_WAIT_TIMEOUT_MS = 4_000;
-const METADATA_REPLAY_INPUT_WAIT_POLL_MS = 50;
-
-async function waitForReplayWorkflowInputs(
-  get: GenerationStoreGet,
-): Promise<void> {
-  const deadline = Date.now() + METADATA_REPLAY_INPUT_WAIT_TIMEOUT_MS;
-
-  while (Date.now() < deadline) {
-    const state = get();
-
-    if (state.workflowInputs.length > 0) {
-      return;
-    }
-
-    if (state.workflowLoadState === "error") {
-      throw new Error(
-        state.workflowLoadError ?? "Failed to prepare workflow inputs",
-      );
-    }
-
-    await new Promise((resolve) =>
-      globalThis.setTimeout(resolve, METADATA_REPLAY_INPUT_WAIT_POLL_MS),
-    );
-  }
-
-  throw new Error(
-    "Saved generation inputs could not be restored because the workflow inputs were not ready in time",
-  );
 }
 
 export function buildWorkflowStoreState(
@@ -97,6 +62,8 @@ export function buildWorkflowStoreState(
     derivedMaskMappings: [],
     targetResolution: DEFAULT_GENERATION_TARGET_RESOLUTION,
     setTargetResolution: (targetResolution) => set({ targetResolution }),
+    exactAspectRatio: false,
+    setExactAspectRatio: (exactAspectRatio) => set({ exactAspectRatio }),
     maskCropMode: "crop",
     setMaskCropMode: (maskCropMode) => set({ maskCropMode }),
     maskCropDilation: 0.1,
@@ -491,10 +458,16 @@ export function buildWorkflowStoreState(
 
     loadWorkflowFromAssetMetadata: async (asset) => {
       const metadata = asset.creationMetadata;
-      if (!canRegenerateFromAssetMetadata(metadata)) {
-        throw new Error(
-          "This asset does not include saved workflow information for regeneration",
-        );
+      if (metadata?.source !== "generated") {
+        throw new Error("Only generated assets can be regenerated from metadata");
+      }
+
+      const workflow =
+        metadata.comfyuiPrompt ?? metadata.comfyuiWorkflow ?? null;
+      const graphData =
+        metadata.comfyuiWorkflow ?? metadata.comfyuiPrompt ?? null;
+      if (!workflow || !graphData) {
+        throw new Error("This asset does not include saved workflow metadata");
       }
 
       set({
@@ -508,56 +481,32 @@ export function buildWorkflowStoreState(
 
       try {
         const state = get();
-        const workflow =
-          metadata.comfyuiPrompt ?? metadata.comfyuiWorkflow ?? null;
-        const graphData =
-          metadata.comfyuiWorkflow ?? metadata.comfyuiPrompt ?? null;
+        const resolvedMatch = await resolveMetadataWorkflowMatch(
+          graphData,
+          state.availableWorkflows,
+        );
+        const nextTempWorkflow: TempWorkflow = {
+          workflow,
+          graphData,
+          inputs: parseMetadataWorkflowInputs(
+            metadata.comfyuiPrompt ?? null,
+            state.inputNodeMap,
+          ),
+          name: LOADED_WORKFLOW_DISPLAY_NAME,
+          rules: resolvedMatch.rules,
+          rulesSourceId: resolvedMatch.rulesSourceId,
+          rulesWarnings: resolvedMatch.rulesWarnings,
+        };
 
-        if (workflow && graphData) {
-          const resolvedMatch = await resolveMetadataWorkflowMatch(
-            graphData,
-            state.availableWorkflows,
-          );
-          const nextTempWorkflow: TempWorkflow = {
-            workflow,
-            graphData,
-            inputs: parseMetadataWorkflowInputs(
-              metadata.comfyuiPrompt ?? null,
-              state.inputNodeMap,
-            ),
-            name: LOADED_WORKFLOW_DISPLAY_NAME,
-            rules: resolvedMatch.rules,
-            rulesSourceId: resolvedMatch.rulesSourceId,
-            rulesWarnings: resolvedMatch.rulesWarnings,
-          };
+        set({
+          tempWorkflow: nextTempWorkflow,
+          availableWorkflows: upsertTempWorkflowOption(
+            resolvedMatch.availableWorkflows,
+            nextTempWorkflow,
+          ),
+        });
 
-          set({
-            tempWorkflow: nextTempWorkflow,
-            availableWorkflows: upsertTempWorkflowOption(
-              resolvedMatch.availableWorkflows,
-              nextTempWorkflow,
-            ),
-          });
-
-          await get().loadWorkflow(TEMP_WORKFLOW_ID);
-        } else {
-          const resolvedWorkflow = await resolveMetadataWorkflowNameMatch(
-            metadata.workflowName,
-            state.availableWorkflows,
-          );
-
-          if (!resolvedWorkflow.matchedWorkflow) {
-            throw new Error(
-              `Could not find the saved workflow "${metadata.workflowName}"`,
-            );
-          }
-
-          set({
-            availableWorkflows: resolvedWorkflow.availableWorkflows,
-          });
-
-          await get().loadWorkflow(resolvedWorkflow.matchedWorkflow.id);
-        }
+        await get().loadWorkflow(TEMP_WORKFLOW_ID);
 
         const savedTargetResolution = metadata.targetResolution;
         if (typeof savedTargetResolution === "number") {
@@ -576,8 +525,6 @@ export function buildWorkflowStoreState(
         }
 
         if (metadata.inputs.length > 0) {
-          await waitForReplayWorkflowInputs(get);
-
           set({
             isWorkflowLoading: true,
             workflowLoadState: "loading",

@@ -23,6 +23,7 @@ class BackendPipelineContext:
         workflow: dict[str, Any],
         workflow_id: str | None = None,
         target_aspect_ratio: str | None = None,
+        exact_aspect_ratio: bool = True,
         target_resolution: Any = None,
         mask_crop_dilation: float | None = None,
         mask_crop_mode: MaskCroppingMode | None = None,
@@ -49,6 +50,7 @@ class BackendPipelineContext:
         self.workflow = workflow
         self.workflow_id = workflow_id
         self.target_aspect_ratio = target_aspect_ratio
+        self.exact_aspect_ratio = exact_aspect_ratio
         self.target_resolution = target_resolution
         self.mask_crop_dilation = mask_crop_dilation
         self.mask_crop_mode = mask_crop_mode

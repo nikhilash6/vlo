@@ -145,6 +145,49 @@ describe("GenerationInputs", () => {
     expect(screen.getByText("80%")).toBeInTheDocument();
   });
 
+  it("renders the exact aspect ratio toggle beside the aspect ratio widget", () => {
+    const handleExactAspectRatioChange = vi.fn();
+
+    render(
+      <GenerationInputs
+        inputs={[]}
+        textValues={{}}
+        onTextValueCommit={vi.fn()}
+        mediaInputs={{}}
+        onInputDrop={vi.fn()}
+        onExternalInputDrop={vi.fn()}
+        onInputClear={vi.fn()}
+        onClickSelect={vi.fn()}
+        widgetInputs={[
+          {
+            nodeId: "12",
+            param: "aspect_ratio",
+            currentValue: "16:9",
+            config: {
+              label: "Aspect Ratio",
+              controlAfterGenerate: false,
+              valueType: "enum",
+              options: ["16:9", "4:3"],
+            },
+          },
+        ]}
+        widgetValues={{}}
+        randomizeToggles={{}}
+        onWidgetChange={vi.fn()}
+        onToggleRandomize={vi.fn()}
+        showExactAspectRatioControl={true}
+        exactAspectRatio={false}
+        onExactAspectRatioChange={handleExactAspectRatioChange}
+        exactAspectRatioTooltip="Tooltip"
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Use exact input aspect ratio"));
+
+    expect(handleExactAspectRatioChange).toHaveBeenCalledWith(true);
+    expect(screen.getByText("EXACT")).toBeInTheDocument();
+  });
+
   it("forwards compatible external file drops to the media input handler", () => {
     const handleExternalInputDrop = vi.fn();
 

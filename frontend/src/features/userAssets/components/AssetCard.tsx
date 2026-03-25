@@ -28,14 +28,13 @@ import {
   useTimelineClipCountForAsset,
 } from "../../timeline";
 import { useGenerationStore } from "../../generation/useGenerationStore";
-import { canRegenerateFromAssetMetadata } from "../../generation/utils/metadataReplay";
 import { getTimelineSelectionFromAsset } from "../../timelineSelection";
 import { useAssetStore } from "../useAssetStore";
 import { AssetPreviewDialog } from "./AssetPreviewDialog";
 
 interface AssetCardProps {
   asset: Asset;
-  onShowFamily?: (familyId: string) => void;
+  onOpenFamily?: () => void;
   layout?: "default" | "square";
 }
 
@@ -146,12 +145,16 @@ const formatDuration = (seconds?: number) => {
 };
 
 function canRegenerateFromMetadata(asset: Asset): boolean {
-  return canRegenerateFromAssetMetadata(asset.creationMetadata);
+  const metadata = asset.creationMetadata;
+  return (
+    metadata?.source === "generated" &&
+    Boolean(metadata.comfyuiPrompt || metadata.comfyuiWorkflow)
+  );
 }
 
 function AssetCardComponent({
   asset,
-  onShowFamily,
+  onOpenFamily,
   layout = "default",
 }: AssetCardProps) {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -193,7 +196,7 @@ function AssetCardComponent({
   const timelineClipCount = useTimelineClipCountForAsset(asset.id);
   const timelineSelection = getTimelineSelectionFromAsset(asset);
   const canRegenerate = canRegenerateFromMetadata(asset);
-  const canShowFamily = Boolean(asset.familyId && onShowFamily);
+  const usesFamilyAction = Boolean(onOpenFamily);
   const isMenuOpen = Boolean(menuAnchorEl);
 
   function handleOpenMenu(event: React.MouseEvent<HTMLButtonElement>) {
@@ -244,9 +247,7 @@ function AssetCardComponent({
   function handleOpenFamily(event: React.MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
     event.preventDefault();
-    if (asset.familyId && onShowFamily) {
-      onShowFamily(asset.familyId);
-    }
+    onOpenFamily?.();
   }
 
   function handleFavouriteToggle(event: React.MouseEvent<HTMLButtonElement>) {
@@ -360,59 +361,60 @@ function AssetCardComponent({
           )}
         </StyledFavouriteButton>
 
-        {canShowFamily ? (
+        {usesFamilyAction ? (
           <StyledMenuButton
             size="small"
             onClick={handleOpenFamily}
             onPointerDown={(e) => e.stopPropagation()}
             aria-label="Open family"
             title="Open family"
-            sx={{ right: 34 }}
           >
             <FolderOpenIcon fontSize="small" />
           </StyledMenuButton>
-        ) : null}
-
-        <StyledMenuButton
-          size="small"
-          onClick={handleOpenMenu}
-          onPointerDown={(e) => e.stopPropagation()}
-          aria-label="Asset actions"
-          title="Asset actions"
-        >
-          <MoreVertIcon fontSize="small" />
-        </StyledMenuButton>
-        <Menu
-          anchorEl={menuAnchorEl}
-          open={isMenuOpen}
-          onClose={handleCloseMenu}
-          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-          transformOrigin={{ vertical: "top", horizontal: "right" }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          {canRegenerate ? (
-            <MenuItem onClick={() => void handleRegenerate()}>
-              <ListItemIcon>
-                <ReplayIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Regenerate</ListItemText>
-            </MenuItem>
-          ) : null}
-          {timelineSelection ? (
-            <MenuItem onClick={handleSendToTimeline}>
-              <ListItemIcon>
-                <TimelineIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Send to Timeline</ListItemText>
-            </MenuItem>
-          ) : null}
-          <MenuItem onClick={handleDelete}>
-            <ListItemIcon>
-              <DeleteIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Delete</ListItemText>
-          </MenuItem>
-        </Menu>
+        ) : (
+          <>
+            <StyledMenuButton
+              size="small"
+              onClick={handleOpenMenu}
+              onPointerDown={(e) => e.stopPropagation()}
+              aria-label="Asset actions"
+              title="Asset actions"
+            >
+              <MoreVertIcon fontSize="small" />
+            </StyledMenuButton>
+            <Menu
+              anchorEl={menuAnchorEl}
+              open={isMenuOpen}
+              onClose={handleCloseMenu}
+              anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+              transformOrigin={{ vertical: "top", horizontal: "right" }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              {canRegenerate ? (
+                <MenuItem onClick={() => void handleRegenerate()}>
+                  <ListItemIcon>
+                    <ReplayIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Regenerate</ListItemText>
+                </MenuItem>
+              ) : null}
+              {timelineSelection ? (
+                <MenuItem onClick={handleSendToTimeline}>
+                  <ListItemIcon>
+                    <TimelineIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Send to Timeline</ListItemText>
+                </MenuItem>
+              ) : null}
+              <MenuItem onClick={handleDelete}>
+                <ListItemIcon>
+                  <DeleteIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Delete</ListItemText>
+              </MenuItem>
+            </Menu>
+          </>
+        )}
 
         {/* Metadata Area */}
         <MetadataArea layout={layout}>

@@ -9,6 +9,7 @@ import {
   CURRENT_PROJECT_SCHEMA_VERSION,
   VLO_APP_VERSION,
 } from "./constants";
+import { PROJECT_ASPECT_RATIOS } from "./aspectRatioOptions";
 import type {
   ProjectDocumentConfig,
   TimelineSnapshot,
@@ -28,13 +29,7 @@ const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   layoutMode: "compact",
 };
 
-const VALID_ASPECT_RATIOS = new Set<AspectRatio>([
-  "16:9",
-  "4:3",
-  "1:1",
-  "3:4",
-  "9:16",
-]);
+const VALID_ASPECT_RATIOS = new Set<AspectRatio>(PROJECT_ASPECT_RATIOS);
 
 const VALID_LAYOUT_MODES = new Set<NonNullable<ProjectConfig["layoutMode"]>>([
   "full-height",
