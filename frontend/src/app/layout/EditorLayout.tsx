@@ -22,6 +22,7 @@ import { RightSidebarPanel } from "./RightSidebarPanel";
 
 const SIDEBAR_WIDTH = 300;
 const TIMELINE_HEIGHT = 280;
+const ASSET_DRAG_ACTIVATION_DISTANCE_PX = 1;
 import { ProjectSettingsMenu } from "./ProjectSettingsMenu";
 
 interface EditorRegionProps {
@@ -113,7 +114,7 @@ export function EditorLayout() {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 3,
+        distance: ASSET_DRAG_ACTIVATION_DISTANCE_PX,
       },
     }),
   );
