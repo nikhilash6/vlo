@@ -17,12 +17,7 @@ ApplyAspectRatioProcessingFn = Callable[
 class _AspectRatioProcessor:
     meta = ProcessorMeta(
         name="aspect_ratio",
-        reads=(
-            "workflow",
-            "rules",
-            "target_aspect_ratio",
-            "target_resolution",
-        ),
+        reads=("workflow", "rules", "target_aspect_ratio", "target_resolution"),
         writes=("aspect_ratio_metadata", "workflow", "warnings"),
         description="Applies aspect ratio processing to the workflow and records the returned metadata",
     )

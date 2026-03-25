@@ -34,12 +34,15 @@ vi.mock("../../../timeline", () => {
   };
 });
 
-vi.mock("../../../generation/useGenerationStore", () => ({
+vi.mock("../../../generation/publicApi", () => ({
   useGenerationStore: {
     getState: () => ({
       loadWorkflowFromAssetMetadata: mocks.mockLoadWorkflowFromAssetMetadata,
     }),
   },
+  canRegenerateFromAssetMetadata: (metadata: Asset["creationMetadata"]) =>
+    metadata?.source === "generated" &&
+    Boolean(metadata.comfyuiPrompt || metadata.comfyuiWorkflow || metadata.workflowName),
 }));
 
 vi.mock("../../useAssetStore");
@@ -86,6 +89,22 @@ const generatedFromSelectionAsset: Asset = {
   },
 };
 
+const generatedWithWorkflowNameOnlyAsset: Asset = {
+  ...mockAsset,
+  id: "asset-generated-workflow-name-only",
+  creationMetadata: {
+    source: "generated",
+    workflowName: "video_ltx2_3_i2v",
+    inputs: [
+      {
+        nodeId: "node-1",
+        kind: "draggedAsset",
+        parentAssetId: "source-asset",
+      },
+    ],
+  },
+};
+
 const generatedWithWorkflowMetadataAsset: Asset = {
   ...mockAsset,
   id: "asset-generated-metadata",
@@ -102,10 +121,27 @@ const generatedWithWorkflowMetadataAsset: Asset = {
   },
 };
 
-const familyRepresentativeAsset: Asset = {
+const generatedFamilyAsset: Asset = {
   ...mockAsset,
-  id: "asset-family",
+  id: "asset-family-generated",
   familyId: "family-1",
+  creationMetadata: {
+    source: "generated",
+    workflowName: "Workflow",
+    inputs: [
+      {
+        nodeId: "node-1",
+        kind: "timelineSelection",
+        timelineSelection: mockTimelineSelection,
+      },
+    ],
+    comfyuiPrompt: {
+      "1": {
+        class_type: "LoadVideo",
+        inputs: { file: "clip.mp4" },
+      },
+    },
+  },
 };
 
 type AssetStoreState = ReturnType<typeof useAssetStore.getState>;
@@ -201,6 +237,19 @@ describe("AssetCard actions", () => {
     );
   });
 
+  it("shows regenerate for generated assets with a saved workflow name", () => {
+    mockStores(0);
+
+    render(<AssetCard asset={generatedWithWorkflowNameOnlyAsset} />);
+
+    fireEvent.click(screen.getByLabelText("Asset actions"));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate" }));
+
+    expect(mocks.mockLoadWorkflowFromAssetMetadata).toHaveBeenCalledWith(
+      generatedWithWorkflowNameOnlyAsset,
+    );
+  });
+
   it("does not show send to timeline when no selection metadata exists", () => {
     mockStores(0);
 
@@ -216,23 +265,34 @@ describe("AssetCard actions", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows a folder action instead of the menu when a family opener is provided", () => {
+  it("keeps the menu actions and adds a folder action for family cards", () => {
     mockStores(0);
 
     render(
       <AssetCard
-        asset={familyRepresentativeAsset}
-        onOpenFamily={mocks.mockOpenFamily}
+        asset={generatedFamilyAsset}
+        onShowFamily={mocks.mockOpenFamily}
       />,
     );
 
+    const menuButton = screen.getByRole("button", { name: "Asset actions" });
+    const familyButton = screen.getByRole("button", { name: "Open family" });
+
+    expect(menuButton).toBeInTheDocument();
+    expect(familyButton).toBeInTheDocument();
+
+    fireEvent.click(menuButton);
+
     expect(
-      screen.queryByRole("button", { name: "Asset actions" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("menuitem", { name: "Send to Timeline" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Regenerate" }),
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open family" }));
+    fireEvent.click(familyButton);
 
-    expect(mocks.mockOpenFamily).toHaveBeenCalledTimes(1);
+    expect(mocks.mockOpenFamily).toHaveBeenCalledWith("family-1");
   });
 
   it("opens a video preview modal from the play button and closes with the x button", async () => {

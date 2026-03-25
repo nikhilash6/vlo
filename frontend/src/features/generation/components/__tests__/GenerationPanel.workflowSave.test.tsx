@@ -136,13 +136,11 @@ function resetGenerationStore(fetchWorkflows = vi.fn()) {
     derivedMaskMappings: [],
     maskCropMode: "crop",
     maskCropDilation: 0.1,
-    exactAspectRatio: false,
     targetResolution: 1080,
     syncedGraphData: { nodes: [{ id: 1 }] },
     selectedWorkflowId: "wf.json",
     fetchWorkflows,
     setTargetResolution: vi.fn(),
-    setExactAspectRatio: vi.fn(),
     setMaskCropMode: vi.fn(),
     setMaskCropDilation: vi.fn(),
   });

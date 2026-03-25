@@ -1,5 +1,6 @@
 export { GenerationPanel } from "./GenerationPanel";
 export { useGenerationStore } from "./useGenerationStore";
+export { canRegenerateFromAssetMetadata } from "./publicApi";
 export type {
   GenerationMode,
   InputSlot,

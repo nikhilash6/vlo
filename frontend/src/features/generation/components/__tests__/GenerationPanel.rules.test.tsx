@@ -119,8 +119,6 @@ describe("GenerationPanel workflow rule hints", () => {
       syncedGraphData: null,
       targetResolution: 1080,
       setTargetResolution: vi.fn(),
-      exactAspectRatio: false,
-      setExactAspectRatio: vi.fn(),
     });
   });
 
@@ -193,9 +191,6 @@ describe("GenerationPanel workflow rule hints", () => {
     render(<GenerationPanel />);
 
     expect(screen.getByLabelText("Resolution")).toBeInTheDocument();
-    expect(
-      screen.getByLabelText("Use exact input aspect ratio"),
-    ).toBeInTheDocument();
     expect(
       screen.getByText("Generation resolution controls the short edge before strided resize."),
     ).toBeInTheDocument();

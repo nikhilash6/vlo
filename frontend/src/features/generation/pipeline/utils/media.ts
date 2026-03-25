@@ -20,7 +20,6 @@ import {
   renameWithExtension,
 } from "./files";
 import { toPositiveInteger } from "./fps";
-import { PROJECT_ASPECT_RATIOS } from "../../../project";
 
 // ---------------------------------------------------------------------------
 // Resize target resolution
@@ -51,120 +50,6 @@ function formatAspectRatio(width: number, height: number): string | null {
 
   const divisor = greatestCommonDivisor(normalizedWidth, normalizedHeight);
   return `${normalizedWidth / divisor}:${normalizedHeight / divisor}`;
-}
-
-function parseAspectRatio(
-  value: string,
-): { width: number; height: number; ratio: number } | null {
-  const raw = value.trim();
-  if (!raw) return null;
-
-  const separator = raw.includes(":") ? ":" : raw.includes("/") ? "/" : null;
-  if (!separator) return null;
-
-  const [widthText, heightText] = raw.split(separator, 2);
-  const width = Number.parseFloat(widthText.trim());
-  const height = Number.parseFloat(heightText.trim());
-  if (
-    !Number.isFinite(width) ||
-    !Number.isFinite(height) ||
-    width <= 0 ||
-    height <= 0
-  ) {
-    return null;
-  }
-
-  return {
-    width,
-    height,
-    ratio: width / height,
-  };
-}
-
-function nearlyEqual(left: number, right: number, epsilon = 1e-6): boolean {
-  return Math.abs(left - right) <= epsilon;
-}
-
-function resolveAspectRatioCropTarget(
-  sourceWidth: number,
-  sourceHeight: number,
-  targetAspectRatio: string,
-  options: { evenDimensions?: boolean } = {},
-): ResizeTarget | null {
-  const normalizedWidth = toPositiveInteger(sourceWidth);
-  const normalizedHeight = toPositiveInteger(sourceHeight);
-  const parsedAspectRatio = parseAspectRatio(targetAspectRatio);
-  if (
-    normalizedWidth === null ||
-    normalizedHeight === null ||
-    parsedAspectRatio === null
-  ) {
-    return null;
-  }
-
-  const sourceRatio = normalizedWidth / normalizedHeight;
-  if (nearlyEqual(sourceRatio, parsedAspectRatio.ratio)) {
-    return {
-      width: normalizedWidth,
-      height: normalizedHeight,
-    };
-  }
-
-  let targetWidth = normalizedWidth;
-  let targetHeight = normalizedHeight;
-
-  if (sourceRatio > parsedAspectRatio.ratio) {
-    targetWidth = Math.max(
-      1,
-      Math.round(normalizedHeight * parsedAspectRatio.ratio),
-    );
-  } else {
-    targetHeight = Math.max(
-      1,
-      Math.round(normalizedWidth / parsedAspectRatio.ratio),
-    );
-  }
-
-  if (options.evenDimensions) {
-    if (targetWidth > 1 && targetWidth % 2 !== 0) {
-      targetWidth -= 1;
-    }
-    if (targetHeight > 1 && targetHeight % 2 !== 0) {
-      targetHeight -= 1;
-    }
-  }
-
-  return {
-    width: Math.max(1, targetWidth),
-    height: Math.max(1, targetHeight),
-  };
-}
-
-export function normalizeToSupportedProjectAspectRatio(
-  aspectRatio: string,
-): string | null {
-  const parsedAspectRatio = parseAspectRatio(aspectRatio);
-  if (!parsedAspectRatio) {
-    return null;
-  }
-
-  let closestAspectRatio = PROJECT_ASPECT_RATIOS[0] ?? null;
-  let closestDelta = Number.POSITIVE_INFINITY;
-
-  for (const candidate of PROJECT_ASPECT_RATIOS) {
-    const parsedCandidate = parseAspectRatio(candidate);
-    if (!parsedCandidate) {
-      continue;
-    }
-
-    const delta = Math.abs(parsedAspectRatio.ratio - parsedCandidate.ratio);
-    if (delta < closestDelta) {
-      closestDelta = delta;
-      closestAspectRatio = candidate;
-    }
-  }
-
-  return closestAspectRatio;
 }
 
 export function resolveResizeTarget(
@@ -341,68 +226,6 @@ export async function resizeImageToExactDimensions(
   }
 }
 
-export async function cropImageToAspectRatio(
-  file: File,
-  targetAspectRatio: string,
-): Promise<File> {
-  if (typeof createImageBitmap !== "function") {
-    return file;
-  }
-
-  const bitmap = await createImageBitmap(file);
-  try {
-    const cropTarget = resolveAspectRatioCropTarget(
-      bitmap.width,
-      bitmap.height,
-      targetAspectRatio,
-    );
-    if (
-      !cropTarget ||
-      (cropTarget.width === bitmap.width && cropTarget.height === bitmap.height)
-    ) {
-      return file;
-    }
-
-    const offsetX = Math.max(0, Math.floor((bitmap.width - cropTarget.width) / 2));
-    const offsetY = Math.max(
-      0,
-      Math.floor((bitmap.height - cropTarget.height) / 2),
-    );
-
-    const canvas = createOutputCanvas(cropTarget.width, cropTarget.height);
-    const context2dRaw = canvas.getContext("2d");
-    if (!isCanvas2DContext(context2dRaw)) {
-      throw new Error("Failed to acquire 2D context for image crop");
-    }
-
-    context2dRaw.clearRect(0, 0, cropTarget.width, cropTarget.height);
-    context2dRaw.drawImage(
-      bitmap,
-      offsetX,
-      offsetY,
-      cropTarget.width,
-      cropTarget.height,
-      0,
-      0,
-      cropTarget.width,
-      cropTarget.height,
-    );
-
-    const outputMimeType = resolveImageOutputMimeType(file);
-    const outputBlob = await convertCanvasToBlob(canvas, outputMimeType);
-    const outputName = renameWithExtension(
-      file.name,
-      extensionForMimeType(outputMimeType),
-    );
-    return new File([outputBlob], outputName, {
-      type: outputMimeType,
-      lastModified: Date.now(),
-    });
-  } finally {
-    bitmap.close();
-  }
-}
-
 export async function resizeVideoToExactDimensions(
   file: File,
   target: ResizeTarget,
@@ -444,72 +267,6 @@ export async function resizeVideoToExactDimensions(
   }
 }
 
-export async function cropVideoToAspectRatio(
-  file: File,
-  targetAspectRatio: string,
-): Promise<File> {
-  const probeBlob = file.slice(0, 1);
-  if (typeof probeBlob.arrayBuffer !== "function") {
-    return file;
-  }
-
-  const input = new Input({
-    source: new BlobSource(file),
-    formats: ALL_FORMATS,
-  });
-  try {
-    const videoTrack = await input.getPrimaryVideoTrack();
-    if (!videoTrack) {
-      return file;
-    }
-
-    const cropTarget = resolveAspectRatioCropTarget(
-      videoTrack.displayWidth,
-      videoTrack.displayHeight,
-      targetAspectRatio,
-      { evenDimensions: true },
-    );
-    if (
-      !cropTarget ||
-      (cropTarget.width === videoTrack.displayWidth &&
-        cropTarget.height === videoTrack.displayHeight)
-    ) {
-      return file;
-    }
-
-    const { mimeType, format } = resolveVideoOutputContainer(file);
-    const outputTarget = new BufferTarget();
-    const output = new Output({
-      format,
-      target: outputTarget,
-    });
-    const conversion = await Conversion.init({
-      input,
-      output,
-      video: {
-        width: cropTarget.width,
-        height: cropTarget.height,
-        fit: "cover",
-      },
-    });
-    await conversion.execute();
-    if (!outputTarget.buffer) {
-      throw new Error("Video crop output buffer is empty");
-    }
-
-    const outputName = renameWithExtension(
-      file.name,
-      extensionForMimeType(mimeType),
-    );
-    return new File([outputTarget.buffer], outputName, {
-      type: mimeType,
-      lastModified: Date.now(),
-    });
-  } finally {
-    input.dispose();
-  }
-}
-
 export async function maybeResizeVisualFile(
   file: File,
   target: ResizeTarget | null,
@@ -532,31 +289,5 @@ export async function maybeResizeVisualFile(
       return file;
     }
   }
-  return file;
-}
-
-export async function maybeCropVisualFileToAspectRatio(
-  file: File,
-  targetAspectRatio: string,
-): Promise<File> {
-  const mediaKind = getOutputMediaKindFromFile(file);
-  if (mediaKind === "image") {
-    try {
-      return await cropImageToAspectRatio(file, targetAspectRatio);
-    } catch (error) {
-      console.warn("[Generation] Failed to crop image input", error);
-      return file;
-    }
-  }
-
-  if (mediaKind === "video") {
-    try {
-      return await cropVideoToAspectRatio(file, targetAspectRatio);
-    } catch (error) {
-      console.warn("[Generation] Failed to crop video input", error);
-      return file;
-    }
-  }
-
   return file;
 }

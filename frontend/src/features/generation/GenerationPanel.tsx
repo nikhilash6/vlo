@@ -18,7 +18,6 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Checkbox,
   TextField,
   Slider,
   Tooltip,
@@ -34,7 +33,6 @@ import {
   ArrowDropDown,
   Close,
   OpenInNew,
-  InfoOutlined,
   Timeline,
 } from "@mui/icons-material";
 import { ComfyUIEditor } from "./components/ComfyUIEditor";
@@ -53,10 +51,6 @@ import {
 } from "./useGenerationStore";
 import { getOutputMediaKindFromFilename } from "./constants/mediaKinds";
 import { getObjectInfo, saveWorkflowContent } from "./services/comfyuiApi";
-import { isAspectRatioWidget } from "./utils/aspectRatioWidgets";
-
-const EXACT_ASPECT_RATIO_TOOLTIP =
-  "If selected, this will make the output aspect ratio exactly match the input ratio, even if it doesn't match the project-supported aspect ratios. If unselected, it will crop the image to the best supported fit before dispatch.";
 
 function buildWorkflowSignature(
   graphData: Record<string, unknown> | null,
@@ -276,8 +270,6 @@ export function GenerationPanel() {
   const activeWorkflowRules = useGenerationStore((s) => s.activeWorkflowRules);
   const targetResolution = useGenerationStore((s) => s.targetResolution);
   const setTargetResolution = useGenerationStore((s) => s.setTargetResolution);
-  const exactAspectRatio = useGenerationStore((s) => s.exactAspectRatio);
-  const setExactAspectRatio = useGenerationStore((s) => s.setExactAspectRatio);
   const maskCropMode = useGenerationStore((s) => s.maskCropMode);
   const setMaskCropMode = useGenerationStore((s) => s.setMaskCropMode);
   const maskCropDilation = useGenerationStore((s) => s.maskCropDilation);
@@ -298,7 +290,6 @@ export function GenerationPanel() {
   const currentResolution = resolutionOptions.includes(targetResolution)
     ? targetResolution
     : resolutionOptions[0];
-  const hasAspectRatioWidget = widgetInputs.some(isAspectRatioWidget);
   const canSaveWorkflowToBackend =
     !isBackendSavePending &&
     !!syncedGraphData &&
@@ -637,74 +628,24 @@ export function GenerationPanel() {
       {/* Dynamic Workflow Inputs */}
       {showResolutionSelector && !isWorkflowLoading && (
         <Box sx={{ px: 2, pb: 2 }}>
-          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.25 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel id="generation-resolution-label">
-                Resolution
-              </InputLabel>
-              <Select
-                labelId="generation-resolution-label"
-                value={currentResolution}
-                label="Resolution"
-                onChange={(event) =>
-                  setTargetResolution(Number(event.target.value))
-                }
-                sx={{ bgcolor: "#1a1a1a" }}
-              >
-                {resolutionOptions.map((resolution) => (
-                  <MenuItem key={resolution} value={resolution}>
-                    {`${resolution}p`}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {!hasAspectRatioWidget ? (
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.5,
-                  minHeight: 40,
-                  px: 0.25,
-                  flexShrink: 0,
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: "text.secondary",
-                    letterSpacing: "0.12em",
-                  }}
-                >
-                  EXACT
-                </Typography>
-                <Checkbox
-                  checked={exactAspectRatio}
-                  onChange={(event) => setExactAspectRatio(event.target.checked)}
-                  size="small"
-                  inputProps={{
-                    "aria-label": "Use exact input aspect ratio",
-                  }}
-                  sx={{
-                    color: "rgba(255, 255, 255, 0.65)",
-                    p: 0.25,
-                    "&.Mui-checked": {
-                      color: "primary.main",
-                    },
-                  }}
-                />
-                <Tooltip title={EXACT_ASPECT_RATIO_TOOLTIP} arrow>
-                  <IconButton
-                    size="small"
-                    aria-label="Exact aspect ratio help"
-                    sx={{ color: "text.secondary", p: 0.25 }}
-                  >
-                    <InfoOutlined fontSize="inherit" />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-            ) : null}
-          </Box>
+          <FormControl fullWidth size="small">
+            <InputLabel id="generation-resolution-label">Resolution</InputLabel>
+            <Select
+              labelId="generation-resolution-label"
+              value={currentResolution}
+              label="Resolution"
+              onChange={(event) =>
+                setTargetResolution(Number(event.target.value))
+              }
+              sx={{ bgcolor: "#1a1a1a" }}
+            >
+              {resolutionOptions.map((resolution) => (
+                <MenuItem key={resolution} value={resolution}>
+                  {`${resolution}p`}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <Typography
             variant="caption"
             sx={{ color: "text.secondary", display: "block", mt: 0.75 }}
@@ -793,10 +734,6 @@ export function GenerationPanel() {
         randomizeToggles={randomizeToggles}
         onWidgetChange={handleWidgetChange}
         onToggleRandomize={handleToggleRandomize}
-        showExactAspectRatioControl={showResolutionSelector}
-        exactAspectRatio={exactAspectRatio}
-        onExactAspectRatioChange={setExactAspectRatio}
-        exactAspectRatioTooltip={EXACT_ASPECT_RATIO_TOOLTIP}
       />
 
       {/* Mask processing */}

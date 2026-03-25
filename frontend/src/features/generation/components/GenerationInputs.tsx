@@ -6,10 +6,8 @@ import {
   Typography,
   MenuItem,
   Slider,
-  Checkbox,
-  Tooltip,
 } from "@mui/material";
-import { Casino, InfoOutlined } from "@mui/icons-material";
+import { Casino } from "@mui/icons-material";
 import { PanelSection, AssetDropSlot, CommittedTextInput } from "../../panelUI";
 import type { Asset } from "../../../types/Asset";
 import type {
@@ -23,7 +21,6 @@ import {
   getWorkflowInputId,
   getWorkflowInputValue,
 } from "../utils/workflowInputs";
-import { isAspectRatioWidget } from "../utils/aspectRatioWidgets";
 
 interface GenerationInputsProps {
   inputs: WorkflowInput[];
@@ -39,10 +36,6 @@ interface GenerationInputsProps {
   randomizeToggles: Record<string, boolean>;
   onWidgetChange: (nodeId: string, param: string, value: unknown) => void;
   onToggleRandomize: (nodeId: string, param: string) => void;
-  showExactAspectRatioControl?: boolean;
-  exactAspectRatio?: boolean;
-  onExactAspectRatioChange?: (exact: boolean) => void;
-  exactAspectRatioTooltip?: string;
 }
 
 function toSlotValue(
@@ -357,10 +350,6 @@ interface WidgetRowProps {
   isRandomized: boolean;
   onWidgetChange: (nodeId: string, param: string, value: unknown) => void;
   onToggleRandomize: (nodeId: string, param: string) => void;
-  showExactAspectRatioControl: boolean;
-  exactAspectRatio: boolean;
-  onExactAspectRatioChange?: (exact: boolean) => void;
-  exactAspectRatioTooltip?: string;
 }
 
 function WidgetRow({
@@ -369,19 +358,11 @@ function WidgetRow({
   isRandomized,
   onWidgetChange,
   onToggleRandomize,
-  showExactAspectRatioControl,
-  exactAspectRatio,
-  onExactAspectRatioChange,
-  exactAspectRatioTooltip,
 }: WidgetRowProps) {
   const useNumericInput = shouldUseNumericWidgetInput(widget, value);
   const useSelectInput =
     !isRandomized && (isEnumWidget(widget) || isBooleanWidget(widget));
   const isSlider = isSliderWidget(widget);
-  const showInlineExactAspectRatioControl =
-    showExactAspectRatioControl &&
-    isAspectRatioWidget(widget) &&
-    typeof onExactAspectRatioChange === "function";
   const displayValue =
     value === undefined || value === null
       ? isRandomized
@@ -503,50 +484,6 @@ function WidgetRow({
                 </MenuItem>
               )))}
       </TextField>
-      {showInlineExactAspectRatioControl ? (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 0.5,
-            flexShrink: 0,
-          }}
-        >
-          <Typography
-            variant="caption"
-            sx={{
-              color: "text.secondary",
-              letterSpacing: "0.12em",
-            }}
-          >
-            EXACT
-          </Typography>
-          <Checkbox
-            checked={exactAspectRatio}
-            onChange={(event) => onExactAspectRatioChange(event.target.checked)}
-            size="small"
-            inputProps={{
-              "aria-label": "Use exact input aspect ratio",
-            }}
-            sx={{
-              color: "rgba(255, 255, 255, 0.65)",
-              p: 0.25,
-              "&.Mui-checked": {
-                color: "primary.main",
-              },
-            }}
-          />
-          {exactAspectRatioTooltip ? (
-            <Tooltip title={exactAspectRatioTooltip} arrow>
-              <InfoOutlined
-                fontSize="inherit"
-                aria-label="Exact aspect ratio help"
-                sx={{ color: "text.secondary" }}
-              />
-            </Tooltip>
-          ) : null}
-        </Box>
-      ) : null}
       {widget.config.controlAfterGenerate && (
         <IconButton
           size="small"
@@ -589,20 +526,12 @@ export const GenerationInputs = memo(function GenerationInputs({
   randomizeToggles,
   onWidgetChange,
   onToggleRandomize,
-  showExactAspectRatioControl = false,
-  exactAspectRatio = false,
-  onExactAspectRatioChange,
-  exactAspectRatioTooltip,
 }: GenerationInputsProps) {
   const groupedWidgets = useMemo(
     () => groupWidgetsByNode(widgetInputs),
     [widgetInputs],
   );
   const inputLookup = useMemo(() => buildWorkflowInputLookup(inputs), [inputs]);
-  const exactAspectRatioWidgetKey = useMemo(() => {
-    const widget = widgetInputs.find(isAspectRatioWidget);
-    return widget ? `${widget.nodeId}:${widget.param}` : null;
-  }, [widgetInputs]);
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
       {inputs.map((input, index) => {
@@ -663,13 +592,6 @@ export const GenerationInputs = memo(function GenerationInputs({
                   isRandomized={isRandomized}
                   onWidgetChange={onWidgetChange}
                   onToggleRandomize={onToggleRandomize}
-                  showExactAspectRatioControl={
-                    showExactAspectRatioControl &&
-                    exactAspectRatioWidgetKey === key
-                  }
-                  exactAspectRatio={exactAspectRatio}
-                  onExactAspectRatioChange={onExactAspectRatioChange}
-                  exactAspectRatioTooltip={exactAspectRatioTooltip}
                 />
               );
             })}
