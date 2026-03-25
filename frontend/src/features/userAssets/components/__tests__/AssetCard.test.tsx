@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   mockUpdateAsset: vi.fn(),
   mockInsertAssetAtTime: vi.fn(),
   mockLoadWorkflowFromAssetMetadata: vi.fn(),
-  mockShowFamily: vi.fn(),
+  mockOpenFamily: vi.fn(),
   timelineClipCount: 0,
 }));
 
@@ -102,7 +102,7 @@ const generatedWithWorkflowMetadataAsset: Asset = {
   },
 };
 
-const familyAsset: Asset = {
+const familyRepresentativeAsset: Asset = {
   ...mockAsset,
   id: "asset-family",
   familyId: "family-1",
@@ -128,7 +128,7 @@ describe("AssetCard actions", () => {
     mocks.mockInsertAssetAtTime.mockReset();
     mocks.mockLoadWorkflowFromAssetMetadata.mockReset();
     mocks.mockLoadWorkflowFromAssetMetadata.mockResolvedValue(undefined);
-    mocks.mockShowFamily.mockReset();
+    mocks.mockOpenFamily.mockReset();
     mocks.timelineClipCount = 0;
   });
 
@@ -214,22 +214,25 @@ describe("AssetCard actions", () => {
     expect(
       screen.queryByRole("menuitem", { name: "Regenerate" }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("menuitem", { name: "Show family" }),
-    ).not.toBeInTheDocument();
   });
 
-  it("shows the family action when a family callback is provided", () => {
+  it("shows a folder action instead of the menu when a family opener is provided", () => {
     mockStores(0);
 
     render(
-      <AssetCard asset={familyAsset} onShowFamily={mocks.mockShowFamily} />,
+      <AssetCard
+        asset={familyRepresentativeAsset}
+        onOpenFamily={mocks.mockOpenFamily}
+      />,
     );
 
-    fireEvent.click(screen.getByLabelText("Asset actions"));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Show family" }));
+    expect(
+      screen.queryByRole("button", { name: "Asset actions" }),
+    ).not.toBeInTheDocument();
 
-    expect(mocks.mockShowFamily).toHaveBeenCalledWith("family-1");
+    fireEvent.click(screen.getByRole("button", { name: "Open family" }));
+
+    expect(mocks.mockOpenFamily).toHaveBeenCalledTimes(1);
   });
 
   it("opens a video preview modal from the play button and closes with the x button", async () => {

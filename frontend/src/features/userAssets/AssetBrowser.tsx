@@ -25,7 +25,7 @@ import type { AssetType } from "../../types/Asset";
 import { useAssetStore } from "./useAssetStore";
 import { AssetCard } from "./components/AssetCard";
 import { FamilyDialog } from "./components/FamilyDialog";
-import { isAssetVisibleInBrowser } from "./utils/assetVisibility";
+import { buildAssetBrowserItems } from "./utils/assetBrowserItems";
 
 type SortOption = "dateDesc" | "dateAsc" | "nameAsc";
 const ASSET_TYPE_PRIORITY: AssetType[] = ["video", "image", "audio"];
@@ -155,14 +155,17 @@ function AssetBrowserComponent() {
     setSortAnchorEl(null);
   };
 
-  const sortedAssets = useMemo(() => {
-    const filtered = assets.filter(
-      (asset) =>
-        asset.type === activeTab &&
-        (!showFavouritesOnly || asset.favourite) &&
-        isAssetVisibleInBrowser(asset),
-    );
-    return filtered.sort((a, b) => {
+  const browserItems = useMemo(() => {
+    const items = buildAssetBrowserItems({
+      assets,
+      families,
+      assetType: activeTab,
+      showFavouritesOnly,
+    });
+
+    return items.sort((left, right) => {
+      const a = left.sortAsset;
+      const b = right.sortAsset;
       switch (sortOption) {
         case "nameAsc":
           return a.name.localeCompare(b.name);
@@ -173,7 +176,7 @@ function AssetBrowserComponent() {
           return (b.createdAt || 0) - (a.createdAt || 0);
       }
     });
-  }, [assets, activeTab, sortOption, showFavouritesOnly]);
+  }, [assets, families, activeTab, sortOption, showFavouritesOnly]);
 
   const selectedFamily = useMemo(
     () => families.find((family) => family.id === selectedFamilyId),
@@ -359,7 +362,7 @@ function AssetBrowserComponent() {
 
       {/* 2. Scrollable Grid Area */}
       <Box sx={{ flexGrow: 1, overflowY: "auto", p: 2 }}>
-        {sortedAssets.length === 0 ? (
+        {browserItems.length === 0 ? (
           <Typography
             variant="body2"
             sx={{ textAlign: "center", mt: 4, color: "#666" }}
@@ -368,9 +371,23 @@ function AssetBrowserComponent() {
           </Typography>
         ) : (
           <Grid container spacing={2}>
-            {sortedAssets.map((asset) => (
-              <Grid size={{ xs: 6 }} key={asset.id}>
-                <AssetCard asset={asset} onShowFamily={handleShowFamily} />
+            {browserItems.map((item) => (
+              <Grid
+                size={{ xs: 6 }}
+                key={
+                  item.kind === "family"
+                    ? `family-${item.family.id}`
+                    : `asset-${item.asset.id}`
+                }
+              >
+                <AssetCard
+                  asset={item.asset}
+                  onOpenFamily={
+                    item.kind === "family"
+                      ? () => handleShowFamily(item.family.id)
+                      : undefined
+                  }
+                />
               </Grid>
             ))}
           </Grid>

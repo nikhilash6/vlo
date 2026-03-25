@@ -32,6 +32,16 @@ describe("AssetBrowser Component", () => {
       favourite: false,
     },
     {
+      id: "solo-video",
+      type: "video",
+      name: "solo.mp4",
+      src: "solo.mp4",
+      hash: "solo",
+      familyId: "family-2",
+      createdAt: 1,
+      favourite: false,
+    },
+    {
       id: "mask-video",
       type: "video",
       name: "vacation_sam2_mask.webm",
@@ -60,7 +70,7 @@ describe("AssetBrowser Component", () => {
   const mockFamilies: AssetFamily[] = [
     {
       id: "family-1",
-      representativeAssetId: "1b",
+      representativeAssetId: "1",
       autoMatchKeys: ["generation-family:v1:test"],
       compatibility: {
         assetType: "video",
@@ -69,6 +79,18 @@ describe("AssetBrowser Component", () => {
       },
       createdAt: 1,
       updatedAt: 2,
+    },
+    {
+      id: "family-2",
+      representativeAssetId: "solo-video",
+      autoMatchKeys: ["generation-family:v1:solo"],
+      compatibility: {
+        assetType: "video",
+        durationMs: 5000,
+        fpsMilli: 24000,
+      },
+      createdAt: 1,
+      updatedAt: 1,
     },
   ];
 
@@ -119,12 +141,14 @@ describe("AssetBrowser Component", () => {
 
   it("displays assets and filters them by active tab", () => {
     // Mock populated store
-    mockStore({ assets: mockAssets });
+    mockStore({ assets: mockAssets, families: mockFamilies });
 
     render(<AssetBrowser />);
 
     // 1. Initial State: Video Tab
     expect(screen.getByText("vacation.mp4")).toBeInTheDocument();
+    expect(screen.getByText("solo.mp4")).toBeInTheDocument();
+    expect(screen.queryByText("b-roll.mp4")).not.toBeInTheDocument();
     expect(
       screen.queryByText("vacation_sam2_mask.webm"),
     ).not.toBeInTheDocument();
@@ -275,22 +299,22 @@ describe("AssetBrowser Component", () => {
   });
 
   it("filters the current tab to favourite assets when the toolbar heart is enabled", () => {
-    mockStore({ assets: mockAssets });
+    mockStore({ assets: mockAssets, families: mockFamilies });
 
     render(<AssetBrowser />);
 
     expect(screen.getByText("vacation.mp4")).toBeInTheDocument();
-    expect(screen.getByText("b-roll.mp4")).toBeInTheDocument();
+    expect(screen.getByText("solo.mp4")).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Show favourite assets" }),
     );
 
     expect(screen.getByText("vacation.mp4")).toBeInTheDocument();
-    expect(screen.queryByText("b-roll.mp4")).not.toBeInTheDocument();
+    expect(screen.queryByText("solo.mp4")).not.toBeInTheDocument();
   });
 
-  it("opens the family dialog from an asset card action", async () => {
+  it("opens the family dialog from the family folder action", async () => {
     mockStore({
       assets: mockAssets,
       families: mockFamilies,
@@ -298,8 +322,10 @@ describe("AssetBrowser Component", () => {
 
     render(<AssetBrowser />);
 
-    fireEvent.click(screen.getAllByLabelText("Asset actions")[0]);
-    fireEvent.click(screen.getByRole("menuitem", { name: "Show family" }));
+    expect(screen.getByRole("button", { name: "Open family" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Asset actions" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open family" }));
 
     expect(
       screen.getByRole("dialog", { name: /Asset Family/i }),
