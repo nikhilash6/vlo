@@ -36,7 +36,6 @@ describe("useProjectStore", () => {
   const defaultConfig = {
     aspectRatio: "16:9" as const,
     fps: 30,
-    exactInputAspectRatio: false,
     layoutMode: "compact" as const,
   };
 
@@ -264,7 +263,6 @@ describe("useProjectStore", () => {
           config: {
             aspectRatio: "9:16",
             fps: 24,
-            exactInputAspectRatio: true,
             layoutMode: "full-height",
           },
         }),
@@ -275,7 +273,6 @@ describe("useProjectStore", () => {
     expect(useProjectStore.getState().config).toEqual({
       aspectRatio: "9:16",
       fps: 24,
-      exactInputAspectRatio: true,
       layoutMode: "full-height",
     });
   });
@@ -297,7 +294,6 @@ describe("useProjectStore", () => {
     await useProjectStore.getState().updateConfig({
       fps: 24,
       aspectRatio: "9:16",
-      exactInputAspectRatio: true,
       layoutMode: "full-height",
     });
 
@@ -309,7 +305,6 @@ describe("useProjectStore", () => {
     expect(writtenData.config).toEqual({
       aspectRatio: "9:16",
       fps: 24,
-      exactInputAspectRatio: true,
       layoutMode: "full-height",
     });
   });

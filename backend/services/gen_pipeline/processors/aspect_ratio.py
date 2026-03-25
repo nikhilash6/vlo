@@ -9,7 +9,7 @@ from services.workflow_rules.schema import has_pipeline_stage
 
 
 ApplyAspectRatioProcessingFn = Callable[
-    [dict[str, Any], dict[str, Any], str | None, bool, Any],
+    [dict[str, Any], dict[str, Any], str | None, Any],
     tuple[dict[str, Any] | None, list[dict[str, Any]]],
 ]
 
@@ -17,13 +17,7 @@ ApplyAspectRatioProcessingFn = Callable[
 class _AspectRatioProcessor:
     meta = ProcessorMeta(
         name="aspect_ratio",
-        reads=(
-            "workflow",
-            "rules",
-            "target_aspect_ratio",
-            "exact_aspect_ratio",
-            "target_resolution",
-        ),
+        reads=("workflow", "rules", "target_aspect_ratio", "target_resolution"),
         writes=("aspect_ratio_metadata", "workflow", "warnings"),
         description="Applies aspect ratio processing to the workflow and records the returned metadata",
     )
@@ -42,7 +36,6 @@ class _AspectRatioProcessor:
             ctx.workflow,
             ctx.rules,
             ctx.target_aspect_ratio,
-            ctx.exact_aspect_ratio,
             ctx.target_resolution,
         )
         ctx.warnings.extend(aspect_ratio_processing_warnings)

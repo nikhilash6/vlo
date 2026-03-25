@@ -92,8 +92,6 @@ function buildGenerationPlanFromState(
     projectConfig: {
       aspectRatio: useProjectStore.getState().config.aspectRatio,
       fps: useProjectStore.getState().config.fps,
-      exactInputAspectRatio:
-        useProjectStore.getState().config.exactInputAspectRatio ?? false,
     },
   });
 }

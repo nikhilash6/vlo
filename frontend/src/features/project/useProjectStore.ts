@@ -9,7 +9,6 @@ import {
   CURRENT_PROJECT_SCHEMA_VERSION,
   VLO_APP_VERSION,
 } from "./constants";
-import { PROJECT_ASPECT_RATIOS } from "./aspectRatioOptions";
 import type {
   ProjectDocumentConfig,
   TimelineSnapshot,
@@ -20,18 +19,22 @@ export type AspectRatio = "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
 export interface ProjectConfig {
   aspectRatio: AspectRatio;
   fps: number;
-  exactInputAspectRatio?: boolean;
   layoutMode?: "full-height" | "compact";
 }
 
 const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   aspectRatio: "16:9",
   fps: 30,
-  exactInputAspectRatio: false,
   layoutMode: "compact",
 };
 
-const VALID_ASPECT_RATIOS = new Set<AspectRatio>(PROJECT_ASPECT_RATIOS);
+const VALID_ASPECT_RATIOS = new Set<AspectRatio>([
+  "16:9",
+  "4:3",
+  "1:1",
+  "3:4",
+  "9:16",
+]);
 
 const VALID_LAYOUT_MODES = new Set<NonNullable<ProjectConfig["layoutMode"]>>([
   "full-height",
@@ -61,15 +64,10 @@ const getProjectConfigFromDocument = (
     typeof value?.fps === "number" && Number.isFinite(value.fps) && value.fps > 0
       ? value.fps
       : DEFAULT_PROJECT_CONFIG.fps;
-  const exactInputAspectRatio =
-    typeof value?.exactInputAspectRatio === "boolean"
-      ? value.exactInputAspectRatio
-      : DEFAULT_PROJECT_CONFIG.exactInputAspectRatio;
 
   return {
     aspectRatio,
     fps,
-    exactInputAspectRatio,
     layoutMode,
   };
 };
@@ -80,7 +78,6 @@ const hasProjectConfigChanged = (
 ): boolean =>
   current.aspectRatio !== next.aspectRatio ||
   current.fps !== next.fps ||
-  current.exactInputAspectRatio !== next.exactInputAspectRatio ||
   current.layoutMode !== next.layoutMode;
 
 export interface ProjectState {

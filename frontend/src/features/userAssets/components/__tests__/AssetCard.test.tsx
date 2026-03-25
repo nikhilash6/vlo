@@ -108,6 +108,29 @@ const familyRepresentativeAsset: Asset = {
   familyId: "family-1",
 };
 
+const generatedFamilyAsset: Asset = {
+  ...mockAsset,
+  id: "asset-family-generated",
+  familyId: "family-1",
+  creationMetadata: {
+    source: "generated",
+    workflowName: "Workflow",
+    inputs: [
+      {
+        nodeId: "node-1",
+        kind: "timelineSelection",
+        timelineSelection: mockTimelineSelection,
+      },
+    ],
+    comfyuiPrompt: {
+      "1": {
+        class_type: "LoadVideo",
+        inputs: { file: "clip.mp4" },
+      },
+    },
+  },
+};
+
 type AssetStoreState = ReturnType<typeof useAssetStore.getState>;
 
 function mockStores(timelineClipCount: number) {
@@ -216,23 +239,34 @@ describe("AssetCard actions", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows a folder action instead of the menu when a family opener is provided", () => {
+  it("keeps the menu actions and adds a folder action for family cards", () => {
     mockStores(0);
 
     render(
       <AssetCard
-        asset={familyRepresentativeAsset}
-        onOpenFamily={mocks.mockOpenFamily}
+        asset={generatedFamilyAsset}
+        onShowFamily={mocks.mockOpenFamily}
       />,
     );
 
+    const menuButton = screen.getByRole("button", { name: "Asset actions" });
+    const familyButton = screen.getByRole("button", { name: "Open family" });
+
+    expect(menuButton).toBeInTheDocument();
+    expect(familyButton).toBeInTheDocument();
+
+    fireEvent.click(menuButton);
+
     expect(
-      screen.queryByRole("button", { name: "Asset actions" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("menuitem", { name: "Send to Timeline" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Regenerate" }),
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open family" }));
+    fireEvent.click(familyButton);
 
-    expect(mocks.mockOpenFamily).toHaveBeenCalledTimes(1);
+    expect(mocks.mockOpenFamily).toHaveBeenCalledWith("family-1");
   });
 
   it("opens a video preview modal from the play button and closes with the x button", async () => {

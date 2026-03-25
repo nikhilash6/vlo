@@ -9,7 +9,6 @@ describe("ProjectSettingsMenu", () => {
       config: {
         aspectRatio: "16:9",
         fps: 30,
-        exactInputAspectRatio: false,
         layoutMode: "compact",
       },
     });
@@ -22,14 +21,5 @@ describe("ProjectSettingsMenu", () => {
 
     expect(screen.queryByText("RESOLUTION")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Resolution")).not.toBeInTheDocument();
-  });
-
-  it("toggles exact input aspect ratio from project settings", () => {
-    render(<ProjectSettingsMenu />);
-
-    fireEvent.click(screen.getByRole("button"));
-    fireEvent.click(screen.getByLabelText("Match input aspect ratio exactly"));
-
-    expect(useProjectStore.getState().config.exactInputAspectRatio).toBe(true);
   });
 });

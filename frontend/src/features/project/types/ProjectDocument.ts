@@ -10,7 +10,6 @@ export interface TimelineSnapshot {
 export interface ProjectDocumentConfig {
   aspectRatio?: "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
   fps?: number;
-  exactInputAspectRatio?: boolean;
   layoutMode?: "full-height" | "compact";
 }
 

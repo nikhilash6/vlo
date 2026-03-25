@@ -4,11 +4,7 @@ import { DEFAULT_GENERATION_TARGET_RESOLUTION } from "../services/workflowRules"
 import { runProcessors } from "./runner";
 import { FRONTEND_PREPROCESSORS } from "./preprocessors";
 import { throwIfAborted } from "./utils/abort";
-import {
-  maybeCropVisualFileToAspectRatio,
-  normalizeToSupportedProjectAspectRatio,
-  probeVisualFileAspectRatio,
-} from "./utils/media";
+import { probeVisualFileAspectRatio } from "./utils/media";
 import {
   buildWorkflowInputLookup,
   getNodeInputRequestKey,
@@ -76,34 +72,6 @@ async function resolveTargetAspectRatio(
   return fallbackAspectRatio ?? ctx.projectConfig.aspectRatio;
 }
 
-async function cropVisualInputsToAspectRatio(
-  ctx: FrontendPreprocessContext,
-  targetAspectRatio: string,
-): Promise<void> {
-  const croppedFiles = new Map<File, Promise<File>>();
-
-  const cropFile = (file: File): Promise<File> => {
-    const pending = croppedFiles.get(file);
-    if (pending) {
-      return pending;
-    }
-
-    const nextPending = maybeCropVisualFileToAspectRatio(file, targetAspectRatio);
-    croppedFiles.set(file, nextPending);
-    return nextPending;
-  };
-
-  for (const [key, file] of Object.entries(ctx.imageInputs)) {
-    throwIfAborted(ctx.signal);
-    ctx.imageInputs[key] = await cropFile(file);
-  }
-
-  for (const [key, file] of Object.entries(ctx.videoInputs)) {
-    throwIfAborted(ctx.signal);
-    ctx.videoInputs[key] = await cropFile(file);
-  }
-}
-
 /**
  * Builds a {@link FrontendPreprocessContext}, runs all frontend preprocessors,
  * and returns the assembled {@link GenerationRequest}.
@@ -135,7 +103,6 @@ export async function runFrontendPreprocess(
     projectConfig: {
       fps: projectConfig.fps,
       aspectRatio: projectConfig.aspectRatio,
-      exactInputAspectRatio: projectConfig.exactInputAspectRatio ?? false,
     },
     targetResolution:
       options.targetResolution ?? DEFAULT_GENERATION_TARGET_RESOLUTION,
@@ -153,15 +120,7 @@ export async function runFrontendPreprocess(
   throwIfAborted(ctx.signal);
   await runProcessors(FRONTEND_PREPROCESSORS, ctx);
   throwIfAborted(ctx.signal);
-  const requestedTargetAspectRatio = await resolveTargetAspectRatio(ctx);
-  const exactAspectRatio = Boolean(ctx.projectConfig.exactInputAspectRatio);
-  const targetAspectRatio = exactAspectRatio
-    ? requestedTargetAspectRatio
-    : normalizeToSupportedProjectAspectRatio(requestedTargetAspectRatio) ??
-      requestedTargetAspectRatio;
-  if (!exactAspectRatio) {
-    await cropVisualInputsToAspectRatio(ctx, targetAspectRatio);
-  }
+  const targetAspectRatio = await resolveTargetAspectRatio(ctx);
   throwIfAborted(ctx.signal);
 
   return {
@@ -169,7 +128,6 @@ export async function runFrontendPreprocess(
     graphData: ctx.syncedGraphData,
     workflowId: ctx.workflowId,
     targetAspectRatio,
-    exactAspectRatio,
     targetResolution: ctx.targetResolution,
     textInputs: ctx.textInputs,
     imageInputs: ctx.imageInputs,

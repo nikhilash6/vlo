@@ -25,7 +25,7 @@ import type { AssetType } from "../../types/Asset";
 import { useAssetStore } from "./useAssetStore";
 import { AssetCard } from "./components/AssetCard";
 import { FamilyDialog } from "./components/FamilyDialog";
-import { buildAssetBrowserItems } from "./utils/assetBrowserItems";
+import { isAssetVisibleInBrowser } from "./utils/assetVisibility";
 
 type SortOption = "dateDesc" | "dateAsc" | "nameAsc";
 const ASSET_TYPE_PRIORITY: AssetType[] = ["video", "image", "audio"];
@@ -44,6 +44,38 @@ function getPreferredUploadedAssetType(
   }
 
   return null;
+}
+
+function isRepresentativeAsset(
+  assetId: string,
+  assetType: AssetType,
+  familyId: string | null | undefined,
+  families: ReturnType<typeof useAssetStore.getState>["families"],
+  assets: ReturnType<typeof useAssetStore.getState>["assets"],
+): boolean {
+  if (!familyId) {
+    return true;
+  }
+
+  const family = families.find((candidate) => candidate.id === familyId);
+  if (!family?.representativeAssetId) {
+    return true;
+  }
+
+  if (family.representativeAssetId === assetId) {
+    return true;
+  }
+
+  const representativeAsset = assets.find(
+    (candidate) => candidate.id === family.representativeAssetId,
+  );
+
+  // If family data is inconsistent, prefer showing the asset rather than hiding it.
+  if (!representativeAsset || representativeAsset.type !== assetType) {
+    return true;
+  }
+
+  return false;
 }
 
 function AssetBrowserComponent() {
@@ -155,17 +187,16 @@ function AssetBrowserComponent() {
     setSortAnchorEl(null);
   };
 
-  const browserItems = useMemo(() => {
-    const items = buildAssetBrowserItems({
-      assets,
-      families,
-      assetType: activeTab,
-      showFavouritesOnly,
-    });
+  const sortedAssets = useMemo(() => {
+    const filtered = assets.filter(
+      (asset) =>
+        asset.type === activeTab &&
+        (!showFavouritesOnly || asset.favourite) &&
+        isAssetVisibleInBrowser(asset) &&
+        isRepresentativeAsset(asset.id, asset.type, asset.familyId, families, assets),
+    );
 
-    return items.sort((left, right) => {
-      const a = left.sortAsset;
-      const b = right.sortAsset;
+    return filtered.sort((a, b) => {
       switch (sortOption) {
         case "nameAsc":
           return a.name.localeCompare(b.name);
@@ -362,7 +393,7 @@ function AssetBrowserComponent() {
 
       {/* 2. Scrollable Grid Area */}
       <Box sx={{ flexGrow: 1, overflowY: "auto", p: 2 }}>
-        {browserItems.length === 0 ? (
+        {sortedAssets.length === 0 ? (
           <Typography
             variant="body2"
             sx={{ textAlign: "center", mt: 4, color: "#666" }}
@@ -371,22 +402,11 @@ function AssetBrowserComponent() {
           </Typography>
         ) : (
           <Grid container spacing={2}>
-            {browserItems.map((item) => (
-              <Grid
-                size={{ xs: 6 }}
-                key={
-                  item.kind === "family"
-                    ? `family-${item.family.id}`
-                    : `asset-${item.asset.id}`
-                }
-              >
+            {sortedAssets.map((asset) => (
+              <Grid size={{ xs: 6 }} key={asset.id}>
                 <AssetCard
-                  asset={item.asset}
-                  onOpenFamily={
-                    item.kind === "family"
-                      ? () => handleShowFamily(item.family.id)
-                      : undefined
-                  }
+                  asset={asset}
+                  onShowFamily={asset.familyId ? handleShowFamily : undefined}
                 />
               </Grid>
             ))}

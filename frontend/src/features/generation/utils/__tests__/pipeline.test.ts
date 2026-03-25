@@ -135,7 +135,6 @@ describe("generation pipeline", () => {
 
     expect(aspectRatioSpy).toHaveBeenCalledWith(imageFile);
     expect(request.targetAspectRatio).toBe("1:1");
-    expect(request.exactAspectRatio).toBe(false);
     expect(request.targetResolution).toBe(1080);
   });
 
@@ -163,100 +162,7 @@ describe("generation pipeline", () => {
     );
 
     expect(request.targetAspectRatio).toBe("9:16");
-    expect(request.exactAspectRatio).toBe(false);
     expect(request.targetResolution).toBe(720);
-  });
-
-  it("normalizes off-grid input aspect ratios to the nearest supported ratio when exact matching is disabled", async () => {
-    useProjectStore.setState((state) => ({
-      ...state,
-      config: {
-        ...state.config,
-        aspectRatio: "16:9",
-        fps: 30,
-        exactInputAspectRatio: false,
-      },
-    }));
-
-    const imageFile = new File(["image"], "input.png", { type: "image/png" });
-    vi.spyOn(mediaUtils, "probeVisualFileAspectRatio").mockResolvedValue(
-      "179:100",
-    );
-    const cropSpy = vi
-      .spyOn(mediaUtils, "maybeCropVisualFileToAspectRatio")
-      .mockResolvedValue(imageFile);
-
-    const request = await frontendPreprocess(
-      {},
-      "workflow.json",
-      [
-        {
-          nodeId: "image_input",
-          classType: "LoadImage",
-          inputType: "image",
-          param: "image",
-          label: "Image Input",
-          currentValue: null,
-          origin: "rule",
-        },
-      ],
-      {
-        image_input: {
-          type: "image",
-          file: imageFile,
-        },
-      },
-      "client-id",
-    );
-
-    expect(request.targetAspectRatio).toBe("16:9");
-    expect(request.exactAspectRatio).toBe(false);
-    expect(cropSpy).toHaveBeenCalledWith(imageFile, "16:9");
-  });
-
-  it("keeps off-grid input aspect ratios when exact matching is enabled", async () => {
-    useProjectStore.setState((state) => ({
-      ...state,
-      config: {
-        ...state.config,
-        aspectRatio: "16:9",
-        fps: 30,
-        exactInputAspectRatio: true,
-      },
-    }));
-
-    const imageFile = new File(["image"], "input.png", { type: "image/png" });
-    vi.spyOn(mediaUtils, "probeVisualFileAspectRatio").mockResolvedValue(
-      "179:100",
-    );
-    const cropSpy = vi.spyOn(mediaUtils, "maybeCropVisualFileToAspectRatio");
-
-    const request = await frontendPreprocess(
-      {},
-      "workflow.json",
-      [
-        {
-          nodeId: "image_input",
-          classType: "LoadImage",
-          inputType: "image",
-          param: "image",
-          label: "Image Input",
-          currentValue: null,
-          origin: "rule",
-        },
-      ],
-      {
-        image_input: {
-          type: "image",
-          file: imageFile,
-        },
-      },
-      "client-id",
-    );
-
-    expect(request.targetAspectRatio).toBe("179:100");
-    expect(request.exactAspectRatio).toBe(true);
-    expect(cropSpy).not.toHaveBeenCalled();
   });
 
   it("includes runtime mask crop mode and suppresses dilation for full mode", async () => {
