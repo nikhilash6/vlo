@@ -50,6 +50,10 @@ function toOptionalBoolean(
   return value ?? undefined;
 }
 
+function hasOwnKey(record: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key);
+}
+
 function resolveDualSamplerDenoiseWidget(
   workflow: Record<string, unknown>,
   rule: WorkflowDualSamplerDenoiseRule,
@@ -160,7 +164,7 @@ export function resolveWidgetInputsFromRules(
 
     const nodeData = workflow[nodeId];
     if (!isRecord(nodeData)) {
-      console.warn(
+      console.debug(
         "[resolveWidgetInputs] Node %s has widget rules but is not in workflow (keys sample: %s)",
         nodeId,
         Object.keys(workflow).slice(0, 10),
@@ -170,6 +174,20 @@ export function resolveWidgetInputsFromRules(
     const nodeInputs = isRecord(nodeData.inputs) ? nodeData.inputs : {};
 
     for (const [param, entry] of Object.entries(widgetDefs)) {
+      const hasWorkflowParam = hasOwnKey(nodeInputs, param);
+      const hasExplicitDefault = Object.prototype.hasOwnProperty.call(
+        entry,
+        "default",
+      );
+      if (!hasWorkflowParam && entry.frontend_only !== true && !hasExplicitDefault) {
+        console.debug(
+          "[resolveWidgetInputs] Skipping %s.%s: param is not present in workflow node inputs",
+          nodeId,
+          param,
+        );
+        continue;
+      }
+
       // Skip params whose value in the workflow is a link [nodeId, outputIndex]
       const rawValue = nodeInputs[param];
       if (Array.isArray(rawValue) && rawValue.length === 2) {

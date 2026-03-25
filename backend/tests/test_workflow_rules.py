@@ -2382,6 +2382,83 @@ async def test_generate_rejects_invalid_widget_override_values(
 
 
 @pytest.mark.anyio
+async def test_generate_allows_widget_override_without_rule_when_workflow_has_param(
+    tmp_path: Path,
+    monkeypatch,
+    fake_comfy_client,
+):
+    workflow_id = "workflow_missing_widget_rule.json"
+    workflow_path = tmp_path / workflow_id
+    workflow_path.write_text("{}")
+    monkeypatch.setattr(comfyui, "WORKFLOWS_DIR", tmp_path)
+
+    workflow = {
+        "145": {"class_type": "LoraLoader", "inputs": {"strength_model": 1.0}},
+    }
+
+    response = await comfyui.generate(
+        _as_request(
+            FormData(
+                [
+                    ("workflow", json.dumps(workflow)),
+                    ("workflow_id", workflow_id),
+                    ("widget_145_strength_model", "0.5"),
+                ]
+            )
+        )
+    )
+
+    assert response.status_code == 200
+    payload = _response_json(response)
+    assert payload["applied_widget_values"]["145:strength_model"] == "0.5"
+    assert any(
+        warning["code"] == "widget_override_missing_rule"
+        for warning in payload["workflow_warnings"]
+    )
+    assert fake_comfy_client.prompt_payload is not None
+    prompt = fake_comfy_client.prompt_payload["prompt"]
+    assert prompt["145"]["inputs"]["strength_model"] == 0.5
+
+
+@pytest.mark.anyio
+async def test_generate_ignores_widget_randomize_without_rule(
+    tmp_path: Path,
+    monkeypatch,
+    fake_comfy_client,
+):
+    workflow_id = "workflow_missing_randomize_rule.json"
+    workflow_path = tmp_path / workflow_id
+    workflow_path.write_text("{}")
+    monkeypatch.setattr(comfyui, "WORKFLOWS_DIR", tmp_path)
+
+    workflow = {
+        "145": {"class_type": "LoraLoader", "inputs": {"strength_model": 1.0}},
+    }
+
+    response = await comfyui.generate(
+        _as_request(
+            FormData(
+                [
+                    ("workflow", json.dumps(workflow)),
+                    ("workflow_id", workflow_id),
+                    ("widget_mode_145_strength_model", "randomize"),
+                ]
+            )
+        )
+    )
+
+    assert response.status_code == 200
+    payload = _response_json(response)
+    assert any(
+        warning["code"] == "widget_randomize_missing_rule"
+        for warning in payload["workflow_warnings"]
+    )
+    assert fake_comfy_client.prompt_payload is not None
+    prompt = fake_comfy_client.prompt_payload["prompt"]
+    assert prompt["145"]["inputs"]["strength_model"] == 1.0
+
+
+@pytest.mark.anyio
 async def test_generate_randomize_mode_produces_fresh_seed_per_request(
     tmp_path: Path,
     monkeypatch,

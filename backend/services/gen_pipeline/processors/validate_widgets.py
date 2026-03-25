@@ -10,6 +10,7 @@ from services.gen_pipeline.processors.utils.coerce import (
     match_enum_value,
 )
 from services.gen_pipeline.processors.utils.widget_rule_lookup import WidgetRuleLookup
+from services.gen_pipeline.processors.utils.warning import pipeline_warning
 from services.gen_pipeline.types import Processor, ProcessorMeta
 from services.workflow_rules import WorkflowValidationError
 
@@ -85,6 +86,17 @@ def _failure(
     }
 
 
+def _get_workflow_inputs(
+    workflow: dict[str, Any],
+    node_id: str,
+) -> dict[str, Any] | None:
+    node = workflow.get(node_id)
+    if not isinstance(node, dict):
+        return None
+    inputs = node.get("inputs")
+    return inputs if isinstance(inputs, dict) else None
+
+
 class _ValidateWidgetsProcessor:
     meta = ProcessorMeta(
         name="validate_widgets",
@@ -104,11 +116,51 @@ class _ValidateWidgetsProcessor:
         for node_id, overrides in ctx.widget_overrides.items():
             if not isinstance(overrides, dict):
                 continue
+            node_inputs = _get_workflow_inputs(ctx.workflow, node_id)
             for param, value in overrides.items():
                 widget_rule = lookup.get_widget_rule(node_id, param)
                 if widget_rule is None:
-                    failures.append(
-                        _failure(node_id, param, "Widget is not defined by workflow rules.")
+                    if node_inputs is None:
+                        ctx.warnings.append(
+                            pipeline_warning(
+                                "widget_override_missing_node",
+                                "Widget override target node was not found in the submitted workflow; ignoring override.",
+                                node_id=node_id,
+                                details={"param": param},
+                            )
+                        )
+                        continue
+                    if param not in node_inputs:
+                        ctx.warnings.append(
+                            pipeline_warning(
+                                "widget_override_missing_param",
+                                "Widget override target input was not found in the submitted workflow; ignoring override.",
+                                node_id=node_id,
+                                details={"param": param},
+                            )
+                        )
+                        continue
+
+                    current_value = node_inputs.get(param)
+                    if isinstance(current_value, list) and len(current_value) == 2:
+                        ctx.warnings.append(
+                            pipeline_warning(
+                                "widget_override_link_target",
+                                "Widget override target is currently driven by a graph link; ignoring override.",
+                                node_id=node_id,
+                                details={"param": param},
+                            )
+                        )
+                        continue
+
+                    normalized_overrides.setdefault(node_id, {})[param] = value
+                    ctx.warnings.append(
+                        pipeline_warning(
+                            "widget_override_missing_rule",
+                            "Widget override is not defined by workflow rules; applying the submitted value directly.",
+                            node_id=node_id,
+                            details={"param": param},
+                        )
                     )
                     continue
                 if widget_rule.get("frontend_only") is True:
@@ -130,44 +182,44 @@ class _ValidateWidgetsProcessor:
                     continue
                 widget_rule = lookup.get_widget_rule(node_id, param)
                 if widget_rule is None:
-                    failures.append(
-                        _failure(
-                            node_id,
-                            param,
-                            "Randomize mode requires a widget rule.",
-                            kind="widget_mode",
+                    ctx.warnings.append(
+                        pipeline_warning(
+                            "widget_randomize_missing_rule",
+                            "Widget randomize mode requested but widget rule was not found; ignoring randomize mode.",
+                            node_id=node_id,
+                            details={"param": param},
                         )
                     )
                     continue
                 if widget_rule.get("frontend_only") is True:
-                    failures.append(
-                        _failure(
-                            node_id,
-                            param,
-                            "Frontend-only widgets cannot be randomized by the backend.",
-                            kind="widget_mode",
+                    ctx.warnings.append(
+                        pipeline_warning(
+                            "widget_randomize_frontend_only",
+                            "Frontend-only widgets cannot be randomized by the backend; ignoring randomize mode.",
+                            node_id=node_id,
+                            details={"param": param},
                         )
                     )
                     continue
                 if not bool(widget_rule.get("control_after_generate")):
-                    failures.append(
-                        _failure(
-                            node_id,
-                            param,
-                            "Randomize mode is only supported for control-after-generate widgets.",
-                            kind="widget_mode",
+                    ctx.warnings.append(
+                        pipeline_warning(
+                            "widget_randomize_not_supported",
+                            "Randomize mode is only supported for control-after-generate widgets; ignoring randomize mode.",
+                            node_id=node_id,
+                            details={"param": param},
                         )
                     )
                     continue
                 if not isinstance(widget_rule.get("min"), (int, float)) or not isinstance(
                     widget_rule.get("max"), (int, float)
                 ):
-                    failures.append(
-                        _failure(
-                            node_id,
-                            param,
-                            "Randomize mode requires numeric min/max bounds.",
-                            kind="widget_mode",
+                    ctx.warnings.append(
+                        pipeline_warning(
+                            "widget_randomize_invalid_bounds",
+                            "Randomize mode requires numeric min/max bounds; ignoring randomize mode.",
+                            node_id=node_id,
+                            details={"param": param},
                         )
                     )
 

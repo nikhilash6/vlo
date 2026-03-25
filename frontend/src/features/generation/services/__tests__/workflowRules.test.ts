@@ -598,6 +598,68 @@ describe("resolvePresentedInputs", () => {
     expect(sampler?.config.options).toEqual(["euler", "heun"]);
   });
 
+  it("skips stale widget rules whose params are no longer present in the workflow", () => {
+    const widgets = resolveWidgetInputs(
+      {
+        "145": {
+          inputs: {
+            cfg: 7,
+          },
+        },
+      },
+      {
+        version: 1,
+        nodes: {
+          "145": {
+            widgets: {
+              steps: {
+                value_type: "int",
+              },
+              cfg: {
+                value_type: "float",
+              },
+            },
+          },
+        },
+        output_injections: {},
+        slots: {},
+      },
+    );
+
+    expect(widgets).toHaveLength(1);
+    expect(widgets[0]?.param).toBe("cfg");
+  });
+
+  it("keeps default-backed widgets even when the workflow omits the raw input param", () => {
+    const widgets = resolveWidgetInputs(
+      {
+        "145": {
+          inputs: {},
+        },
+      },
+      {
+        version: 1,
+        nodes: {
+          "145": {
+            widgets: {
+              sampler_name: {
+                value_type: "enum",
+                options: ["euler", "heun"],
+                default: "euler",
+              },
+            },
+          },
+        },
+        output_injections: {},
+        slots: {},
+      },
+    );
+
+    expect(widgets).toHaveLength(1);
+    expect(widgets[0]?.param).toBe("sampler_name");
+    expect(widgets[0]?.currentValue).toBe("euler");
+  });
+
   it("preserves widget grouping metadata for proxy-backed controls", () => {
     const widgets = resolveWidgetInputs(
       {
