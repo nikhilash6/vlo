@@ -18,6 +18,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import ReplayIcon from "@mui/icons-material/Replay";
 import TimelineIcon from "@mui/icons-material/Timeline";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import FavoriteIcon from "@mui/icons-material/Favorite";
 import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 import type { Asset } from "../../../types/Asset";
@@ -33,6 +34,7 @@ import { AssetPreviewDialog } from "./AssetPreviewDialog";
 
 interface AssetCardProps {
   asset: Asset;
+  onShowFamily?: (familyId: string) => void;
 }
 
 // Styled Components for better performance
@@ -123,7 +125,7 @@ function canRegenerateFromMetadata(asset: Asset): boolean {
   );
 }
 
-function AssetCardComponent({ asset }: AssetCardProps) {
+function AssetCardComponent({ asset, onShowFamily }: AssetCardProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
@@ -163,6 +165,7 @@ function AssetCardComponent({ asset }: AssetCardProps) {
   const timelineClipCount = useTimelineClipCountForAsset(asset.id);
   const timelineSelection = getTimelineSelectionFromAsset(asset);
   const canRegenerate = canRegenerateFromMetadata(asset);
+  const canShowFamily = Boolean(asset.familyId && onShowFamily);
   const isMenuOpen = Boolean(menuAnchorEl);
 
   function handleOpenMenu(event: React.MouseEvent<HTMLButtonElement>) {
@@ -207,6 +210,13 @@ function AssetCardComponent({ asset }: AssetCardProps) {
           ? error.message
           : "Failed to load workflow metadata";
       window.alert(message);
+    }
+  }
+
+  function handleShowFamily() {
+    handleCloseMenu();
+    if (asset.familyId && onShowFamily) {
+      onShowFamily(asset.familyId);
     }
   }
 
@@ -347,6 +357,14 @@ function AssetCardComponent({ asset }: AssetCardProps) {
                 <TimelineIcon fontSize="small" />
               </ListItemIcon>
               <ListItemText>Send to Timeline</ListItemText>
+            </MenuItem>
+          ) : null}
+          {canShowFamily ? (
+            <MenuItem onClick={handleShowFamily}>
+              <ListItemIcon>
+                <AccountTreeIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Show family</ListItemText>
             </MenuItem>
           ) : null}
           <MenuItem onClick={handleDelete}>

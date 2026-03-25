@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   mockUpdateAsset: vi.fn(),
   mockInsertAssetAtTime: vi.fn(),
   mockLoadWorkflowFromAssetMetadata: vi.fn(),
+  mockShowFamily: vi.fn(),
   timelineClipCount: 0,
 }));
 
@@ -101,6 +102,12 @@ const generatedWithWorkflowMetadataAsset: Asset = {
   },
 };
 
+const familyAsset: Asset = {
+  ...mockAsset,
+  id: "asset-family",
+  familyId: "family-1",
+};
+
 type AssetStoreState = ReturnType<typeof useAssetStore.getState>;
 
 function mockStores(timelineClipCount: number) {
@@ -121,6 +128,7 @@ describe("AssetCard actions", () => {
     mocks.mockInsertAssetAtTime.mockReset();
     mocks.mockLoadWorkflowFromAssetMetadata.mockReset();
     mocks.mockLoadWorkflowFromAssetMetadata.mockResolvedValue(undefined);
+    mocks.mockShowFamily.mockReset();
     mocks.timelineClipCount = 0;
   });
 
@@ -206,6 +214,22 @@ describe("AssetCard actions", () => {
     expect(
       screen.queryByRole("menuitem", { name: "Regenerate" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Show family" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the family action when a family callback is provided", () => {
+    mockStores(0);
+
+    render(
+      <AssetCard asset={familyAsset} onShowFamily={mocks.mockShowFamily} />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Asset actions"));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Show family" }));
+
+    expect(mocks.mockShowFamily).toHaveBeenCalledWith("family-1");
   });
 
   it("opens a video preview modal from the play button and closes with the x button", async () => {

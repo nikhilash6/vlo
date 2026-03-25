@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AssetBrowser } from "../AssetBrowser";
 import { useAssetStore } from "../useAssetStore";
-import type { Asset } from "../../../types/Asset";
+import type { Asset, AssetFamily } from "../../../types/Asset";
 
 // Mock the Zustand store hook
 vi.mock("../useAssetStore");
@@ -17,6 +17,7 @@ describe("AssetBrowser Component", () => {
       name: "vacation.mp4",
       src: "vid.mp4",
       hash: "1",
+      familyId: "family-1",
       createdAt: 0,
       favourite: true,
     },
@@ -26,6 +27,7 @@ describe("AssetBrowser Component", () => {
       name: "b-roll.mp4",
       src: "b-roll.mp4",
       hash: "1b",
+      familyId: "family-1",
       createdAt: 2,
       favourite: false,
     },
@@ -55,6 +57,21 @@ describe("AssetBrowser Component", () => {
     },
   ];
 
+  const mockFamilies: AssetFamily[] = [
+    {
+      id: "family-1",
+      representativeAssetId: "1b",
+      autoMatchKeys: ["generation-family:v1:test"],
+      compatibility: {
+        assetType: "video",
+        durationMs: 5000,
+        fpsMilli: 24000,
+      },
+      createdAt: 1,
+      updatedAt: 2,
+    },
+  ];
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockAddLocalAssets.mockReset();
@@ -64,6 +81,7 @@ describe("AssetBrowser Component", () => {
   const mockStore = (state: Partial<ReturnType<typeof useAssetStore>> = {}) => {
     const defaultState = {
       assets: [],
+      families: [],
       uploadAsset: vi.fn(),
       isUploading: false,
       uploadingCount: 0,
@@ -270,5 +288,33 @@ describe("AssetBrowser Component", () => {
 
     expect(screen.getByText("vacation.mp4")).toBeInTheDocument();
     expect(screen.queryByText("b-roll.mp4")).not.toBeInTheDocument();
+  });
+
+  it("opens the family dialog from an asset card action", async () => {
+    mockStore({
+      assets: mockAssets,
+      families: mockFamilies,
+    });
+
+    render(<AssetBrowser />);
+
+    fireEvent.click(screen.getAllByLabelText("Asset actions")[0]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Show family" }));
+
+    expect(
+      screen.getByRole("dialog", { name: /Asset Family/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("family-1")).toBeInTheDocument();
+    expect(screen.getByText("2 members")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close family dialog" }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: /Asset Family/i }),
+      ).not.toBeInTheDocument();
+    });
   });
 });

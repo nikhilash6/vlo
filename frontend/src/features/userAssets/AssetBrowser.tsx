@@ -24,6 +24,7 @@ import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 import type { AssetType } from "../../types/Asset";
 import { useAssetStore } from "./useAssetStore";
 import { AssetCard } from "./components/AssetCard";
+import { FamilyDialog } from "./components/FamilyDialog";
 import { isAssetVisibleInBrowser } from "./utils/assetVisibility";
 
 type SortOption = "dateDesc" | "dateAsc" | "nameAsc";
@@ -51,8 +52,10 @@ function AssetBrowserComponent() {
   const [sortAnchorEl, setSortAnchorEl] = useState<null | HTMLElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
+  const [selectedFamilyId, setSelectedFamilyId] = useState<string | null>(null);
 
   const assets = useAssetStore((state) => state.assets);
+  const families = useAssetStore((state) => state.families);
 
   React.useEffect(() => {
     console.log("[AssetBrowser] Assets updated. Count:", assets.length);
@@ -171,6 +174,19 @@ function AssetBrowserComponent() {
       }
     });
   }, [assets, activeTab, sortOption, showFavouritesOnly]);
+
+  const selectedFamily = useMemo(
+    () => families.find((family) => family.id === selectedFamilyId),
+    [families, selectedFamilyId],
+  );
+
+  const handleShowFamily = (familyId: string) => {
+    setSelectedFamilyId(familyId);
+  };
+
+  const handleCloseFamilyDialog = () => {
+    setSelectedFamilyId(null);
+  };
 
   return (
     <Box
@@ -354,12 +370,18 @@ function AssetBrowserComponent() {
           <Grid container spacing={2}>
             {sortedAssets.map((asset) => (
               <Grid size={{ xs: 6 }} key={asset.id}>
-                <AssetCard asset={asset} />
+                <AssetCard asset={asset} onShowFamily={handleShowFamily} />
               </Grid>
             ))}
           </Grid>
         )}
       </Box>
+
+      <FamilyDialog
+        family={selectedFamily}
+        open={Boolean(selectedFamily)}
+        onClose={handleCloseFamilyDialog}
+      />
 
       {(isUploading || isDragOver) && (
         <Box
