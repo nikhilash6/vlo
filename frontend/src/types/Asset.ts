@@ -2,9 +2,19 @@ import type { TimelineSelection } from "./TimelineTypes";
 
 export type AssetType = "video" | "image" | "audio";
 
+export interface AssetFamilyCompatibility {
+  assetType: AssetType;
+  durationMs: number | null;
+  fpsMilli: number | null;
+}
+
 export interface AssetFamily {
-  uuid: string;
-  hashes?: string[];
+  id: string;
+  representativeAssetId?: string;
+  autoMatchKeys?: string[];
+  compatibility: AssetFamilyCompatibility;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export type GeneratedCreationInput =
@@ -68,7 +78,7 @@ export type CreationMetadata =
 export interface Asset {
   id: string;
   hash: string; // xxhash
-  family?: AssetFamily;
+  familyId?: string;
   name: string;
   type: AssetType;
   favourite?: boolean;

@@ -6,8 +6,13 @@ export {
   addLocalAsset,
   deleteAsset,
   getAssetById,
+  getFamilyById,
+  getFamilies,
   getAssetInput,
   getAssets,
+  inspectAssetFamilyCompatibility,
   scanForNewAssets,
+  upsertFamily,
   useAsset,
+  useFamily,
 } from "./publicApi";

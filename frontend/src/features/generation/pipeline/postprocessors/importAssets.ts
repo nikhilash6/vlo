@@ -1,7 +1,10 @@
 import type { AssetFamily, CreationMetadata } from "../../../../types/Asset";
 import { getOutputMediaKindFromFile } from "../../constants/mediaKinds";
 import type { FrontendPostprocessContext, Processor } from "../types";
-import { resolveFamilyForGenerationHash } from "../../utils/familyAssignment";
+import {
+  buildGenerationFamilyAutoMatchKey,
+  resolveFamilyForGenerationMatchKey,
+} from "../../utils/familyAssignment";
 
 /**
  * If a prepared mask file exists, ingest it as a separate asset first and
@@ -13,7 +16,7 @@ async function ingestMaskAsset(
   addLocalAsset: (
     file: File,
     creationMetadata?: CreationMetadata,
-    family?: AssetFamily,
+    familyId?: string,
   ) => Promise<{ id: string } | null>,
 ): Promise<void> {
   if (!ctx.preparedMaskFile) return;
@@ -38,15 +41,57 @@ async function ingestGeneratedAsset(
   addLocalAsset: (
     file: File,
     creationMetadata?: CreationMetadata,
-    family?: AssetFamily,
+    familyId?: string,
   ) => Promise<{ id: string } | null>,
-  family: AssetFamily | undefined,
+  getFamilies: () => AssetFamily[],
+  upsertFamily: (family: AssetFamily) => Promise<void>,
+  inspectAssetFamilyCompatibility: (file: File) => Promise<
+    import("../../../../types/Asset").AssetFamilyCompatibility | null
+  >,
+  pendingFamilies: Map<string, AssetFamily>,
 ): Promise<{ id: string } | null> {
-  if (family) {
-    return addLocalAsset(file, ctx.generationMetadata, family);
+  let family: AssetFamily | undefined;
+
+  if (ctx.autoFamilyRequestKey) {
+    try {
+      const compatibility = await inspectAssetFamilyCompatibility(file);
+      const autoMatchKey = await buildGenerationFamilyAutoMatchKey(
+        ctx.autoFamilyRequestKey,
+        compatibility,
+      );
+      const knownFamilies = [...getFamilies(), ...pendingFamilies.values()].filter(
+        (candidate, index, families) =>
+          families.findIndex((familyCandidate) => familyCandidate.id === candidate.id) ===
+          index,
+      );
+      family = resolveFamilyForGenerationMatchKey(
+        knownFamilies,
+        autoMatchKey,
+        compatibility,
+      );
+    } catch (error) {
+      console.warn(
+        "[Generation] Failed to resolve compatible family for generated output",
+        error,
+      );
+    }
   }
 
-  return addLocalAsset(file, ctx.generationMetadata);
+  const asset = family
+    ? await addLocalAsset(file, ctx.generationMetadata, family.id)
+    : await addLocalAsset(file, ctx.generationMetadata);
+
+  if (asset && family) {
+    const updatedFamily: AssetFamily = {
+      ...family,
+      representativeAssetId: asset.id,
+      updatedAt: Date.now(),
+    };
+    pendingFamilies.set(updatedFamily.id, updatedFamily);
+    await upsertFamily(updatedFamily);
+  }
+
+  return asset;
 }
 
 /**
@@ -62,6 +107,7 @@ export const importAssets: Processor<FrontendPostprocessContext> = {
       "stitchFailure",
       "stitchMessage",
       "generationMetadata",
+      "autoFamilyRequestKey",
       "postprocessingConfig",
       "previewFrameFiles",
       "preparedMaskFile",
@@ -86,11 +132,13 @@ export const importAssets: Processor<FrontendPostprocessContext> = {
       return;
     }
 
-    const { addLocalAsset, getAssets } = await import("../../../userAssets");
-    const family = resolveFamilyForGenerationHash(
-      getAssets(),
-      ctx.autoFamilyHash,
-    );
+    const {
+      addLocalAsset,
+      getFamilies,
+      inspectAssetFamilyCompatibility,
+      upsertFamily,
+    } = await import("../../../userAssets");
+    const pendingFamilies = new Map<string, AssetFamily>();
 
     // This transport is intentionally singular for now: one generation run
     // only ever yields one linked generation mask clip. If we later support
@@ -103,7 +151,10 @@ export const importAssets: Processor<FrontendPostprocessContext> = {
         ctx.packagedVideo,
         ctx,
         addLocalAsset,
-        family,
+        getFamilies,
+        upsertFamily,
+        inspectAssetFamilyCompatibility,
+        pendingFamilies,
       );
 
       if (packagedAsset) {
@@ -125,7 +176,15 @@ export const importAssets: Processor<FrontendPostprocessContext> = {
     }
 
     for (const { file } of ctx.fetchedFiles) {
-      const asset = await ingestGeneratedAsset(file, ctx, addLocalAsset, family);
+      const asset = await ingestGeneratedAsset(
+        file,
+        ctx,
+        addLocalAsset,
+        getFamilies,
+        upsertFamily,
+        inspectAssetFamilyCompatibility,
+        pendingFamilies,
+      );
       if (asset) {
         ctx.importedAssetIds.push(asset.id);
       }
@@ -145,7 +204,10 @@ export const importAssets: Processor<FrontendPostprocessContext> = {
           fallbackFrame,
           ctx,
           addLocalAsset,
-          family,
+          getFamilies,
+          upsertFamily,
+          inspectAssetFamilyCompatibility,
+          pendingFamilies,
         );
         if (fallbackAsset) {
           ctx.importedAssetIds.push(fallbackAsset.id);

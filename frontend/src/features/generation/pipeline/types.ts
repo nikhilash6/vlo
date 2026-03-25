@@ -206,7 +206,7 @@ export interface FrontendPostprocessContext {
   readonly postprocessingConfig: WorkflowPostprocessingConfig;
   readonly aspectRatioProcessing: AspectRatioProcessingMetadata | null;
   generationMetadata: GeneratedCreationMetadata;
-  readonly autoFamilyHash: string | null;
+  readonly autoFamilyRequestKey: string | null;
   readonly previewFrameFiles: File[];
   preparedMaskFile: File | null;
 
@@ -227,7 +227,7 @@ export interface FrontendPostprocessOptions {
   postprocessing?: WorkflowPostprocessingConfig | null;
   aspectRatioProcessing?: AspectRatioProcessingMetadata | null;
   generationMetadata: GeneratedCreationMetadata;
-  autoFamilyHash?: string | null;
+  autoFamilyRequestKey?: string | null;
   previewFrameFiles?: File[] | null;
   preparedMaskFile?: File | null;
 }

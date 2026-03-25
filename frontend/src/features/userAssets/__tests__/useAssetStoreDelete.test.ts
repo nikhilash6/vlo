@@ -60,6 +60,7 @@ describe("useAssetStore - Deletion", () => {
           createdAt: 2000,
         },
       ],
+      families: [],
       isUploading: false,
     });
     vi.clearAllMocks();
@@ -300,6 +301,7 @@ describe("useAssetStore - Deletion", () => {
           },
         },
       ],
+      families: [],
       isUploading: false,
     });
     (fileSystemService.readFile as Mock).mockResolvedValue({
@@ -335,6 +337,153 @@ describe("useAssetStore - Deletion", () => {
     expect(fileSystemService.writeFile).toHaveBeenLastCalledWith(
       ".vloproject/project.json",
       expect.not.stringContaining('"mask-1"'),
+    );
+  });
+
+  it("reassigns the representative when the current family representative is deleted", async () => {
+    useAssetStore.setState({
+      assets: [
+        {
+          id: "asset-1",
+          name: "video-a.mp4",
+          src: "video-a.mp4",
+          type: "video",
+          hash: "hash-a",
+          familyId: "family-1",
+          createdAt: 1000,
+        },
+        {
+          id: "asset-2",
+          name: "video-b.mp4",
+          src: "video-b.mp4",
+          type: "video",
+          hash: "hash-b",
+          familyId: "family-1",
+          createdAt: 2000,
+        },
+      ],
+      families: [
+        {
+          id: "family-1",
+          representativeAssetId: "asset-2",
+          autoMatchKeys: ["generation-family:v1:match"],
+          compatibility: {
+            assetType: "video",
+            durationMs: 5000,
+            fpsMilli: 24000,
+          },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      isUploading: false,
+    });
+    (fileSystemService.readFile as Mock).mockResolvedValue({
+      text: async () =>
+        JSON.stringify({
+          assets: {
+            "asset-1": {
+              id: "asset-1",
+              name: "video-a.mp4",
+              src: "video-a.mp4",
+            },
+            "asset-2": {
+              id: "asset-2",
+              name: "video-b.mp4",
+              src: "video-b.mp4",
+            },
+          },
+          assetFamilies: {
+            "family-1": {
+              id: "family-1",
+              representativeAssetId: "asset-2",
+              compatibility: {
+                assetType: "video",
+                durationMs: 5000,
+                fpsMilli: 24000,
+              },
+              createdAt: 1,
+              updatedAt: 1,
+            },
+          },
+        }),
+    });
+
+    await useAssetStore.getState().deleteAsset("asset-2");
+
+    expect(useAssetStore.getState().families).toEqual([
+      expect.objectContaining({
+        id: "family-1",
+        representativeAssetId: "asset-1",
+      }),
+    ]);
+    expect(fileSystemService.writeFile).toHaveBeenCalledWith(
+      ".vloproject/project.json",
+      expect.stringContaining('"representativeAssetId": "asset-1"'),
+    );
+  });
+
+  it("removes empty families when their final member is deleted", async () => {
+    useAssetStore.setState({
+      assets: [
+        {
+          id: "asset-1",
+          name: "video-a.mp4",
+          src: "video-a.mp4",
+          type: "video",
+          hash: "hash-a",
+          familyId: "family-1",
+          createdAt: 1000,
+        },
+      ],
+      families: [
+        {
+          id: "family-1",
+          representativeAssetId: "asset-1",
+          autoMatchKeys: ["generation-family:v1:match"],
+          compatibility: {
+            assetType: "video",
+            durationMs: 5000,
+            fpsMilli: 24000,
+          },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      isUploading: false,
+    });
+    (fileSystemService.readFile as Mock).mockResolvedValue({
+      text: async () =>
+        JSON.stringify({
+          assets: {
+            "asset-1": {
+              id: "asset-1",
+              name: "video-a.mp4",
+              src: "video-a.mp4",
+            },
+          },
+          assetFamilies: {
+            "family-1": {
+              id: "family-1",
+              representativeAssetId: "asset-1",
+              compatibility: {
+                assetType: "video",
+                durationMs: 5000,
+                fpsMilli: 24000,
+              },
+              createdAt: 1,
+              updatedAt: 1,
+            },
+          },
+        }),
+    });
+
+    await useAssetStore.getState().deleteAsset("asset-1");
+
+    expect(useAssetStore.getState().families).toEqual([]);
+    expect(fileSystemService.writeFile).toHaveBeenCalledWith(
+      ".vloproject/project.json",
+      expect.not.stringContaining('"assetFamilies"'),
     );
   });
 });

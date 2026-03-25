@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Asset, GeneratedCreationInput } from "../../../../types/Asset";
+import type {
+  Asset,
+  AssetFamily,
+  AssetFamilyCompatibility,
+  GeneratedCreationInput,
+} from "../../../../types/Asset";
 import type { SlotValue } from "../../pipeline/types";
 import type { WorkflowInput } from "../../types";
 import {
-  buildGenerationFamilyHash,
-  resolveFamilyForGenerationHash,
+  buildGenerationFamilyAutoMatchKey,
+  buildGenerationFamilyRequestKey,
+  resolveFamilyForGenerationMatchKey,
 } from "../familyAssignment";
 
 const { getAssetByIdMock } = vi.hoisted(() => ({
@@ -91,6 +97,12 @@ function makeSlotValues(prompt: string): Record<string, SlotValue> {
   };
 }
 
+const compatibility: AssetFamilyCompatibility = {
+  assetType: "video",
+  durationMs: 5000,
+  fpsMilli: 24000,
+};
+
 describe("familyAssignment", () => {
   beforeEach(() => {
     getAssetByIdMock.mockReset();
@@ -98,13 +110,13 @@ describe("familyAssignment", () => {
   });
 
   it("treats seed differences as the same family when structure and inputs match", async () => {
-    const left = await buildGenerationFamilyHash({
+    const left = await buildGenerationFamilyRequestKey({
       workflow: makeWorkflow(1),
       workflowInputs,
       slotValues: makeSlotValues("hello world"),
       generationInputs,
     });
-    const right = await buildGenerationFamilyHash({
+    const right = await buildGenerationFamilyRequestKey({
       workflow: makeWorkflow(99999),
       workflowInputs,
       slotValues: makeSlotValues("hello world"),
@@ -116,13 +128,13 @@ describe("familyAssignment", () => {
   });
 
   it("changes the family hash when the text prompt changes", async () => {
-    const left = await buildGenerationFamilyHash({
+    const left = await buildGenerationFamilyRequestKey({
       workflow: makeWorkflow(1),
       workflowInputs,
       slotValues: makeSlotValues("hello world"),
       generationInputs,
     });
-    const right = await buildGenerationFamilyHash({
+    const right = await buildGenerationFamilyRequestKey({
       workflow: makeWorkflow(1),
       workflowInputs,
       slotValues: makeSlotValues("different prompt"),
@@ -133,13 +145,13 @@ describe("familyAssignment", () => {
   });
 
   it("changes the family hash when the workflow wiring changes", async () => {
-    const left = await buildGenerationFamilyHash({
+    const left = await buildGenerationFamilyRequestKey({
       workflow: makeWorkflow(1, "2"),
       workflowInputs,
       slotValues: makeSlotValues("hello world"),
       generationInputs,
     });
-    const right = await buildGenerationFamilyHash({
+    const right = await buildGenerationFamilyRequestKey({
       workflow: makeWorkflow(1, "1"),
       workflowInputs,
       slotValues: makeSlotValues("hello world"),
@@ -149,24 +161,58 @@ describe("familyAssignment", () => {
     expect(left).not.toBe(right);
   });
 
-  it("reuses an existing family uuid when the hash already exists", () => {
-    const familyHash = "generation-family:v1:abc123";
-    const family = resolveFamilyForGenerationHash(
-      [
-        {
-          ...sourceAsset,
-          family: {
-            uuid: "family-uuid",
-            hashes: [familyHash],
-          },
-        },
-      ],
-      familyHash,
+  it("changes the match key when compatibility changes", async () => {
+    const requestKey = await buildGenerationFamilyRequestKey({
+      workflow: makeWorkflow(1),
+      workflowInputs,
+      slotValues: makeSlotValues("hello world"),
+      generationInputs,
+    });
+
+    const left = await buildGenerationFamilyAutoMatchKey(requestKey, compatibility);
+    const right = await buildGenerationFamilyAutoMatchKey(requestKey, {
+      ...compatibility,
+      durationMs: 7000,
+    });
+
+    expect(left).not.toBeNull();
+    expect(left).not.toBe(right);
+  });
+
+  it("reuses an existing family id when the match key already exists", async () => {
+    const requestKey = await buildGenerationFamilyRequestKey({
+      workflow: makeWorkflow(1),
+      workflowInputs,
+      slotValues: makeSlotValues("hello world"),
+      generationInputs,
+    });
+    const familyMatchKey = await buildGenerationFamilyAutoMatchKey(
+      requestKey,
+      compatibility,
+    );
+    const families: AssetFamily[] = [
+      {
+        id: "family-id",
+        representativeAssetId: "existing-asset",
+        autoMatchKeys: [familyMatchKey!],
+        compatibility,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ];
+    const family = resolveFamilyForGenerationMatchKey(
+      families,
+      familyMatchKey,
+      compatibility,
     );
 
     expect(family).toEqual({
-      uuid: "family-uuid",
-      hashes: [familyHash],
+      id: "family-id",
+      representativeAssetId: "existing-asset",
+      autoMatchKeys: [familyMatchKey],
+      compatibility,
+      createdAt: 1,
+      updatedAt: 1,
     });
   });
 });

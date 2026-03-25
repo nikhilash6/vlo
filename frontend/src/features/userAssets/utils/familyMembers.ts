@@ -1,9 +1,31 @@
 import type { Asset, AssetFamily } from "../../../types/Asset";
+import { doesAssetBelongToFamily } from "../../../shared/utils/assetFamilies";
 import { isAssetVisibleInBrowser } from "./assetVisibility";
 
-function isAssetInFamily(asset: Asset, family: AssetFamily): boolean {
-  const familyHashes = family.hashes ?? [];
-  return asset.family?.uuid === family.uuid || familyHashes.includes(asset.hash);
+export function getAssetsForFamilyId(
+  assets: readonly Asset[],
+  familyId: string | null | undefined,
+): Asset[] {
+  if (!familyId) {
+    return [];
+  }
+
+  return assets.filter((asset) => asset.familyId === familyId);
+}
+
+export function pickRepresentativeAssetId(
+  assets: readonly Asset[],
+  familyId: string | null | undefined,
+): string | undefined {
+  return getAssetsForFamilyId(assets, familyId)
+    .sort((left, right) => {
+      const createdAtDifference = (right.createdAt || 0) - (left.createdAt || 0);
+      if (createdAtDifference !== 0) {
+        return createdAtDifference;
+      }
+
+      return left.name.localeCompare(right.name);
+    })[0]?.id;
 }
 
 export function getFamilyMembers(
@@ -18,7 +40,10 @@ export function getFamilyMembers(
 
   return assets
     .filter((asset) => {
-      if (!isAssetVisibleInBrowser(asset) || !isAssetInFamily(asset, family)) {
+      if (
+        !isAssetVisibleInBrowser(asset) ||
+        !doesAssetBelongToFamily(asset, family)
+      ) {
         return false;
       }
 

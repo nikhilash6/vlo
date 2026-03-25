@@ -50,7 +50,7 @@ export async function runFrontendPostprocess(
     postprocessingConfig: normalizePostprocessingConfig(options.postprocessing),
     aspectRatioProcessing: options.aspectRatioProcessing ?? null,
     generationMetadata: options.generationMetadata,
-    autoFamilyHash: options.autoFamilyHash ?? null,
+    autoFamilyRequestKey: options.autoFamilyRequestKey ?? null,
     previewFrameFiles: (options.previewFrameFiles ?? []).filter(
       (file) => getOutputMediaKindFromFile(file) === "image",
     ),

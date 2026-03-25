@@ -59,7 +59,7 @@ describe("useAssetStore", () => {
     vi.clearAllMocks();
     mockRemoveClipsByAssetId.mockReset();
     projectDocumentService.resetProjectDocumentCache();
-    useAssetStore.setState({ assets: [], isLoading: false });
+    useAssetStore.setState({ assets: [], families: [], isLoading: false });
   });
 
   it("fetchAssets should hydrate proxyFile from local FS", async () => {

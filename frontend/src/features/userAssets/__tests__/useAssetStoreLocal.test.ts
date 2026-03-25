@@ -71,6 +71,7 @@ describe("useAssetStore - Local Assets", () => {
   beforeEach(() => {
     useAssetStore.setState({
       assets: [],
+      families: [],
       isUploading: false,
       uploadingCount: 0,
       isLoading: false,

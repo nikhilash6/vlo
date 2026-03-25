@@ -12,15 +12,23 @@ vi.mock("../AssetCard", () => ({
 }));
 
 const family: AssetFamily = {
-  uuid: "8d3995b4-4f43-4fe2-a702-b3e87ae0d8b0",
-  hashes: ["family-hash-2"],
+  id: "8d3995b4-4f43-4fe2-a702-b3e87ae0d8b0",
+  representativeAssetId: "asset-2",
+  autoMatchKeys: ["generation-family:v1:match"],
+  compatibility: {
+    assetType: "video",
+    durationMs: 5000,
+    fpsMilli: null,
+  },
+  createdAt: 1,
+  updatedAt: 1,
 };
 
 const mockAssets: Asset[] = [
   {
     id: "asset-1",
     hash: "family-hash-1",
-    family,
+    familyId: family.id,
     name: "hero.mp4",
     type: "video",
     src: "hero.mp4",
@@ -29,26 +37,25 @@ const mockAssets: Asset[] = [
   {
     id: "asset-2",
     hash: "family-hash-2",
-    name: "hero-frame.png",
-    type: "image",
-    src: "hero-frame.png",
+    familyId: family.id,
+    name: "hero-alt.mp4",
+    type: "video",
+    src: "hero-alt.mp4",
     createdAt: 20,
   },
   {
     id: "asset-3",
     hash: "other-hash",
-    family: {
-      uuid: family.uuid,
-    },
-    name: "hero-audio.wav",
-    type: "audio",
-    src: "hero-audio.wav",
+    familyId: family.id,
+    name: "hero-take-2.mp4",
+    type: "video",
+    src: "hero-take-2.mp4",
     createdAt: 15,
   },
   {
     id: "mask-asset",
     hash: "family-hash-2",
-    family,
+    familyId: family.id,
     name: "hero_mask.webm",
     type: "video",
     src: "hero_mask.webm",
@@ -80,7 +87,7 @@ describe("FamilyDialog", () => {
     vi.clearAllMocks();
   });
 
-  it("renders visible members that match by family uuid or hash", () => {
+  it("renders visible members that belong to the selected family", () => {
     mockStore(mockAssets);
 
     render(<FamilyDialog family={family} open={true} onClose={vi.fn()} />);
@@ -88,11 +95,11 @@ describe("FamilyDialog", () => {
     expect(
       screen.getByRole("dialog", { name: /Asset Family/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText(family.uuid)).toBeInTheDocument();
+    expect(screen.getByText(family.id)).toBeInTheDocument();
     expect(screen.getByText("3 members")).toBeInTheDocument();
     expect(screen.getAllByTestId("family-asset-card")).toHaveLength(3);
-    expect(screen.getByText("hero-frame.png")).toBeInTheDocument();
-    expect(screen.getByText("hero-audio.wav")).toBeInTheDocument();
+    expect(screen.getByText("hero-alt.mp4")).toBeInTheDocument();
+    expect(screen.getByText("hero-take-2.mp4")).toBeInTheDocument();
     expect(screen.getByText("hero.mp4")).toBeInTheDocument();
     expect(screen.queryByText("hero_mask.webm")).not.toBeInTheDocument();
   });

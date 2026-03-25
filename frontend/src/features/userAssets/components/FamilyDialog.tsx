@@ -22,7 +22,7 @@ interface FamilyDialogProps {
 export function FamilyDialog({ family, open, onClose }: FamilyDialogProps) {
   const assets = useAssetStore((state) => state.assets);
   const familyMembers = getFamilyMembers(assets, family);
-  const familyLabel = family?.uuid ?? "Unknown family";
+  const familyLabel = family?.id ?? "Unknown family";
 
   return (
     <Dialog
@@ -38,7 +38,9 @@ export function FamilyDialog({ family, open, onClose }: FamilyDialogProps) {
       }}
     >
       <DialogTitle sx={{ pr: 7 }}>
-        <Typography variant="h6">Asset Family</Typography>
+        <Typography variant="h6" component="div">
+          Asset Family
+        </Typography>
         <Typography
           variant="caption"
           component="div"

@@ -1,4 +1,5 @@
 import type { Asset } from "../../../types/Asset";
+import type { AssetFamily } from "../../../types/Asset";
 import type { TimelineClip, TimelineTrack } from "../../../types/TimelineTypes";
 
 export interface TimelineSnapshot {
@@ -23,6 +24,7 @@ export interface ProjectDocument {
   last_modified?: number;
   config?: ProjectDocumentConfig;
   assets?: Record<string, Asset>;
+  assetFamilies?: Record<string, AssetFamily>;
   timeline?: TimelineSnapshot;
   [key: string]: unknown;
 }

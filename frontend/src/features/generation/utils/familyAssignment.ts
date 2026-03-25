@@ -1,8 +1,9 @@
 import type {
-  Asset,
   AssetFamily,
+  AssetFamilyCompatibility,
   GeneratedCreationInput,
 } from "../../../types/Asset";
+import { areAssetFamilyCompatibilitiesEqual } from "../../../shared/utils/assetFamilies";
 import {
   computeXxhash64Bytes,
   computeXxhash64String,
@@ -18,14 +19,15 @@ import {
 } from "./workflowInputs";
 import { buildWorkflowStructureSignature } from "./workflowNodeSignature";
 
-interface BuildGenerationFamilyHashOptions {
+interface BuildGenerationFamilyRequestKeyOptions {
   workflow: Record<string, unknown> | null | undefined;
   workflowInputs: WorkflowInput[];
   slotValues: Record<string, SlotValue>;
   generationInputs: GeneratedCreationInput[];
 }
 
-const AUTO_FAMILY_HASH_PREFIX = "generation-family:v1:";
+const AUTO_FAMILY_REQUEST_KEY_PREFIX = "generation-family-request:v1:";
+const AUTO_FAMILY_MATCH_KEY_PREFIX = "generation-family:v1:";
 
 function stableSerialize(value: unknown): string {
   if (value === null) {
@@ -125,8 +127,8 @@ async function buildMediaInputDescriptor(
   return null;
 }
 
-export async function buildGenerationFamilyHash(
-  options: BuildGenerationFamilyHashOptions,
+export async function buildGenerationFamilyRequestKey(
+  options: BuildGenerationFamilyRequestKeyOptions,
 ): Promise<string | null> {
   const workflowStructure = buildWorkflowStructureSignature(options.workflow);
   if (!workflowStructure) {
@@ -182,35 +184,60 @@ export async function buildGenerationFamilyHash(
     mediaInputs,
   });
 
-  return `${AUTO_FAMILY_HASH_PREFIX}${await computeXxhash64String(
+  return `${AUTO_FAMILY_REQUEST_KEY_PREFIX}${await computeXxhash64String(
     signaturePayload,
   )}`;
 }
 
-export function resolveFamilyForGenerationHash(
-  assets: readonly Asset[],
-  familyHash: string | null | undefined,
+export async function buildGenerationFamilyAutoMatchKey(
+  requestKey: string | null | undefined,
+  compatibility: AssetFamilyCompatibility | null | undefined,
+): Promise<string | null> {
+  if (!requestKey || !compatibility) {
+    return null;
+  }
+
+  return `${AUTO_FAMILY_MATCH_KEY_PREFIX}${await computeXxhash64String(
+    stableSerialize({
+      requestKey,
+      compatibility,
+    }),
+  )}`;
+}
+
+export function resolveFamilyForGenerationMatchKey(
+  families: readonly AssetFamily[],
+  matchKey: string | null | undefined,
+  compatibility: AssetFamilyCompatibility | null | undefined,
+  now = Date.now(),
 ): AssetFamily | undefined {
-  if (!familyHash) {
+  if (!matchKey || !compatibility) {
     return undefined;
   }
 
-  const matchingFamily = assets.find((asset) =>
-    asset.family?.hashes?.includes(familyHash),
-  )?.family;
+  const matchingFamily = families.find(
+    (family) =>
+      family.autoMatchKeys?.includes(matchKey) &&
+      areAssetFamilyCompatibilitiesEqual(family.compatibility, compatibility),
+  );
 
   if (!matchingFamily) {
     return {
-      uuid: crypto.randomUUID(),
-      hashes: [familyHash],
+      id: crypto.randomUUID(),
+      autoMatchKeys: [matchKey],
+      compatibility,
+      createdAt: now,
+      updatedAt: now,
     };
   }
 
-  const hashes = new Set(matchingFamily.hashes ?? []);
-  hashes.add(familyHash);
+  const autoMatchKeys = new Set(matchingFamily.autoMatchKeys ?? []);
+  autoMatchKeys.add(matchKey);
 
   return {
-    uuid: matchingFamily.uuid,
-    hashes: [...hashes].sort((left, right) => left.localeCompare(right)),
+    ...matchingFamily,
+    autoMatchKeys: [...autoMatchKeys].sort((left, right) =>
+      left.localeCompare(right),
+    ),
   };
 }

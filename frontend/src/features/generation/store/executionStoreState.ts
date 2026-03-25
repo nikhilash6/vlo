@@ -15,7 +15,7 @@ import {
   isActiveGenerationJob,
   markActiveJobError,
 } from "./jobMutations";
-import { buildGenerationFamilyHash } from "../utils/familyAssignment";
+import { buildGenerationFamilyRequestKey } from "../utils/familyAssignment";
 import { resolveWorkflowDisplayName } from "./workflowCatalog";
 import type {
   GenerationExecutionState,
@@ -169,9 +169,9 @@ export function buildExecutionStoreState(
         return null;
       }
 
-      let autoFamilyHash: string | null = null;
+      let autoFamilyRequestKey: string | null = null;
       try {
-        autoFamilyHash = await buildGenerationFamilyHash({
+        autoFamilyRequestKey = await buildGenerationFamilyRequestKey({
           workflow: response.comfyui_prompt ?? prepared.request.workflow,
           workflowInputs: plan.workflow.workflowInputs,
           slotValues: plan.preprocess.slotValues,
@@ -179,7 +179,7 @@ export function buildExecutionStoreState(
         });
       } catch (error) {
         console.warn(
-          "[Generation] Failed to build auto family hash for generated asset",
+          "[Generation] Failed to build auto family request key for generated asset",
           error,
         );
       }
@@ -207,7 +207,7 @@ export function buildExecutionStoreState(
         generationMetadata: submitted.generationMetadata,
         postprocessedPreview: null,
         postprocessError: null,
-        autoFamilyHash,
+        autoFamilyRequestKey,
         usesSaveImageWebsocketOutputs: submitted.usesSaveImageWebsocketOutputs,
         saveImageWebsocketNodeIds: submitted.saveImageWebsocketNodeIds,
         preparedMaskFile: submitted.preparedMaskFile,

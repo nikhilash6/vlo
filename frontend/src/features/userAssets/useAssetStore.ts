@@ -1,15 +1,17 @@
 import { create } from "zustand";
 import { Input, UrlSource, BlobSource, ALL_FORMATS } from "mediabunny";
-import type { Asset } from "../../types/Asset";
+import type { Asset, AssetFamily } from "../../types/Asset";
 import {
   useProjectStore,
   fileSystemService,
   projectDocumentService,
 } from "../project";
 import { mediaProcessingService } from "./services/MediaProcessingService";
+import { pickRepresentativeAssetId } from "./utils/familyMembers";
 
 interface AssetStore {
   assets: Asset[];
+  families: AssetFamily[];
   isUploading: boolean;
   uploadingCount: number;
   isScanning: boolean; // Add scanning lock
@@ -19,13 +21,14 @@ interface AssetStore {
   addLocalAsset: (
     file: File,
     creationMetadata?: Asset["creationMetadata"],
-    family?: Asset["family"],
+    familyId?: Asset["familyId"],
   ) => Promise<Asset | null>;
   addLocalAssets: (
     files: readonly File[],
     creationMetadata?: Asset["creationMetadata"],
-    family?: Asset["family"],
+    familyId?: Asset["familyId"],
   ) => Promise<Asset[]>;
+  upsertFamily: (family: AssetFamily) => Promise<void>;
   updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
   fetchAssets: () => Promise<void>;
   scanForNewAssets: () => Promise<void>;
@@ -40,6 +43,66 @@ interface AssetDurationRepair {
 
 function hasValidDuration(duration: number | undefined): duration is number {
   return typeof duration === "number" && Number.isFinite(duration) && duration > 0;
+}
+
+function toAssetFamilyRecordMap(
+  families: readonly AssetFamily[],
+): Record<string, AssetFamily> {
+  return Object.fromEntries(families.map((family) => [family.id, family]));
+}
+
+function upsertFamilyInCollection(
+  families: readonly AssetFamily[],
+  family: AssetFamily,
+): AssetFamily[] {
+  const index = families.findIndex((candidate) => candidate.id === family.id);
+  if (index < 0) {
+    return [...families, family];
+  }
+
+  const nextFamilies = [...families];
+  nextFamilies[index] = family;
+  return nextFamilies;
+}
+
+function clearUnknownFamilyReferences(
+  assets: readonly Asset[],
+  families: readonly AssetFamily[],
+): Asset[] {
+  const knownFamilyIds = new Set(families.map((family) => family.id));
+  return assets.map((asset) =>
+    asset.familyId && !knownFamilyIds.has(asset.familyId)
+      ? {
+          ...asset,
+          familyId: undefined,
+        }
+      : asset,
+  );
+}
+
+function reconcileFamiliesWithAssets(
+  assets: readonly Asset[],
+  families: readonly AssetFamily[],
+  updatedAt = Date.now(),
+): AssetFamily[] {
+  return families.flatMap((family) => {
+    const representativeAssetId = pickRepresentativeAssetId(assets, family.id);
+    if (!representativeAssetId) {
+      return [];
+    }
+
+    if (family.representativeAssetId === representativeAssetId) {
+      return [family];
+    }
+
+    return [
+      {
+        ...family,
+        representativeAssetId,
+        updatedAt,
+      },
+    ];
+  });
 }
 
 function countGenerationMaskAssetConsumers(
@@ -77,6 +140,7 @@ async function resolveAssetDurationRepair(
 
 export const useAssetStore = create<AssetStore>((set, get) => ({
   assets: [],
+  families: [],
   isUploading: false,
   uploadingCount: 0,
   isScanning: false,
@@ -91,6 +155,10 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     try {
       const data = await projectDocumentService.readProjectDocument();
       const assetsMap = (data.assets || {}) as Record<string, Asset>;
+      const assetFamiliesMap = (data.assetFamilies || {}) as Record<
+        string,
+        AssetFamily
+      >;
       const durationRepairs: AssetDurationRepair[] = [];
 
       // Hydrate paths to Blob URLs
@@ -188,7 +256,14 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
         }
       }
 
-      set({ assets: loadedAssets });
+      const loadedFamilies = Object.values(assetFamiliesMap);
+      const nextAssets = clearUnknownFamilyReferences(loadedAssets, loadedFamilies);
+      const nextFamilies = reconcileFamiliesWithAssets(nextAssets, loadedFamilies);
+
+      set({
+        assets: nextAssets,
+        families: nextFamilies,
+      });
     } catch (err) {
       console.error("Failed to load assets from project.json", err);
     } finally {
@@ -241,16 +316,20 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   addLocalAsset: async (
     file: File,
     creationMetadata?: Asset["creationMetadata"],
-    family?: Asset["family"],
+    familyId?: Asset["familyId"],
   ) => {
-    const [asset] = await get().addLocalAssets([file], creationMetadata, family);
+    const [asset] = await get().addLocalAssets(
+      [file],
+      creationMetadata,
+      familyId,
+    );
     return asset ?? null;
   },
 
   addLocalAssets: async (
     files: readonly File[],
     creationMetadata?: Asset["creationMetadata"],
-    family?: Asset["family"],
+    familyId?: Asset["familyId"],
   ) => {
     const createdAssets: Asset[] = [];
 
@@ -274,7 +353,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
           false,
           assets,
           creationMetadata,
-          family,
+          familyId,
         );
 
         if (!newAsset) {
@@ -300,6 +379,28 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
           isUploading: uploadingCount > 0,
         };
       });
+    }
+  },
+
+  upsertFamily: async (family: AssetFamily) => {
+    const previousFamilies = get().families;
+    const nextFamilies = upsertFamilyInCollection(previousFamilies, family);
+    set({ families: nextFamilies });
+
+    try {
+      await projectDocumentService.updateProjectDocument((draft) => {
+        if (!draft.assetFamilies) {
+          draft.assetFamilies = {};
+        }
+
+        draft.assetFamilies[family.id] = family;
+      });
+    } catch (error) {
+      console.error(
+        `Failed to persist asset family update for '${family.id}'`,
+        error,
+      );
+      set({ families: previousFamilies });
     }
   },
 
@@ -390,6 +491,8 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       thumbnail?: string;
       proxySrc?: string;
     } = {};
+    const nextAssets = get().assets.filter((asset) => asset.id !== id);
+    const nextFamilies = reconcileFamiliesWithAssets(nextAssets, get().families);
 
     try {
       await projectDocumentService.updateProjectDocument((draft) => {
@@ -403,6 +506,12 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
         };
 
         delete draft.assets[id];
+
+        if (nextFamilies.length > 0) {
+          draft.assetFamilies = toAssetFamilyRecordMap(nextFamilies);
+        } else {
+          delete draft.assetFamilies;
+        }
       });
     } catch (e) {
       console.error("Failed to update project.json during deletion", e);
@@ -411,9 +520,10 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     }
 
     // 2. Remove from memory immediately for UI responsiveness
-    set((state) => ({
-      assets: state.assets.filter((a) => a.id !== id),
-    }));
+    set({
+      assets: nextAssets,
+      families: nextFamilies,
+    });
 
     // 3. Delete files from disk using paths found in JSON
     if (pathsToDelete.src) {

@@ -1,20 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Asset, GeneratedCreationMetadata } from "../../../../types/Asset";
+import type {
+  Asset,
+  AssetFamily,
+  AssetFamilyCompatibility,
+  GeneratedCreationMetadata,
+} from "../../../../types/Asset";
 import { useProjectStore } from "../../../project";
 import { DEFAULT_DERIVED_MASK_SOURCE_VIDEO_TREATMENT } from "../../derivedMaskVideoTreatment";
 import * as inputSelection from "../../utils/inputSelection";
 import * as mediaUtils from "../../pipeline/utils/media";
+import { buildGenerationFamilyAutoMatchKey } from "../familyAssignment";
 
 const {
   mockAddLocalAsset,
-  mockGetAssets,
+  mockGetFamilies,
+  mockInspectAssetFamilyCompatibility,
   mockFetchOutputAsFile,
   mockPackageFramesAndAudioToVideo,
+  mockUpsertFamily,
 } = vi.hoisted(() => ({
   mockAddLocalAsset: vi.fn(),
-  mockGetAssets: vi.fn<() => Asset[]>(() => []),
+  mockGetFamilies: vi.fn<() => AssetFamily[]>(() => []),
+  mockInspectAssetFamilyCompatibility: vi.fn<
+    () => Promise<AssetFamilyCompatibility | null>
+  >(),
   mockFetchOutputAsFile: vi.fn(),
   mockPackageFramesAndAudioToVideo: vi.fn(),
+  mockUpsertFamily: vi.fn(),
 }));
 
 vi.mock("../../services/comfyuiApi", async (importOriginal) => {
@@ -37,8 +49,10 @@ vi.mock("../../pipeline/utils/videoPackaging", async (importOriginal) => {
 
 vi.mock("../../../userAssets", () => ({
   addLocalAsset: mockAddLocalAsset,
-  getAssets: mockGetAssets,
   getAssetById: vi.fn(() => undefined),
+  getFamilies: mockGetFamilies,
+  inspectAssetFamilyCompatibility: mockInspectAssetFamilyCompatibility,
+  upsertFamily: mockUpsertFamily,
 }));
 
 import { frontendPostprocess, frontendPreprocess } from "../pipeline";
@@ -54,10 +68,17 @@ function makeGenerationMetadata(): GeneratedCreationMetadata {
 describe("generation pipeline", () => {
   beforeEach(() => {
     mockAddLocalAsset.mockReset();
-    mockGetAssets.mockReset();
-    mockGetAssets.mockReturnValue([]);
+    mockGetFamilies.mockReset();
+    mockGetFamilies.mockReturnValue([]);
+    mockInspectAssetFamilyCompatibility.mockReset();
+    mockInspectAssetFamilyCompatibility.mockResolvedValue({
+      assetType: "image",
+      durationMs: 5000,
+      fpsMilli: null,
+    });
     mockFetchOutputAsFile.mockReset();
     mockPackageFramesAndAudioToVideo.mockReset();
+    mockUpsertFamily.mockReset();
     vi.restoreAllMocks();
     if (!("createObjectURL" in URL)) {
       Object.defineProperty(URL, "createObjectURL", {
@@ -653,26 +674,31 @@ describe("generation pipeline", () => {
     });
   });
 
-  it("reuses an existing family when autoFamilyHash matches a previous generation", async () => {
-    const familyHash = "generation-family:v1:matching";
-    const existingAsset: Asset = {
-      id: "existing-asset",
-      hash: "existing-hash",
-      name: "existing.png",
-      type: "image",
-      src: "existing.png",
-      createdAt: 1,
-      family: {
-        uuid: "existing-family",
-        hashes: [familyHash],
+  it("reuses an existing compatible family when the request key matches a previous generation", async () => {
+    const requestKey = "generation-family-request:v1:matching";
+    const existingMatchKey = await buildGenerationFamilyAutoMatchKey(requestKey, {
+      assetType: "image",
+      durationMs: 5000,
+      fpsMilli: null,
+    });
+    const existingFamily: AssetFamily = {
+      id: "existing-family",
+      representativeAssetId: "existing-asset",
+      autoMatchKeys: [existingMatchKey!],
+      compatibility: {
+        assetType: "image",
+        durationMs: 5000,
+        fpsMilli: null,
       },
+      createdAt: 1,
+      updatedAt: 1,
     };
     const output = new File(["frame"], "output.png", {
       type: "image/png",
     });
 
     mockFetchOutputAsFile.mockResolvedValue(output);
-    mockGetAssets.mockReturnValue([existingAsset]);
+    mockGetFamilies.mockReturnValue([existingFamily]);
     mockAddLocalAsset.mockResolvedValue({ id: "asset-family-match" });
 
     await frontendPostprocess(
@@ -691,7 +717,7 @@ describe("generation pipeline", () => {
           on_failure: "fallback_raw",
         },
         aspectRatioProcessing: null,
-        autoFamilyHash: familyHash,
+        autoFamilyRequestKey: requestKey,
         generationMetadata: makeGenerationMetadata(),
         previewFrameFiles: null,
       },
@@ -700,10 +726,13 @@ describe("generation pipeline", () => {
     expect(mockAddLocalAsset).toHaveBeenCalledWith(
       output,
       makeGenerationMetadata(),
-      {
-        uuid: "existing-family",
-        hashes: [familyHash],
-      },
+      "existing-family",
+    );
+    expect(mockUpsertFamily).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "existing-family",
+        representativeAssetId: "asset-family-match",
+      }),
     );
   });
 });

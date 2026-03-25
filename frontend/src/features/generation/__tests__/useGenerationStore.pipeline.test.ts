@@ -593,7 +593,9 @@ describe("useGenerationStore pipeline phases", () => {
     expect(mockFrontendPostprocess).toHaveBeenCalledWith(
       expect.any(Array),
       expect.objectContaining({
-        autoFamilyHash: expect.stringMatching(/^generation-family:v1:/),
+        autoFamilyRequestKey: expect.stringMatching(
+          /^generation-family-request:v1:/,
+        ),
       }),
     );
   });
