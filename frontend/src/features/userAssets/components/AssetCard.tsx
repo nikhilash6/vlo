@@ -35,12 +35,14 @@ import { AssetPreviewDialog } from "./AssetPreviewDialog";
 interface AssetCardProps {
   asset: Asset;
   onShowFamily?: (familyId: string) => void;
+  layout?: "default" | "square";
 }
 
 // Styled Components for better performance
 const StyledCard = styled(Paper, {
-  shouldForwardProp: (prop) => prop !== "isDragging",
-})<{ isDragging?: boolean }>(({ isDragging }) => ({
+  shouldForwardProp: (prop) => prop !== "isDragging" && prop !== "layout",
+})<{ isDragging?: boolean; layout: "default" | "square" }>(
+  ({ isDragging, layout }) => ({
   width: "100%",
   backgroundColor: "#252525",
   color: "white",
@@ -50,16 +52,23 @@ const StyledCard = styled(Paper, {
   "&:hover": { transform: "scale(1.02)" },
   position: "relative",
   opacity: isDragging ? 0.5 : 1,
+  ...(layout === "square"
+    ? {
+        aspectRatio: "1 / 1",
+      }
+    : {}),
 }));
 
-const ThumbnailContainer = styled(Box)({
-  height: 80,
+const ThumbnailContainer = styled(Box, {
+  shouldForwardProp: (prop) => prop !== "layout",
+})<{ layout: "default" | "square" }>(({ layout }) => ({
+  height: layout === "square" ? "100%" : 80,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   backgroundColor: "#000",
   position: "relative",
-});
+}));
 
 const OverlayControls = styled(Box, {
   shouldForwardProp: (prop) => prop !== "isPlaying",
@@ -109,6 +118,24 @@ const StyledMenuButton = styled(StyledActionButton)({
   right: 4,
 });
 
+const MetadataArea = styled(Box, {
+  shouldForwardProp: (prop) => prop !== "layout",
+})<{ layout: "default" | "square" }>(({ layout }) => ({
+  padding: 8,
+  ...(layout === "square"
+    ? {
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 2,
+        paddingTop: 28,
+        background:
+          "linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(9, 9, 9, 0.84) 44%, rgba(9, 9, 9, 0.96) 100%)",
+      }
+    : {}),
+}));
+
 // Helper to format seconds into MM:SS
 const formatDuration = (seconds?: number) => {
   if (!seconds) return "";
@@ -125,7 +152,11 @@ function canRegenerateFromMetadata(asset: Asset): boolean {
   );
 }
 
-function AssetCardComponent({ asset, onShowFamily }: AssetCardProps) {
+function AssetCardComponent({
+  asset,
+  onShowFamily,
+  layout = "default",
+}: AssetCardProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
@@ -234,11 +265,12 @@ function AssetCardComponent({ asset, onShowFamily }: AssetCardProps) {
         {...attributes}
         elevation={2}
         isDragging={isDragging}
+        layout={layout}
         onMouseLeave={() => setIsPlaying(false)}
         data-testid="asset-card"
       >
         {/* Thumbnail / Video Area */}
-        <ThumbnailContainer>
+        <ThumbnailContainer layout={layout}>
           {displayImage ? (
             <img
               src={displayImage}
@@ -296,7 +328,11 @@ function AssetCardComponent({ asset, onShowFamily }: AssetCardProps) {
 
           {/* Duration Badge */}
           {asset.type !== "image" && asset.duration && (
-            <DurationBadge>
+            <DurationBadge
+              sx={{
+                bottom: layout === "square" ? 56 : 4,
+              }}
+            >
               <Typography
                 variant="caption"
                 sx={{ fontSize: "0.6rem", color: "white" }}
@@ -376,12 +412,15 @@ function AssetCardComponent({ asset, onShowFamily }: AssetCardProps) {
         </Menu>
 
         {/* Metadata Area */}
-        <Box sx={{ p: 1 }}>
+        <MetadataArea layout={layout}>
           <Typography
             variant="caption"
             noWrap
             display="block"
-            sx={{ fontWeight: 500 }}
+            sx={{
+              fontWeight: 500,
+              pr: layout === "square" ? 3 : 0,
+            }}
             title={asset.name} // Tooltip for long names
             data-testid="asset-card-name"
           >
@@ -397,7 +436,7 @@ function AssetCardComponent({ asset, onShowFamily }: AssetCardProps) {
               : "Unknown Time"}
             {/* Fallback added in case createdAt is missing in legacy data */}
           </Typography>
-        </Box>
+        </MetadataArea>
       </StyledCard>
 
       {asset.type === "video" ? (

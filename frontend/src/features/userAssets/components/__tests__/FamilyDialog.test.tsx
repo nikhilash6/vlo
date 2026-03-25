@@ -4,11 +4,17 @@ import type { Asset, AssetFamily } from "../../../../types/Asset";
 import { useAssetStore } from "../../useAssetStore";
 import { FamilyDialog } from "../FamilyDialog";
 
+const { assetCardMock } = vi.hoisted(() => ({
+  assetCardMock: vi.fn(
+    ({ asset }: { asset: Asset; layout?: "default" | "square" }) => (
+      <div data-testid="family-asset-card">{asset.name}</div>
+    ),
+  ),
+}));
+
 vi.mock("../../useAssetStore");
 vi.mock("../AssetCard", () => ({
-  AssetCard: ({ asset }: { asset: Asset }) => (
-    <div data-testid="family-asset-card">{asset.name}</div>
-  ),
+  AssetCard: assetCardMock,
 }));
 
 const family: AssetFamily = {
@@ -85,6 +91,7 @@ function mockStore(assets: Asset[]) {
 describe("FamilyDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    assetCardMock.mockClear();
   });
 
   it("renders visible members that belong to the selected family", () => {
@@ -102,6 +109,12 @@ describe("FamilyDialog", () => {
     expect(screen.getByText("hero-take-2.mp4")).toBeInTheDocument();
     expect(screen.getByText("hero.mp4")).toBeInTheDocument();
     expect(screen.queryByText("hero_mask.webm")).not.toBeInTheDocument();
+    expect(assetCardMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        layout: "square",
+      }),
+      undefined,
+    );
   });
 
   it("shows an empty state when no family members resolve", () => {

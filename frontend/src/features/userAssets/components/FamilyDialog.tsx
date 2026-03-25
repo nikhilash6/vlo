@@ -28,33 +28,49 @@ export function FamilyDialog({ family, open, onClose }: FamilyDialogProps) {
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="lg"
-      fullWidth
+      maxWidth={false}
       PaperProps={{
         sx: {
           bgcolor: "#111",
           color: "white",
+          width: "min(1440px, calc(100vw - 48px))",
+          maxWidth: "none",
+          minHeight: "min(860px, calc(100vh - 48px))",
         },
       }}
     >
-      <DialogTitle sx={{ pr: 7 }}>
-        <Typography variant="h6" component="div">
-          Asset Family
-        </Typography>
-        <Typography
-          variant="caption"
-          component="div"
+      <DialogTitle sx={{ pr: 8, pt: 3, pb: 2 }}>
+        <Box
           sx={{
-            color: "#9aa0a6",
-            fontFamily: "monospace",
-            wordBreak: "break-all",
+            display: "inline-flex",
+            flexDirection: "column",
+            gap: 0.75,
+            maxWidth: "min(100%, 460px)",
+            px: 2,
+            py: 1.75,
+            borderRadius: 2.5,
+            bgcolor: "#171717",
+            border: "1px solid #262626",
           }}
         >
-          {familyLabel}
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 1, color: "#c4c7c5" }}>
-          {familyMembers.length} member{familyMembers.length === 1 ? "" : "s"}
-        </Typography>
+          <Typography variant="h6" component="div">
+            Asset Family
+          </Typography>
+          <Typography
+            variant="caption"
+            component="div"
+            sx={{
+              color: "#9aa0a6",
+              fontFamily: "monospace",
+              wordBreak: "break-all",
+            }}
+          >
+            {familyLabel}
+          </Typography>
+          <Typography variant="body2" sx={{ color: "#c4c7c5" }}>
+            {familyMembers.length} member{familyMembers.length === 1 ? "" : "s"}
+          </Typography>
+        </Box>
       </DialogTitle>
 
       <IconButton
@@ -71,7 +87,15 @@ export function FamilyDialog({ family, open, onClose }: FamilyDialogProps) {
         <CloseIcon />
       </IconButton>
 
-      <DialogContent dividers sx={{ bgcolor: "#0b0b0b", borderColor: "#222" }}>
+      <DialogContent
+        dividers
+        sx={{
+          bgcolor: "#0b0b0b",
+          borderColor: "#222",
+          px: { xs: 2, md: 3 },
+          py: { xs: 2, md: 3 },
+        }}
+      >
         {familyMembers.length === 0 ? (
           <Box
             sx={{
@@ -84,10 +108,10 @@ export function FamilyDialog({ family, open, onClose }: FamilyDialogProps) {
             </Typography>
           </Box>
         ) : (
-          <Grid container spacing={2}>
+          <Grid container spacing={2.5}>
             {familyMembers.map((asset) => (
-              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={asset.id}>
-                <AssetCard asset={asset} />
+              <Grid size={{ xs: 12, sm: 6, lg: 4, xl: 3 }} key={asset.id}>
+                <AssetCard asset={asset} layout="square" />
               </Grid>
             ))}
           </Grid>
