@@ -79,6 +79,7 @@ function buildGenerationPlanFromState(
     mediaInputs: state.mediaInputs,
     slotValues,
     derivedMaskMappings: state.derivedMaskMappings,
+    exactAspectRatio: state.exactAspectRatio,
     targetResolution: state.targetResolution,
     maskCropMode: state.maskCropMode,
     maskCropDilation: state.maskCropDilation,

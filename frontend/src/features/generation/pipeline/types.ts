@@ -102,6 +102,7 @@ export interface GenerationPreprocessPlan {
   slotValues: Record<string, SlotValue>;
   derivedMaskMappings: DerivedMaskMapping[];
   projectConfig: ProjectConfig;
+  exactAspectRatio: boolean;
   targetResolution: number;
   maskCropDilation: number;
   maskCropMode: WorkflowMaskCroppingMode;
@@ -141,6 +142,7 @@ export interface FrontendPreprocessContext {
   readonly slotValues: Record<string, SlotValue>;
   readonly derivedMaskMappings: DerivedMaskMapping[];
   readonly projectConfig: ProjectConfig;
+  readonly exactAspectRatio: boolean;
   readonly targetResolution: number;
   readonly clientId: string;
   readonly maskCropDilation: number | undefined;
@@ -148,6 +150,7 @@ export interface FrontendPreprocessContext {
   readonly signal?: AbortSignal;
 
   // --- Accumulated outputs (processors write to these) ---
+  targetAspectRatio: string;
   textInputs: Record<string, string>;
   imageInputs: Record<string, File>;
   videoInputs: Record<string, File>;
@@ -162,6 +165,7 @@ export interface GenerationRequest {
   graphData: Record<string, unknown> | null;
   workflowId: string | null;
   targetAspectRatio: string;
+  exactAspectRatio: boolean;
   targetResolution: number;
   textInputs: Record<string, string>;
   imageInputs: Record<string, File>;
@@ -234,6 +238,7 @@ export interface FrontendPostprocessOptions {
 
 export interface FrontendPreprocessOptions {
   signal?: AbortSignal;
+  exactAspectRatio?: boolean;
   maskCropMode?: WorkflowMaskCroppingMode;
   targetResolution?: number;
   projectConfig?: ProjectConfig;

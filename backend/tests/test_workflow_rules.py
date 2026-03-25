@@ -1178,6 +1178,52 @@ def test_apply_aspect_ratio_processing_clamps_to_supported_resolution():
     )
 
 
+def test_apply_aspect_ratio_processing_uses_provided_target_aspect_ratio():
+    workflow = {
+        "49": {
+            "class_type": "WanVaceToVideo",
+            "inputs": {
+                "width": 720,
+                "height": 720,
+            },
+        }
+    }
+    rules = {
+        "aspect_ratio_processing": {
+            "enabled": True,
+            "stride": 32,
+            "search_steps": 2,
+            "target_nodes": [
+                {
+                    "node_id": "49",
+                    "width_param": "width",
+                    "height_param": "height",
+                }
+            ],
+            "postprocess": {
+                "enabled": True,
+                "mode": "stretch_exact",
+                "apply_to": "all_visual_outputs",
+            },
+        }
+    }
+
+    metadata, warnings = apply_aspect_ratio_processing(
+        workflow,
+        rules,
+        "179:100",
+        720,
+    )
+
+    assert warnings == []
+    assert isinstance(metadata, dict)
+    assert metadata["requested"]["aspect_ratio"] == "179:100"
+    assert metadata["requested"]["width"] == 1289
+    assert metadata["requested"]["height"] == 720
+    assert workflow["49"]["inputs"]["width"] == metadata["strided"]["width"]
+    assert workflow["49"]["inputs"]["height"] == metadata["strided"]["height"]
+
+
 def test_apply_rules_rewrites_output_links():
     workflow = {
         "1": {"class_type": "SourceA", "inputs": {}},
@@ -2635,6 +2681,74 @@ async def test_generate_applies_aspect_ratio_processing_and_returns_metadata(
     prompt = fake_comfy_client.prompt_payload["prompt"]
     assert prompt["49"]["inputs"]["width"] == metadata["strided"]["width"]
     assert prompt["49"]["inputs"]["height"] == metadata["strided"]["height"]
+
+
+@pytest.mark.anyio
+async def test_generate_uses_provided_target_aspect_ratio(
+    tmp_path: Path,
+    monkeypatch,
+    fake_comfy_client,
+):
+    workflow_id = "workflow_ar_processing_normalized.json"
+    workflow_path = tmp_path / workflow_id
+    workflow_path.write_text("{}")
+    sidecar_path = tmp_path / "workflow_ar_processing_normalized.rules.json"
+    sidecar_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "aspect_ratio_processing": {
+                    "enabled": True,
+                    "stride": 32,
+                    "search_steps": 2,
+                    "target_nodes": [
+                        {
+                            "node_id": "49",
+                            "width_param": "width",
+                            "height_param": "height",
+                        }
+                    ],
+                    "postprocess": {
+                        "enabled": True,
+                        "mode": "stretch_exact",
+                        "apply_to": "all_visual_outputs",
+                    },
+                },
+            }
+        )
+    )
+    monkeypatch.setattr(comfyui, "WORKFLOWS_DIR", tmp_path)
+
+    workflow = {
+        "49": {
+            "class_type": "WanVaceToVideo",
+            "inputs": {
+                "width": 720,
+                "height": 720,
+            },
+        }
+    }
+
+    response = await comfyui.generate(
+        _as_request(
+            FormData(
+                [
+                    ("workflow", json.dumps(workflow)),
+                    ("workflow_id", workflow_id),
+                    ("target_aspect_ratio", "179:100"),
+                    ("target_resolution", "720"),
+                ]
+            )
+        )
+    )
+
+    assert response.status_code == 200
+    payload = _response_json(response)
+    metadata = payload.get("aspect_ratio_processing")
+    assert isinstance(metadata, dict)
+    assert metadata["requested"]["aspect_ratio"] == "179:100"
+    assert metadata["requested"]["width"] == 1289
+    assert metadata["requested"]["height"] == 720
 
 
 @pytest.mark.anyio

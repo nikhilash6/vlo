@@ -97,6 +97,8 @@ export function buildWorkflowStoreState(
     derivedMaskMappings: [],
     targetResolution: DEFAULT_GENERATION_TARGET_RESOLUTION,
     setTargetResolution: (targetResolution) => set({ targetResolution }),
+    exactAspectRatio: false,
+    setExactAspectRatio: (exactAspectRatio) => set({ exactAspectRatio }),
     maskCropMode: "crop",
     setMaskCropMode: (maskCropMode) => set({ maskCropMode }),
     maskCropDilation: 0.1,
