@@ -1,6 +1,7 @@
-import type { CreationMetadata } from "../../../../types/Asset";
+import type { AssetFamily, CreationMetadata } from "../../../../types/Asset";
 import { getOutputMediaKindFromFile } from "../../constants/mediaKinds";
 import type { FrontendPostprocessContext, Processor } from "../types";
+import { resolveFamilyForGenerationHash } from "../../utils/familyAssignment";
 
 /**
  * If a prepared mask file exists, ingest it as a separate asset first and
@@ -12,6 +13,7 @@ async function ingestMaskAsset(
   addLocalAsset: (
     file: File,
     creationMetadata?: CreationMetadata,
+    family?: AssetFamily,
   ) => Promise<{ id: string } | null>,
 ): Promise<void> {
   if (!ctx.preparedMaskFile) return;
@@ -28,6 +30,23 @@ async function ingestMaskAsset(
       generationMaskAssetId: maskAsset.id,
     };
   }
+}
+
+async function ingestGeneratedAsset(
+  file: File,
+  ctx: FrontendPostprocessContext,
+  addLocalAsset: (
+    file: File,
+    creationMetadata?: CreationMetadata,
+    family?: AssetFamily,
+  ) => Promise<{ id: string } | null>,
+  family: AssetFamily | undefined,
+): Promise<{ id: string } | null> {
+  if (family) {
+    return addLocalAsset(file, ctx.generationMetadata, family);
+  }
+
+  return addLocalAsset(file, ctx.generationMetadata);
 }
 
 /**
@@ -67,7 +86,11 @@ export const importAssets: Processor<FrontendPostprocessContext> = {
       return;
     }
 
-    const { addLocalAsset } = await import("../../../userAssets");
+    const { addLocalAsset, getAssets } = await import("../../../userAssets");
+    const family = resolveFamilyForGenerationHash(
+      getAssets(),
+      ctx.autoFamilyHash,
+    );
 
     // This transport is intentionally singular for now: one generation run
     // only ever yields one linked generation mask clip. If we later support
@@ -76,9 +99,11 @@ export const importAssets: Processor<FrontendPostprocessContext> = {
     await ingestMaskAsset(ctx, addLocalAsset);
 
     if (ctx.packagedVideo) {
-      const packagedAsset = await addLocalAsset(
+      const packagedAsset = await ingestGeneratedAsset(
         ctx.packagedVideo,
-        ctx.generationMetadata,
+        ctx,
+        addLocalAsset,
+        family,
       );
 
       if (packagedAsset) {
@@ -100,7 +125,7 @@ export const importAssets: Processor<FrontendPostprocessContext> = {
     }
 
     for (const { file } of ctx.fetchedFiles) {
-      const asset = await addLocalAsset(file, ctx.generationMetadata);
+      const asset = await ingestGeneratedAsset(file, ctx, addLocalAsset, family);
       if (asset) {
         ctx.importedAssetIds.push(asset.id);
       }
@@ -116,9 +141,11 @@ export const importAssets: Processor<FrontendPostprocessContext> = {
         );
 
       if (fallbackFrame && ctx.importedAssetIds.length === 0) {
-        const fallbackAsset = await addLocalAsset(
+        const fallbackAsset = await ingestGeneratedAsset(
           fallbackFrame,
-          ctx.generationMetadata,
+          ctx,
+          addLocalAsset,
+          family,
         );
         if (fallbackAsset) {
           ctx.importedAssetIds.push(fallbackAsset.id);

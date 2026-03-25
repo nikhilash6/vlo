@@ -1,0 +1,172 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Asset, GeneratedCreationInput } from "../../../../types/Asset";
+import type { SlotValue } from "../../pipeline/types";
+import type { WorkflowInput } from "../../types";
+import {
+  buildGenerationFamilyHash,
+  resolveFamilyForGenerationHash,
+} from "../familyAssignment";
+
+const { getAssetByIdMock } = vi.hoisted(() => ({
+  getAssetByIdMock: vi.fn(),
+}));
+
+vi.mock("../../../userAssets/publicApi", () => ({
+  getAssetById: getAssetByIdMock,
+}));
+
+const workflowInputs: WorkflowInput[] = [
+  {
+    nodeId: "1",
+    classType: "CLIPTextEncode",
+    inputType: "text",
+    param: "text",
+    label: "Prompt",
+    currentValue: "",
+    origin: "rule",
+  },
+  {
+    nodeId: "2",
+    classType: "LoadImage",
+    inputType: "image",
+    param: "image",
+    label: "Image",
+    currentValue: null,
+    origin: "rule",
+  },
+];
+
+const generationInputs: GeneratedCreationInput[] = [
+  {
+    nodeId: "2",
+    kind: "draggedAsset",
+    parentAssetId: "asset-source",
+  },
+];
+
+const sourceAsset: Asset = {
+  id: "asset-source",
+  hash: "source-hash",
+  name: "input.png",
+  type: "image",
+  src: "input.png",
+  createdAt: 1,
+};
+
+function makeWorkflow(seed: number, imageNodeSource = "2") {
+  return {
+    "1": {
+      class_type: "CLIPTextEncode",
+      inputs: {
+        text: "hello world",
+        clip: ["3", 0],
+      },
+    },
+    "2": {
+      class_type: "LoadImage",
+      inputs: {
+        image: "input.png",
+      },
+    },
+    "3": {
+      class_type: "ImageConsumer",
+      inputs: {
+        image: [imageNodeSource, 0],
+        seed,
+      },
+    },
+  };
+}
+
+function makeSlotValues(prompt: string): Record<string, SlotValue> {
+  return {
+    "1:text": {
+      type: "text",
+      value: prompt,
+    },
+    "2:image": {
+      type: "image",
+      file: new File(["image-bytes"], "input.png", { type: "image/png" }),
+    },
+  };
+}
+
+describe("familyAssignment", () => {
+  beforeEach(() => {
+    getAssetByIdMock.mockReset();
+    getAssetByIdMock.mockReturnValue(sourceAsset);
+  });
+
+  it("treats seed differences as the same family when structure and inputs match", async () => {
+    const left = await buildGenerationFamilyHash({
+      workflow: makeWorkflow(1),
+      workflowInputs,
+      slotValues: makeSlotValues("hello world"),
+      generationInputs,
+    });
+    const right = await buildGenerationFamilyHash({
+      workflow: makeWorkflow(99999),
+      workflowInputs,
+      slotValues: makeSlotValues("hello world"),
+      generationInputs,
+    });
+
+    expect(left).not.toBeNull();
+    expect(left).toBe(right);
+  });
+
+  it("changes the family hash when the text prompt changes", async () => {
+    const left = await buildGenerationFamilyHash({
+      workflow: makeWorkflow(1),
+      workflowInputs,
+      slotValues: makeSlotValues("hello world"),
+      generationInputs,
+    });
+    const right = await buildGenerationFamilyHash({
+      workflow: makeWorkflow(1),
+      workflowInputs,
+      slotValues: makeSlotValues("different prompt"),
+      generationInputs,
+    });
+
+    expect(left).not.toBe(right);
+  });
+
+  it("changes the family hash when the workflow wiring changes", async () => {
+    const left = await buildGenerationFamilyHash({
+      workflow: makeWorkflow(1, "2"),
+      workflowInputs,
+      slotValues: makeSlotValues("hello world"),
+      generationInputs,
+    });
+    const right = await buildGenerationFamilyHash({
+      workflow: makeWorkflow(1, "1"),
+      workflowInputs,
+      slotValues: makeSlotValues("hello world"),
+      generationInputs,
+    });
+
+    expect(left).not.toBe(right);
+  });
+
+  it("reuses an existing family uuid when the hash already exists", () => {
+    const familyHash = "generation-family:v1:abc123";
+    const family = resolveFamilyForGenerationHash(
+      [
+        {
+          ...sourceAsset,
+          family: {
+            uuid: "family-uuid",
+            hashes: [familyHash],
+          },
+        },
+      ],
+      familyHash,
+    );
+
+    expect(family).toEqual({
+      uuid: "family-uuid",
+      hashes: [familyHash],
+    });
+  });
+});

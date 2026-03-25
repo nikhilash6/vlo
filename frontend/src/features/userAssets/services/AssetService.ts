@@ -151,6 +151,7 @@ export class AssetService {
     skipProjectSave: boolean,
     existingAssets: Asset[],
     creationMetadata?: Asset["creationMetadata"],
+    family?: Asset["family"],
   ): Promise<Asset | null> {
     console.time(`[Ingest] ${file.name}`);
     // Use MediaFileProcessor for optimized access to the file
@@ -282,6 +283,7 @@ export class AssetService {
       const newAssetInMemory: Asset = {
         id: assetId,
         hash: hash,
+        family,
         name: assetFileName,
         type: isImage ? "image" : isAudio ? "audio" : "video",
         src: URL.createObjectURL(file),

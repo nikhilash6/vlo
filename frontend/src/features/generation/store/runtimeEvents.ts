@@ -69,6 +69,7 @@ export function attachRuntimeClientHandlers(
         postprocessing: jobSnapshot.postprocessConfig,
         aspectRatioProcessing: jobSnapshot.aspectRatioProcessing,
         generationMetadata,
+        autoFamilyHash: jobSnapshot.autoFamilyHash,
         previewFrameFiles,
         preparedMaskFile: jobSnapshot.preparedMaskFile,
       });

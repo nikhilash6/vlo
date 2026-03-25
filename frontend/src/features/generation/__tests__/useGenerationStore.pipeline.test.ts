@@ -550,6 +550,54 @@ describe("useGenerationStore pipeline phases", () => {
     ]);
   });
 
+  it("passes an auto family hash into postprocess for generated outputs", async () => {
+    makeReadyStoreState();
+    useGenerationStore.setState({
+      wsClient: null,
+      connectionStatus: "disconnected",
+      syncedWorkflow: {
+        "1": {
+          class_type: "LoadImage",
+          inputs: {
+            image: "input.png",
+          },
+        },
+        "2": {
+          class_type: "ImageConsumer",
+          inputs: {
+            image: ["1", 0],
+            seed: 123,
+          },
+        },
+      },
+    });
+
+    useGenerationStore.getState().connect();
+    await flushMicrotasks();
+    const client = getLatestClient();
+
+    const submitPromise = useGenerationStore.getState().submitGeneration({});
+    const jobId = await submitPromise;
+    expect(jobId).toBe("prompt-1");
+
+    client.emitEvent({
+      type: "executing",
+      data: {
+        node: null,
+        prompt_id: "prompt-1",
+      },
+    });
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    expect(mockFrontendPostprocess).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        autoFamilyHash: expect.stringMatching(/^generation-family:v1:/),
+      }),
+    );
+  });
+
   it("dispatches the next queued generation while the previous one is still postprocessing", async () => {
     makeReadyStoreState();
     useGenerationStore.setState({

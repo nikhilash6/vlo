@@ -103,6 +103,7 @@ export interface GenerationJob {
   generationMetadata?: GeneratedCreationMetadata;
   postprocessedPreview?: GenerationPostprocessedPreview | null;
   postprocessError?: string | null;
+  autoFamilyHash?: string | null;
   importedAssetIds?: string[];
   usesSaveImageWebsocketOutputs?: boolean;
   saveImageWebsocketNodeIds?: ReadonlySet<string>;

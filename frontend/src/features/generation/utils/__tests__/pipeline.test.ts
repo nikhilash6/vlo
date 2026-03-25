@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { GeneratedCreationMetadata } from "../../../../types/Asset";
+import type { Asset, GeneratedCreationMetadata } from "../../../../types/Asset";
 import { useProjectStore } from "../../../project";
 import { DEFAULT_DERIVED_MASK_SOURCE_VIDEO_TREATMENT } from "../../derivedMaskVideoTreatment";
 import * as inputSelection from "../../utils/inputSelection";
@@ -7,10 +7,12 @@ import * as mediaUtils from "../../pipeline/utils/media";
 
 const {
   mockAddLocalAsset,
+  mockGetAssets,
   mockFetchOutputAsFile,
   mockPackageFramesAndAudioToVideo,
 } = vi.hoisted(() => ({
   mockAddLocalAsset: vi.fn(),
+  mockGetAssets: vi.fn<() => Asset[]>(() => []),
   mockFetchOutputAsFile: vi.fn(),
   mockPackageFramesAndAudioToVideo: vi.fn(),
 }));
@@ -35,6 +37,7 @@ vi.mock("../../pipeline/utils/videoPackaging", async (importOriginal) => {
 
 vi.mock("../../../userAssets", () => ({
   addLocalAsset: mockAddLocalAsset,
+  getAssets: mockGetAssets,
   getAssetById: vi.fn(() => undefined),
 }));
 
@@ -51,6 +54,8 @@ function makeGenerationMetadata(): GeneratedCreationMetadata {
 describe("generation pipeline", () => {
   beforeEach(() => {
     mockAddLocalAsset.mockReset();
+    mockGetAssets.mockReset();
+    mockGetAssets.mockReturnValue([]);
     mockFetchOutputAsFile.mockReset();
     mockPackageFramesAndAudioToVideo.mockReset();
     vi.restoreAllMocks();
@@ -646,5 +651,59 @@ describe("generation pipeline", () => {
         "Only one frame was generated; returning the PNG output.",
       importedAssetIds: ["asset-frame-only-ws"],
     });
+  });
+
+  it("reuses an existing family when autoFamilyHash matches a previous generation", async () => {
+    const familyHash = "generation-family:v1:matching";
+    const existingAsset: Asset = {
+      id: "existing-asset",
+      hash: "existing-hash",
+      name: "existing.png",
+      type: "image",
+      src: "existing.png",
+      createdAt: 1,
+      family: {
+        uuid: "existing-family",
+        hashes: [familyHash],
+      },
+    };
+    const output = new File(["frame"], "output.png", {
+      type: "image/png",
+    });
+
+    mockFetchOutputAsFile.mockResolvedValue(output);
+    mockGetAssets.mockReturnValue([existingAsset]);
+    mockAddLocalAsset.mockResolvedValue({ id: "asset-family-match" });
+
+    await frontendPostprocess(
+      [
+        {
+          filename: "output.png",
+          subfolder: "",
+          type: "output",
+          viewUrl: "/output.png",
+        },
+      ],
+      {
+        postprocessing: {
+          mode: "none",
+          panel_preview: "raw_outputs",
+          on_failure: "fallback_raw",
+        },
+        aspectRatioProcessing: null,
+        autoFamilyHash: familyHash,
+        generationMetadata: makeGenerationMetadata(),
+        previewFrameFiles: null,
+      },
+    );
+
+    expect(mockAddLocalAsset).toHaveBeenCalledWith(
+      output,
+      makeGenerationMetadata(),
+      {
+        uuid: "existing-family",
+        hashes: [familyHash],
+      },
+    );
   });
 });

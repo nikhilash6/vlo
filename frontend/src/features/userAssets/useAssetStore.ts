@@ -19,10 +19,12 @@ interface AssetStore {
   addLocalAsset: (
     file: File,
     creationMetadata?: Asset["creationMetadata"],
+    family?: Asset["family"],
   ) => Promise<Asset | null>;
   addLocalAssets: (
     files: readonly File[],
     creationMetadata?: Asset["creationMetadata"],
+    family?: Asset["family"],
   ) => Promise<Asset[]>;
   updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
   fetchAssets: () => Promise<void>;
@@ -239,14 +241,16 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   addLocalAsset: async (
     file: File,
     creationMetadata?: Asset["creationMetadata"],
+    family?: Asset["family"],
   ) => {
-    const [asset] = await get().addLocalAssets([file], creationMetadata);
+    const [asset] = await get().addLocalAssets([file], creationMetadata, family);
     return asset ?? null;
   },
 
   addLocalAssets: async (
     files: readonly File[],
     creationMetadata?: Asset["creationMetadata"],
+    family?: Asset["family"],
   ) => {
     const createdAssets: Asset[] = [];
 
@@ -270,6 +274,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
           false,
           assets,
           creationMetadata,
+          family,
         );
 
         if (!newAsset) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildWorkflowNodeSignature,
+  buildWorkflowStructureSignature,
   haveMatchingWorkflowNodes,
 } from "../workflowNodeSignature";
 
@@ -71,6 +72,37 @@ describe("workflowNodeSignature", () => {
 
     expect(buildWorkflowNodeSignature(apiWorkflow)).toBe(
       buildWorkflowNodeSignature(graphWorkflow),
+    );
+  });
+
+  it("captures wiring changes in the structure signature while ignoring literals", () => {
+    const left = {
+      "1": { class_type: "LoadVideo", inputs: { file: "a.mp4" } },
+      "2": {
+        class_type: "VideoConsumer",
+        inputs: { video: ["1", 0], seed: 1 },
+      },
+    };
+    const right = {
+      "1": { class_type: "LoadVideo", inputs: { file: "b.mp4" } },
+      "2": {
+        class_type: "VideoConsumer",
+        inputs: { video: ["1", 0], seed: 9999 },
+      },
+    };
+    const rewired = {
+      "1": { class_type: "LoadVideo", inputs: { file: "b.mp4" } },
+      "2": {
+        class_type: "VideoConsumer",
+        inputs: { video: ["9", 0], seed: 9999 },
+      },
+    };
+
+    expect(buildWorkflowStructureSignature(left)).toBe(
+      buildWorkflowStructureSignature(right),
+    );
+    expect(buildWorkflowStructureSignature(left)).not.toBe(
+      buildWorkflowStructureSignature(rewired),
     );
   });
 });

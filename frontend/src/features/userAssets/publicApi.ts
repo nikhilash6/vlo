@@ -30,8 +30,9 @@ export function getAssetById(
 export async function addLocalAsset(
   file: File,
   creationMetadata?: Asset["creationMetadata"],
+  family?: Asset["family"],
 ): Promise<Asset | null> {
-  return useAssetStore.getState().addLocalAsset(file, creationMetadata);
+  return useAssetStore.getState().addLocalAsset(file, creationMetadata, family);
 }
 
 export async function deleteAsset(assetId: string): Promise<void> {

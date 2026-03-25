@@ -15,6 +15,7 @@ import {
   isActiveGenerationJob,
   markActiveJobError,
 } from "./jobMutations";
+import { buildGenerationFamilyHash } from "../utils/familyAssignment";
 import { resolveWorkflowDisplayName } from "./workflowCatalog";
 import type {
   GenerationExecutionState,
@@ -168,6 +169,21 @@ export function buildExecutionStoreState(
         return null;
       }
 
+      let autoFamilyHash: string | null = null;
+      try {
+        autoFamilyHash = await buildGenerationFamilyHash({
+          workflow: response.comfyui_prompt ?? prepared.request.workflow,
+          workflowInputs: plan.workflow.workflowInputs,
+          slotValues: plan.preprocess.slotValues,
+          generationInputs: plan.metadata.generationMetadata.inputs,
+        });
+      } catch (error) {
+        console.warn(
+          "[Generation] Failed to build auto family hash for generated asset",
+          error,
+        );
+      }
+
       const submitted = buildSubmittedGeneration(prepared, response);
       set({
         workflowRuleWarnings: mergeRuleWarnings(
@@ -191,6 +207,7 @@ export function buildExecutionStoreState(
         generationMetadata: submitted.generationMetadata,
         postprocessedPreview: null,
         postprocessError: null,
+        autoFamilyHash,
         usesSaveImageWebsocketOutputs: submitted.usesSaveImageWebsocketOutputs,
         saveImageWebsocketNodeIds: submitted.saveImageWebsocketNodeIds,
         preparedMaskFile: submitted.preparedMaskFile,

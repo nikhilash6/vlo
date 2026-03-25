@@ -118,6 +118,85 @@ export function buildWorkflowNodeSignature(
     .join("|");
 }
 
+function normalizeLinkedInput(
+  value: unknown,
+  knownNodeIds: ReadonlySet<string>,
+): string | null {
+  if (!Array.isArray(value) || value.length === 0) {
+    return null;
+  }
+
+  const [sourceNodeId, outputIndex = 0] = value;
+  if (
+    typeof sourceNodeId !== "string" &&
+    typeof sourceNodeId !== "number"
+  ) {
+    return null;
+  }
+
+  if (typeof outputIndex !== "number" && typeof outputIndex !== "string") {
+    return null;
+  }
+
+  const normalizedNodeId = String(sourceNodeId);
+  if (!knownNodeIds.has(normalizedNodeId)) {
+    return null;
+  }
+
+  return `${normalizedNodeId}:${String(outputIndex)}`;
+}
+
+export function buildWorkflowStructureSignature(
+  workflowData: Record<string, unknown> | null | undefined,
+): string | null {
+  if (!workflowData || !isApiWorkflow(workflowData)) {
+    return null;
+  }
+
+  const knownNodeIds = new Set(Object.keys(workflowData));
+  const nodeEntries = Object.entries(workflowData)
+    .filter(([, nodeData]) => isRecord(nodeData))
+    .map(([nodeId, nodeData]) => {
+      const record = nodeData as Record<string, unknown>;
+      const classType =
+        typeof record.class_type === "string"
+          ? record.class_type.trim()
+          : null;
+      if (!classType) {
+        return null;
+      }
+
+      const inputs = isRecord(record.inputs) ? record.inputs : {};
+      const linkedInputs = Object.entries(inputs)
+        .map(([param, value]) => {
+          const link = normalizeLinkedInput(value, knownNodeIds);
+          return link ? `${param}->${link}` : null;
+        })
+        .filter((entry): entry is string => entry !== null)
+        .sort((left, right) => left.localeCompare(right));
+
+      return {
+        nodeId,
+        signature: `${nodeId}:${classType}[${linkedInputs.join(",")}]`,
+      };
+    })
+    .filter(
+      (
+        entry,
+      ): entry is {
+        nodeId: string;
+        signature: string;
+      } => entry !== null,
+    )
+    .sort((left, right) => left.nodeId.localeCompare(right.nodeId));
+
+  if (nodeEntries.length === 0) {
+    return null;
+  }
+
+  return nodeEntries.map((entry) => entry.signature).join("|");
+}
+
 export function haveMatchingWorkflowNodes(
   left: Record<string, unknown> | null | undefined,
   right: Record<string, unknown> | null | undefined,
