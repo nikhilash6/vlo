@@ -150,6 +150,7 @@ export interface FrontendPreprocessContext {
   readonly signal?: AbortSignal;
 
   // --- Accumulated outputs (processors write to these) ---
+  targetAspectRatio: string;
   textInputs: Record<string, string>;
   imageInputs: Record<string, File>;
   videoInputs: Record<string, File>;
