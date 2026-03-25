@@ -189,6 +189,8 @@ export function createGenerationPlan(
       projectConfig: {
         fps: options.projectConfig.fps,
         aspectRatio: options.projectConfig.aspectRatio,
+        exactInputAspectRatio:
+          options.projectConfig.exactInputAspectRatio ?? false,
       },
       targetResolution: options.targetResolution,
       maskCropDilation: options.maskCropDilation,

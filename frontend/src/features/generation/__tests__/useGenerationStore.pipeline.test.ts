@@ -298,6 +298,7 @@ describe("useGenerationStore pipeline phases", () => {
         workflow: syncedWorkflow,
         workflowId,
         targetAspectRatio: "16:9",
+        exactAspectRatio: false,
         targetResolution: 1080,
         textInputs: {},
         imageInputs: {},
@@ -393,6 +394,7 @@ describe("useGenerationStore pipeline phases", () => {
       workflow: Record<string, unknown> | null;
       workflowId: string | null;
       targetAspectRatio: string;
+      exactAspectRatio: boolean;
       targetResolution: number;
       textInputs: Record<string, string>;
       imageInputs: Record<string, File>;
@@ -415,6 +417,7 @@ describe("useGenerationStore pipeline phases", () => {
       workflow: {},
       workflowId: "wf.json",
       targetAspectRatio: "16:9",
+      exactAspectRatio: false,
       targetResolution: 1080,
       textInputs: {},
       imageInputs: {},
@@ -474,6 +477,7 @@ describe("useGenerationStore pipeline phases", () => {
       workflow: Record<string, unknown> | null;
       workflowId: string | null;
       targetAspectRatio: string;
+      exactAspectRatio: boolean;
       targetResolution: number;
       textInputs: Record<string, string>;
       imageInputs: Record<string, File>;
@@ -493,6 +497,7 @@ describe("useGenerationStore pipeline phases", () => {
       workflow: {},
       workflowId: "wf.json",
       targetAspectRatio: "16:9",
+      exactAspectRatio: false,
       targetResolution: 1080,
       textInputs: {},
       imageInputs: {},

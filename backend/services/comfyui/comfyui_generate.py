@@ -40,6 +40,7 @@ class GenerationInput:
     workflow: dict
     workflow_id: str | None = None
     target_aspect_ratio: str | None = None
+    exact_aspect_ratio: bool = True
     target_resolution_raw: Any = None
     mask_crop_dilation: float | None = None
     mask_crop_mode: MaskCroppingMode | None = None
@@ -238,6 +239,7 @@ def build_backend_context(
         workflow=gen_input.workflow,
         workflow_id=gen_input.workflow_id,
         target_aspect_ratio=gen_input.target_aspect_ratio,
+        exact_aspect_ratio=gen_input.exact_aspect_ratio,
         target_resolution=gen_input.target_resolution_raw,
         mask_crop_dilation=gen_input.mask_crop_dilation,
         mask_crop_mode=gen_input.mask_crop_mode,

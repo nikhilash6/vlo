@@ -33,6 +33,7 @@ def _noop_aspect_ratio_processing(
     _workflow: dict[str, Any],
     _rules: dict[str, Any],
     _target_aspect_ratio: str | None,
+    _exact: bool,
     _target_resolution: Any,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     return None, []
@@ -140,6 +141,7 @@ def test_v2_pipeline_runs_aspect_ratio_during_mask_crop_when_declared_first():
         _workflow: dict[str, Any],
         _rules: dict[str, Any],
         _target_aspect_ratio: str | None,
+        _exact: bool,
         _target_resolution: Any,
     ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
         call_log.append("aspect_ratio")
@@ -211,6 +213,7 @@ def test_v2_pipeline_without_mask_stage_skips_mask_cropping_effects():
         _workflow: dict[str, Any],
         _rules: dict[str, Any],
         _target_aspect_ratio: str | None,
+        _exact: bool,
         _target_resolution: Any,
     ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
         call_log.append("aspect_ratio")

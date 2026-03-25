@@ -89,6 +89,7 @@ export interface ProcessorDescription {
 export interface ProjectConfig {
   fps: number;
   aspectRatio: string;
+  exactInputAspectRatio?: boolean;
 }
 
 export interface GenerationWorkflowSnapshot {
@@ -162,6 +163,7 @@ export interface GenerationRequest {
   graphData: Record<string, unknown> | null;
   workflowId: string | null;
   targetAspectRatio: string;
+  exactAspectRatio: boolean;
   targetResolution: number;
   textInputs: Record<string, string>;
   imageInputs: Record<string, File>;

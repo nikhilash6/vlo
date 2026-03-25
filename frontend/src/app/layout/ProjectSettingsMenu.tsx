@@ -1,19 +1,25 @@
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 import {
   Box,
+  Checkbox,
   Divider,
   IconButton,
   ListItemIcon,
   ListItemText,
   Menu,
   MenuItem,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
 import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 import ViewStreamIcon from "@mui/icons-material/ViewStream";
 import CheckIcon from "@mui/icons-material/Check";
-import type { AspectRatio } from "../../features/project";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import {
+  EXACT_INPUT_ASPECT_RATIO_TOOLTIP,
+  type AspectRatio,
+} from "../../features/project";
 import { useProjectStore } from "../../features/project/useProjectStore";
 
 const FPS_OPTIONS = [16, 24, 25, 30, 60];
@@ -55,9 +61,15 @@ export function ProjectSettingsMenu() {
     void updateConfig({ aspectRatio });
     handleClose();
   };
+  const handleExactInputAspectRatioChange = (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    void updateConfig({ exactInputAspectRatio: event.target.checked });
+  };
   const currentLayout = config.layoutMode || "compact";
   const currentFps = config.fps || 30;
   const currentAspectRatio = config.aspectRatio || "16:9";
+  const currentExactInputAspectRatio = Boolean(config.exactInputAspectRatio);
 
   return (
     <>
@@ -136,10 +148,48 @@ export function ProjectSettingsMenu() {
         ))}
 
         <Divider sx={{ borderColor: "#333" }} />
-        <Box sx={{ px: 2, py: 1 }}>
+        <Box
+          sx={{
+            px: 2,
+            py: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 1,
+          }}
+        >
           <Typography variant="caption" color="gray">
             ASPECT RATIO
           </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <Typography variant="caption" color="gray">
+              EXACT
+            </Typography>
+            <Checkbox
+              checked={currentExactInputAspectRatio}
+              onChange={handleExactInputAspectRatioChange}
+              size="small"
+              inputProps={{
+                "aria-label": "Match input aspect ratio exactly",
+              }}
+              sx={{
+                color: "rgba(255, 255, 255, 0.65)",
+                p: 0.25,
+                "&.Mui-checked": {
+                  color: "primary.main",
+                },
+              }}
+            />
+            <Tooltip title={EXACT_INPUT_ASPECT_RATIO_TOOLTIP} arrow>
+              <IconButton
+                size="small"
+                sx={{ color: "rgba(255, 255, 255, 0.6)", p: 0.25 }}
+                aria-label="Exact aspect ratio help"
+              >
+                <InfoOutlinedIcon fontSize="inherit" />
+              </IconButton>
+            </Tooltip>
+          </Box>
         </Box>
         {ASPECT_RATIO_OPTIONS.map((ratio) => (
           <MenuItem
