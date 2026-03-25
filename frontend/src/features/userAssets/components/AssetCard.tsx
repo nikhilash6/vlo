@@ -28,6 +28,7 @@ import {
   useTimelineClipCountForAsset,
 } from "../../timeline";
 import { useGenerationStore } from "../../generation/useGenerationStore";
+import { canRegenerateFromAssetMetadata } from "../../generation/utils/metadataReplay";
 import { getTimelineSelectionFromAsset } from "../../timelineSelection";
 import { useAssetStore } from "../useAssetStore";
 import { AssetPreviewDialog } from "./AssetPreviewDialog";
@@ -145,11 +146,7 @@ const formatDuration = (seconds?: number) => {
 };
 
 function canRegenerateFromMetadata(asset: Asset): boolean {
-  const metadata = asset.creationMetadata;
-  return (
-    metadata?.source === "generated" &&
-    Boolean(metadata.comfyuiPrompt || metadata.comfyuiWorkflow)
-  );
+  return canRegenerateFromAssetMetadata(asset.creationMetadata);
 }
 
 function AssetCardComponent({

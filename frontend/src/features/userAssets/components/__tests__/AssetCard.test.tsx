@@ -86,6 +86,22 @@ const generatedFromSelectionAsset: Asset = {
   },
 };
 
+const generatedWithWorkflowNameOnlyAsset: Asset = {
+  ...mockAsset,
+  id: "asset-generated-workflow-name-only",
+  creationMetadata: {
+    source: "generated",
+    workflowName: "video_ltx2_3_i2v",
+    inputs: [
+      {
+        nodeId: "node-1",
+        kind: "draggedAsset",
+        parentAssetId: "source-asset",
+      },
+    ],
+  },
+};
+
 const generatedWithWorkflowMetadataAsset: Asset = {
   ...mockAsset,
   id: "asset-generated-metadata",
@@ -221,6 +237,19 @@ describe("AssetCard actions", () => {
 
     expect(mocks.mockLoadWorkflowFromAssetMetadata).toHaveBeenCalledWith(
       generatedWithWorkflowMetadataAsset,
+    );
+  });
+
+  it("shows regenerate for generated assets with a saved workflow name", () => {
+    mockStores(0);
+
+    render(<AssetCard asset={generatedWithWorkflowNameOnlyAsset} />);
+
+    fireEvent.click(screen.getByLabelText("Asset actions"));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate" }));
+
+    expect(mocks.mockLoadWorkflowFromAssetMetadata).toHaveBeenCalledWith(
+      generatedWithWorkflowNameOnlyAsset,
     );
   });
 
