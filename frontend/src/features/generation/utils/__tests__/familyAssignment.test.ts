@@ -179,6 +179,34 @@ describe("familyAssignment", () => {
     expect(left).not.toBe(right);
   });
 
+  it("does not create or resolve auto-families for incomplete compatibility", async () => {
+    const requestKey = await buildGenerationFamilyRequestKey({
+      workflow: makeWorkflow(1),
+      workflowInputs,
+      slotValues: makeSlotValues("hello world"),
+      generationInputs,
+    });
+    const incompleteCompatibility: AssetFamilyCompatibility = {
+      assetType: "video",
+      durationMs: 5000,
+      fpsMilli: null,
+    };
+
+    expect(
+      await buildGenerationFamilyAutoMatchKey(
+        requestKey,
+        incompleteCompatibility,
+      ),
+    ).toBeNull();
+    expect(
+      resolveFamilyForGenerationMatchKey(
+        [],
+        "generation-family:v1:test",
+        incompleteCompatibility,
+      ),
+    ).toBeUndefined();
+  });
+
   it("reuses an existing family id when the match key already exists", async () => {
     const requestKey = await buildGenerationFamilyRequestKey({
       workflow: makeWorkflow(1),

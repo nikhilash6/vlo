@@ -1,4 +1,5 @@
-import type { Asset } from "../../../types/Asset";
+import type { Asset, AssetFamily } from "../../../types/Asset";
+import { doesAssetMatchFamilyCompatibility } from "../../../shared/utils/assetFamilies";
 import { fileSystemService } from "../../project";
 import { projectDocumentService } from "../../project/services/ProjectDocumentService";
 import { mediaProcessingService } from "./MediaProcessingService";
@@ -151,7 +152,7 @@ export class AssetService {
     skipProjectSave: boolean,
     existingAssets: Asset[],
     creationMetadata?: Asset["creationMetadata"],
-    familyId?: Asset["familyId"],
+    family?: Pick<AssetFamily, "id" | "compatibility">,
   ): Promise<Asset | null> {
     console.time(`[Ingest] ${file.name}`);
     // Use MediaFileProcessor for optimized access to the file
@@ -278,14 +279,34 @@ export class AssetService {
         }
       }
 
+      const assetType = isImage ? "image" : isAudio ? "audio" : "video";
+      const resolvedFamilyId =
+        family &&
+        doesAssetMatchFamilyCompatibility(
+          {
+            type: assetType,
+            duration,
+            fps,
+          },
+          family.compatibility,
+        )
+          ? family.id
+          : undefined;
+
+      if (family && !resolvedFamilyId) {
+        console.warn(
+          `[Ingest] Skipping family assignment for ${file.name} because it does not match family '${family.id}' compatibility.`,
+        );
+      }
+
       // 5. Construct In-Memory Asset (Return this immediately)
       console.time(`[Ingest] Object Creation ${file.name}`);
       const newAssetInMemory: Asset = {
         id: assetId,
         hash: hash,
-        familyId,
+        familyId: resolvedFamilyId,
         name: assetFileName,
-        type: isImage ? "image" : isAudio ? "audio" : "video",
+        type: assetType,
         src: URL.createObjectURL(file),
         thumbnail: thumbnailBlob
           ? URL.createObjectURL(thumbnailBlob)

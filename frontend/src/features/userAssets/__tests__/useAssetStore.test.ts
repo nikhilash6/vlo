@@ -215,6 +215,58 @@ describe("useAssetStore", () => {
     );
   });
 
+  it("fetchAssets clears incompatible family references and drops empty families", async () => {
+    (useProjectStore.getState as Mock).mockReturnValue({ rootHandle: {} });
+
+    const mockProjectJson = JSON.stringify({
+      assets: {
+        "asset-image": {
+          id: "asset-image",
+          name: "poster.png",
+          hash: "image-hash",
+          src: "poster.png",
+          type: "image",
+          familyId: "family-1",
+          createdAt: 1,
+        },
+      },
+      assetFamilies: {
+        "family-1": {
+          id: "family-1",
+          representativeAssetId: "asset-image",
+          autoMatchKeys: ["generation-family:v1:image"],
+          compatibility: {
+            assetType: "video",
+            durationMs: 5000,
+            fpsMilli: 24000,
+          },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      },
+    });
+
+    (fileSystemService.readFile as Mock).mockImplementation(async (path: string) => {
+      if (path === ".vloproject/project.json") {
+        return { text: async () => mockProjectJson };
+      }
+      if (path === "poster.png") {
+        return new File(["image"], "poster.png", { type: "image/png" });
+      }
+      throw new Error("File not found: " + path);
+    });
+
+    await useAssetStore.getState().fetchAssets();
+
+    expect(useAssetStore.getState().assets).toEqual([
+      expect.objectContaining({
+        id: "asset-image",
+        familyId: undefined,
+      }),
+    ]);
+    expect(useAssetStore.getState().families).toEqual([]);
+  });
+
   it("updateAsset persists favourite changes to project.json", async () => {
     (useProjectStore.getState as Mock).mockReturnValue({ rootHandle: {} });
 

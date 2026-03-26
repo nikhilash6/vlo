@@ -2,12 +2,15 @@ import { create } from "zustand";
 import { Input, UrlSource, BlobSource, ALL_FORMATS } from "mediabunny";
 import type { Asset, AssetFamily } from "../../types/Asset";
 import {
+  doesAssetBelongToFamily,
+  isAssetFamilyCompatibilityComplete,
+} from "../../shared/utils/assetFamilies";
+import {
   useProjectStore,
   fileSystemService,
   projectDocumentService,
 } from "../project";
 import { mediaProcessingService } from "./services/MediaProcessingService";
-import { pickRepresentativeAssetId } from "./utils/familyMembers";
 
 interface AssetStore {
   assets: Asset[];
@@ -65,19 +68,43 @@ function upsertFamilyInCollection(
   return nextFamilies;
 }
 
-function clearUnknownFamilyReferences(
+function pickRepresentativeAssetIdForFamily(
+  assets: readonly Asset[],
+  family: AssetFamily,
+): string | undefined {
+  return assets
+    .filter((asset) => doesAssetBelongToFamily(asset, family))
+    .sort((left, right) => {
+      const createdAtDifference = (right.createdAt || 0) - (left.createdAt || 0);
+      if (createdAtDifference !== 0) {
+        return createdAtDifference;
+      }
+
+      return left.name.localeCompare(right.name);
+    })[0]?.id;
+}
+
+function clearInvalidFamilyReferences(
   assets: readonly Asset[],
   families: readonly AssetFamily[],
 ): Asset[] {
-  const knownFamilyIds = new Set(families.map((family) => family.id));
-  return assets.map((asset) =>
-    asset.familyId && !knownFamilyIds.has(asset.familyId)
-      ? {
-          ...asset,
-          familyId: undefined,
-        }
-      : asset,
-  );
+  const familiesById = new Map(families.map((family) => [family.id, family]));
+
+  return assets.map((asset) => {
+    if (!asset.familyId) {
+      return asset;
+    }
+
+    const family = familiesById.get(asset.familyId);
+    if (!family || !doesAssetBelongToFamily(asset, family)) {
+      return {
+        ...asset,
+        familyId: undefined,
+      };
+    }
+
+    return asset;
+  });
 }
 
 function reconcileFamiliesWithAssets(
@@ -86,7 +113,11 @@ function reconcileFamiliesWithAssets(
   updatedAt = Date.now(),
 ): AssetFamily[] {
   return families.flatMap((family) => {
-    const representativeAssetId = pickRepresentativeAssetId(assets, family.id);
+    if (!isAssetFamilyCompatibilityComplete(family.compatibility)) {
+      return [];
+    }
+
+    const representativeAssetId = pickRepresentativeAssetIdForFamily(assets, family);
     if (!representativeAssetId) {
       return [];
     }
@@ -103,6 +134,27 @@ function reconcileFamiliesWithAssets(
       },
     ];
   });
+}
+
+function sanitizeAssetFamilyState(
+  assets: readonly Asset[],
+  families: readonly AssetFamily[],
+  updatedAt = Date.now(),
+): { assets: Asset[]; families: AssetFamily[] } {
+  const compatibleFamilies = families.filter((family) =>
+    isAssetFamilyCompatibilityComplete(family.compatibility),
+  );
+  const nextAssets = clearInvalidFamilyReferences(assets, compatibleFamilies);
+  const nextFamilies = reconcileFamiliesWithAssets(
+    nextAssets,
+    compatibleFamilies,
+    updatedAt,
+  );
+
+  return {
+    assets: nextAssets,
+    families: nextFamilies,
+  };
 }
 
 function countGenerationMaskAssetConsumers(
@@ -257,12 +309,11 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       }
 
       const loadedFamilies = Object.values(assetFamiliesMap);
-      const nextAssets = clearUnknownFamilyReferences(loadedAssets, loadedFamilies);
-      const nextFamilies = reconcileFamiliesWithAssets(nextAssets, loadedFamilies);
+      const sanitizedState = sanitizeAssetFamilyState(loadedAssets, loadedFamilies);
 
       set({
-        assets: nextAssets,
-        families: nextFamilies,
+        assets: sanitizedState.assets,
+        families: sanitizedState.families,
       });
     } catch (err) {
       console.error("Failed to load assets from project.json", err);
@@ -345,6 +396,15 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     try {
       const { assetService } = await import("./services/AssetService");
       const assets = [...get().assets];
+      const family = familyId
+        ? get().families.find((candidate) => candidate.id === familyId)
+        : undefined;
+
+      if (familyId && !family) {
+        console.warn(
+          `[AssetStore] Skipping family assignment because family '${familyId}' was not found.`,
+        );
+      }
 
       for (const file of files) {
         const newAsset = await assetService.ingestAsset(
@@ -353,7 +413,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
           false,
           assets,
           creationMetadata,
-          familyId,
+          family,
         );
 
         if (!newAsset) {
@@ -383,24 +443,38 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   },
 
   upsertFamily: async (family: AssetFamily) => {
+    const previousAssets = get().assets;
     const previousFamilies = get().families;
-    const nextFamilies = upsertFamilyInCollection(previousFamilies, family);
-    set({ families: nextFamilies });
+    const sanitizedState = sanitizeAssetFamilyState(
+      previousAssets,
+      upsertFamilyInCollection(previousFamilies, family),
+    );
+    set(sanitizedState);
 
     try {
       await projectDocumentService.updateProjectDocument((draft) => {
-        if (!draft.assetFamilies) {
-          draft.assetFamilies = {};
+        if (draft.assets) {
+          for (const asset of sanitizedState.assets) {
+            if (!draft.assets[asset.id]) {
+              continue;
+            }
+
+            draft.assets[asset.id].familyId = asset.familyId;
+          }
         }
 
-        draft.assetFamilies[family.id] = family;
+        if (sanitizedState.families.length > 0) {
+          draft.assetFamilies = toAssetFamilyRecordMap(sanitizedState.families);
+        } else {
+          delete draft.assetFamilies;
+        }
       });
     } catch (error) {
       console.error(
         `Failed to persist asset family update for '${family.id}'`,
         error,
       );
-      set({ families: previousFamilies });
+      set({ assets: previousAssets, families: previousFamilies });
     }
   },
 
@@ -410,9 +484,16 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       return;
     }
 
-    set((state) => ({
-      assets: state.assets.map((a) => (a.id === id ? { ...a, ...updates } : a)),
-    }));
+    const previousAssets = get().assets;
+    const previousFamilies = get().families;
+    const sanitizedState = sanitizeAssetFamilyState(
+      previousAssets.map((asset) =>
+        asset.id === id ? { ...asset, ...updates } : asset,
+      ),
+      previousFamilies,
+    );
+
+    set(sanitizedState);
 
     try {
       await projectDocumentService.updateProjectDocument((draft) => {
@@ -420,15 +501,30 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
           return;
         }
 
-        Object.assign(draft.assets[id], updates);
+        for (const asset of sanitizedState.assets) {
+          if (!draft.assets[asset.id]) {
+            continue;
+          }
+
+          draft.assets[asset.id].familyId = asset.familyId;
+        }
+
+        const nextAsset = sanitizedState.assets.find((asset) => asset.id === id);
+        if (nextAsset) {
+          Object.assign(draft.assets[id], updates, {
+            familyId: nextAsset.familyId,
+          });
+        }
+
+        if (sanitizedState.families.length > 0) {
+          draft.assetFamilies = toAssetFamilyRecordMap(sanitizedState.families);
+        } else {
+          delete draft.assetFamilies;
+        }
       });
     } catch (error) {
       console.error(`Failed to persist asset update for '${id}'`, error);
-      set((state) => ({
-        assets: state.assets.map((asset) =>
-          asset.id === id ? previousAsset : asset,
-        ),
-      }));
+      set({ assets: previousAssets, families: previousFamilies });
     }
   },
 
@@ -492,7 +588,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       proxySrc?: string;
     } = {};
     const nextAssets = get().assets.filter((asset) => asset.id !== id);
-    const nextFamilies = reconcileFamiliesWithAssets(nextAssets, get().families);
+    const sanitizedState = sanitizeAssetFamilyState(nextAssets, get().families);
 
     try {
       await projectDocumentService.updateProjectDocument((draft) => {
@@ -507,8 +603,16 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
 
         delete draft.assets[id];
 
-        if (nextFamilies.length > 0) {
-          draft.assetFamilies = toAssetFamilyRecordMap(nextFamilies);
+        for (const asset of sanitizedState.assets) {
+          if (!draft.assets[asset.id]) {
+            continue;
+          }
+
+          draft.assets[asset.id].familyId = asset.familyId;
+        }
+
+        if (sanitizedState.families.length > 0) {
+          draft.assetFamilies = toAssetFamilyRecordMap(sanitizedState.families);
         } else {
           delete draft.assetFamilies;
         }
@@ -521,8 +625,8 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
 
     // 2. Remove from memory immediately for UI responsiveness
     set({
-      assets: nextAssets,
-      families: nextFamilies,
+      assets: sanitizedState.assets,
+      families: sanitizedState.families,
     });
 
     // 3. Delete files from disk using paths found in JSON

@@ -157,6 +157,62 @@ describe("useAssetStore - Local Assets", () => {
     expect(useAssetStore.getState().uploadingCount).toBe(0);
   });
 
+  it("assigns a family when the ingested asset matches the family contract", async () => {
+    useAssetStore.setState({
+      families: [
+        {
+          id: "family-video",
+          representativeAssetId: "existing-video",
+          autoMatchKeys: ["generation-family:v1:video"],
+          compatibility: {
+            assetType: "video",
+            durationMs: 10000,
+            fpsMilli: 30000,
+          },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+    });
+
+    const store = useAssetStore.getState();
+    const file = new File(["video"], "family-clip.mp4", { type: "video/mp4" });
+
+    const asset = await store.addLocalAsset(file, undefined, "family-video");
+
+    expect(asset?.familyId).toBe("family-video");
+    expect(useAssetStore.getState().assets[0].familyId).toBe("family-video");
+  });
+
+  it("skips family assignment when the ingested asset does not match the family contract", async () => {
+    useAssetStore.setState({
+      families: [
+        {
+          id: "family-image",
+          representativeAssetId: "existing-image",
+          autoMatchKeys: ["generation-family:v1:image"],
+          compatibility: {
+            assetType: "image",
+            durationMs: 5000,
+            fpsMilli: null,
+          },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+    });
+
+    const store = useAssetStore.getState();
+    const file = new File(["video"], "family-mismatch.mp4", {
+      type: "video/mp4",
+    });
+
+    const asset = await store.addLocalAsset(file, undefined, "family-image");
+
+    expect(asset?.familyId).toBeUndefined();
+    expect(useAssetStore.getState().assets[0].familyId).toBeUndefined();
+  });
+
   it("addLocalAsset updates video metadata asynchronously", async () => {
     const { mediaProcessingService } =
       await import("../services/MediaProcessingService");

@@ -23,6 +23,7 @@ import FavoriteIcon from "@mui/icons-material/Favorite";
 import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 
 import type { AssetType } from "../../types/Asset";
+import { doesAssetBelongToFamily } from "../../shared/utils/assetFamilies";
 import { useAssetStore } from "./useAssetStore";
 import { AssetCard } from "./components/AssetCard";
 import { isAssetVisibleInBrowser } from "./utils/assetVisibility";
@@ -68,6 +69,11 @@ function isRepresentativeAsset(
     return true;
   }
 
+  const asset = assets.find((candidate) => candidate.id === assetId);
+  if (!asset || !doesAssetBelongToFamily(asset, family)) {
+    return true;
+  }
+
   if (family.representativeAssetId === assetId) {
     return true;
   }
@@ -77,7 +83,11 @@ function isRepresentativeAsset(
   );
 
   // If family data is inconsistent, prefer showing the asset rather than hiding it.
-  if (!representativeAsset || representativeAsset.type !== assetType) {
+  if (
+    !representativeAsset ||
+    !doesAssetBelongToFamily(representativeAsset, family) ||
+    representativeAsset.type !== assetType
+  ) {
     return true;
   }
 

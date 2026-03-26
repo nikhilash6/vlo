@@ -13,6 +13,10 @@ interface AssetFamilyCompatibilitySource {
   fps?: number;
 }
 
+function isPositiveFiniteNumber(value: number | null): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
 function normalizeDurationSeconds(
   assetType: AssetType,
   duration: number | undefined,
@@ -65,9 +69,40 @@ export function areAssetFamilyCompatibilitiesEqual(
   );
 }
 
-export function doesAssetBelongToFamily(
-  asset: Pick<Asset, "familyId">,
-  family: Pick<AssetFamily, "id">,
+export function isAssetFamilyCompatibilityComplete(
+  compatibility: AssetFamilyCompatibility | null | undefined,
+): compatibility is AssetFamilyCompatibility {
+  if (!compatibility || !isPositiveFiniteNumber(compatibility.durationMs)) {
+    return false;
+  }
+
+  if (compatibility.assetType === "video") {
+    return isPositiveFiniteNumber(compatibility.fpsMilli);
+  }
+
+  return compatibility.fpsMilli === null;
+}
+
+export function doesAssetMatchFamilyCompatibility(
+  asset: Pick<Asset, "type" | "duration" | "fps">,
+  compatibility: AssetFamilyCompatibility | null | undefined,
 ): boolean {
-  return asset.familyId === family.id;
+  if (!isAssetFamilyCompatibilityComplete(compatibility)) {
+    return false;
+  }
+
+  return areAssetFamilyCompatibilitiesEqual(
+    buildAssetFamilyCompatibilityFromAsset(asset),
+    compatibility,
+  );
+}
+
+export function doesAssetBelongToFamily(
+  asset: Pick<Asset, "familyId" | "type" | "duration" | "fps">,
+  family: Pick<AssetFamily, "id" | "compatibility">,
+): boolean {
+  return (
+    asset.familyId === family.id &&
+    doesAssetMatchFamilyCompatibility(asset, family.compatibility)
+  );
 }
