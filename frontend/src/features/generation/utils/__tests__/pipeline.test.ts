@@ -12,6 +12,7 @@ import { buildGenerationFamilyAutoMatchKey } from "../familyAssignment";
 
 const {
   mockAddLocalAsset,
+  mockAddLocalAssetWithFamily,
   mockGetFamilies,
   mockInspectAssetFamilyCompatibility,
   mockFetchOutputAsFile,
@@ -19,6 +20,7 @@ const {
   mockUpsertFamily,
 } = vi.hoisted(() => ({
   mockAddLocalAsset: vi.fn(),
+  mockAddLocalAssetWithFamily: vi.fn(),
   mockGetFamilies: vi.fn<() => AssetFamily[]>(() => []),
   mockInspectAssetFamilyCompatibility: vi.fn<
     () => Promise<AssetFamilyCompatibility | null>
@@ -48,6 +50,7 @@ vi.mock("../../pipeline/utils/videoPackaging", async (importOriginal) => {
 
 vi.mock("../../../userAssets", () => ({
   addLocalAsset: mockAddLocalAsset,
+  addLocalAssetWithFamily: mockAddLocalAssetWithFamily,
   getAssetById: vi.fn(() => undefined),
   getFamilies: mockGetFamilies,
   inspectAssetFamilyCompatibility: mockInspectAssetFamilyCompatibility,
@@ -67,6 +70,7 @@ function makeGenerationMetadata(): GeneratedCreationMetadata {
 describe("generation pipeline", () => {
   beforeEach(() => {
     mockAddLocalAsset.mockReset();
+    mockAddLocalAssetWithFamily.mockReset();
     mockGetFamilies.mockReset();
     mockGetFamilies.mockReturnValue([]);
     mockInspectAssetFamilyCompatibility.mockReset();
@@ -834,6 +838,82 @@ describe("generation pipeline", () => {
         id: "existing-family",
         representativeAssetId: "asset-family-match",
       }),
+    );
+  });
+
+  it("creates and then reuses the same auto-family across separate postprocess runs", async () => {
+    const requestKey = "generation-family-request:v1:new-family";
+    const createdFamilies: AssetFamily[] = [];
+    const firstOutput = new File(["frame-1"], "output-1.png", {
+      type: "image/png",
+    });
+    const secondOutput = new File(["frame-2"], "output-2.png", {
+      type: "image/png",
+    });
+
+    mockGetFamilies.mockImplementation(() => [...createdFamilies]);
+    mockFetchOutputAsFile
+      .mockResolvedValueOnce(firstOutput)
+      .mockResolvedValueOnce(secondOutput);
+    mockAddLocalAssetWithFamily.mockResolvedValueOnce({ id: "asset-family-1" });
+    mockAddLocalAsset.mockResolvedValueOnce({ id: "asset-family-2" });
+    mockUpsertFamily.mockImplementation(async (family) => {
+      createdFamilies.splice(0, createdFamilies.length, family);
+    });
+
+    await frontendPostprocess(
+      [
+        {
+          filename: "output-1.png",
+          subfolder: "",
+          type: "output",
+          viewUrl: "/output-1.png",
+        },
+      ],
+      {
+        postprocessing: {
+          mode: "none",
+          panel_preview: "raw_outputs",
+          on_failure: "fallback_raw",
+        },
+        aspectRatioProcessing: null,
+        autoFamilyRequestKey: requestKey,
+        generationMetadata: makeGenerationMetadata(),
+        previewFrameFiles: null,
+      },
+    );
+
+    expect(mockAddLocalAssetWithFamily).toHaveBeenCalledTimes(1);
+    const createdFamily = createdFamilies[0];
+    expect(createdFamily).toBeDefined();
+    expect(createdFamily?.representativeAssetId).toBe("asset-family-1");
+
+    await frontendPostprocess(
+      [
+        {
+          filename: "output-2.png",
+          subfolder: "",
+          type: "output",
+          viewUrl: "/output-2.png",
+        },
+      ],
+      {
+        postprocessing: {
+          mode: "none",
+          panel_preview: "raw_outputs",
+          on_failure: "fallback_raw",
+        },
+        aspectRatioProcessing: null,
+        autoFamilyRequestKey: requestKey,
+        generationMetadata: makeGenerationMetadata(),
+        previewFrameFiles: null,
+      },
+    );
+
+    expect(mockAddLocalAsset).toHaveBeenLastCalledWith(
+      secondOutput,
+      makeGenerationMetadata(),
+      createdFamily?.id,
     );
   });
 });

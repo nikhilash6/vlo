@@ -6,6 +6,8 @@ import {
   resolveFamilyForGenerationMatchKey,
 } from "../../utils/familyAssignment";
 
+const pendingAutoFamilies = new Map<string, AssetFamily>();
+
 /**
  * If a prepared mask file exists, ingest it as a separate asset first and
  * link it to the generation metadata so all subsequently ingested output
@@ -51,15 +53,22 @@ async function ingestGeneratedAsset(
   pendingFamilies: Map<string, AssetFamily>,
 ): Promise<{ id: string } | null> {
   let family: AssetFamily | undefined;
+  let autoMatchKey: string | null = null;
+  let familyExistsInStore = false;
 
   if (ctx.autoFamilyRequestKey) {
     try {
       const compatibility = await inspectAssetFamilyCompatibility(file);
-      const autoMatchKey = await buildGenerationFamilyAutoMatchKey(
+      autoMatchKey = await buildGenerationFamilyAutoMatchKey(
         ctx.autoFamilyRequestKey,
         compatibility,
       );
-      const knownFamilies = [...getFamilies(), ...pendingFamilies.values()].filter(
+      const storeFamilies = getFamilies();
+      const knownFamilies = [
+        ...storeFamilies,
+        ...pendingAutoFamilies.values(),
+        ...pendingFamilies.values(),
+      ].filter(
         (candidate, index, families) =>
           families.findIndex((familyCandidate) => familyCandidate.id === candidate.id) ===
           index,
@@ -69,6 +78,14 @@ async function ingestGeneratedAsset(
         autoMatchKey,
         compatibility,
       );
+      const resolvedFamilyId = family?.id;
+      familyExistsInStore = Boolean(
+        resolvedFamilyId &&
+          storeFamilies.some((candidate) => candidate.id === resolvedFamilyId),
+      );
+      if (family && autoMatchKey) {
+        pendingAutoFamilies.set(autoMatchKey, family);
+      }
     } catch (error) {
       console.warn(
         "[Generation] Failed to resolve compatible family for generated output",
@@ -77,9 +94,14 @@ async function ingestGeneratedAsset(
     }
   }
 
-  const asset = family
-    ? await addLocalAsset(file, ctx.generationMetadata, family.id)
-    : await addLocalAsset(file, ctx.generationMetadata);
+  const { addLocalAssetWithFamily } = await import("../../../userAssets");
+
+  const asset =
+    family && familyExistsInStore
+      ? await addLocalAsset(file, ctx.generationMetadata, family.id)
+      : family
+        ? await addLocalAssetWithFamily(file, ctx.generationMetadata, family)
+        : await addLocalAsset(file, ctx.generationMetadata);
 
   if (asset && family) {
     const updatedFamily: AssetFamily = {
@@ -89,6 +111,11 @@ async function ingestGeneratedAsset(
     };
     pendingFamilies.set(updatedFamily.id, updatedFamily);
     await upsertFamily(updatedFamily);
+    if (autoMatchKey) {
+      pendingAutoFamilies.delete(autoMatchKey);
+    }
+  } else if (autoMatchKey) {
+    pendingAutoFamilies.delete(autoMatchKey);
   }
 
   return asset;

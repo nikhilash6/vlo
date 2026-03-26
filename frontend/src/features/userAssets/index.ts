@@ -3,6 +3,7 @@ export { AssetCard } from "./components/AssetCard";
 export { useAssetStore } from "./useAssetStore";
 export {
   addLocalAsset,
+  addLocalAssetWithFamily,
   deleteAsset,
   getAssetById,
   getFamilyById,

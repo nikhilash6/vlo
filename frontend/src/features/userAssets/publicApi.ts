@@ -67,6 +67,16 @@ export async function addLocalAsset(
   return useAssetStore.getState().addLocalAsset(file, creationMetadata, familyId);
 }
 
+export async function addLocalAssetWithFamily(
+  file: File,
+  creationMetadata?: Asset["creationMetadata"],
+  family?: Pick<AssetFamily, "id" | "compatibility">,
+): Promise<Asset | null> {
+  return useAssetStore
+    .getState()
+    .addLocalAssetWithFamily(file, creationMetadata, family);
+}
+
 export async function upsertFamily(family: AssetFamily): Promise<void> {
   await useAssetStore.getState().upsertFamily(family);
 }

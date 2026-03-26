@@ -31,6 +31,11 @@ interface AssetStore {
     creationMetadata?: Asset["creationMetadata"],
     familyId?: Asset["familyId"],
   ) => Promise<Asset[]>;
+  addLocalAssetWithFamily: (
+    file: File,
+    creationMetadata?: Asset["creationMetadata"],
+    family?: Pick<AssetFamily, "id" | "compatibility">,
+  ) => Promise<Asset | null>;
   upsertFamily: (family: AssetFamily) => Promise<void>;
   updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
   fetchAssets: () => Promise<void>;
@@ -38,6 +43,12 @@ interface AssetStore {
   getInput: (assetId: string) => Promise<Input | null>;
   deleteAsset: (id: string) => Promise<void>;
 }
+
+type AssetStoreSet = (
+  partial:
+    | Partial<AssetStore>
+    | ((state: AssetStore) => Partial<AssetStore>),
+) => void;
 
 interface AssetDurationRepair {
   id: string;
@@ -155,6 +166,64 @@ function sanitizeAssetFamilyState(
     assets: nextAssets,
     families: nextFamilies,
   };
+}
+
+async function ingestLocalAssetsIntoStore(
+  get: () => AssetStore,
+  set: AssetStoreSet,
+  files: readonly File[],
+  creationMetadata?: Asset["creationMetadata"],
+  family?: Pick<AssetFamily, "id" | "compatibility">,
+): Promise<Asset[]> {
+  const createdAssets: Asset[] = [];
+
+  if (files.length === 0) {
+    return createdAssets;
+  }
+
+  set((state) => ({
+    uploadingCount: state.uploadingCount + 1,
+    isUploading: true,
+  }));
+
+  try {
+    const { assetService } = await import("./services/AssetService");
+    const assets = [...get().assets];
+
+    for (const file of files) {
+      const newAsset = await assetService.ingestAsset(
+        file,
+        false,
+        false,
+        assets,
+        creationMetadata,
+        family,
+      );
+
+      if (!newAsset) {
+        continue;
+      }
+
+      assets.push(newAsset);
+      createdAssets.push(newAsset);
+    }
+
+    if (createdAssets.length > 0) {
+      set((state) => ({
+        assets: [...state.assets, ...createdAssets],
+      }));
+    }
+
+    return createdAssets;
+  } finally {
+    set((state) => {
+      const uploadingCount = Math.max(0, state.uploadingCount - 1);
+      return {
+        uploadingCount,
+        isUploading: uploadingCount > 0,
+      };
+    });
+  }
 }
 
 function countGenerationMaskAssetConsumers(
@@ -369,10 +438,22 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     creationMetadata?: Asset["creationMetadata"],
     familyId?: Asset["familyId"],
   ) => {
-    const [asset] = await get().addLocalAssets(
+    const family = familyId
+      ? get().families.find((candidate) => candidate.id === familyId)
+      : undefined;
+
+    if (familyId && !family) {
+      console.warn(
+        `[AssetStore] Skipping family assignment because family '${familyId}' was not found.`,
+      );
+    }
+
+    const [asset] = await ingestLocalAssetsIntoStore(
+      get,
+      set,
       [file],
       creationMetadata,
-      familyId,
+      family,
     );
     return asset ?? null;
   },
@@ -382,64 +463,38 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     creationMetadata?: Asset["creationMetadata"],
     familyId?: Asset["familyId"],
   ) => {
-    const createdAssets: Asset[] = [];
+    const family = familyId
+      ? get().families.find((candidate) => candidate.id === familyId)
+      : undefined;
 
-    if (files.length === 0) {
-      return createdAssets;
+    if (familyId && !family) {
+      console.warn(
+        `[AssetStore] Skipping family assignment because family '${familyId}' was not found.`,
+      );
     }
 
-    set((state) => ({
-      uploadingCount: state.uploadingCount + 1,
-      isUploading: true,
-    }));
+    return ingestLocalAssetsIntoStore(
+      get,
+      set,
+      files,
+      creationMetadata,
+      family,
+    );
+  },
 
-    try {
-      const { assetService } = await import("./services/AssetService");
-      const assets = [...get().assets];
-      const family = familyId
-        ? get().families.find((candidate) => candidate.id === familyId)
-        : undefined;
-
-      if (familyId && !family) {
-        console.warn(
-          `[AssetStore] Skipping family assignment because family '${familyId}' was not found.`,
-        );
-      }
-
-      for (const file of files) {
-        const newAsset = await assetService.ingestAsset(
-          file,
-          false,
-          false,
-          assets,
-          creationMetadata,
-          family,
-        );
-
-        if (!newAsset) {
-          continue;
-        }
-
-        assets.push(newAsset);
-        createdAssets.push(newAsset);
-      }
-
-      if (createdAssets.length > 0) {
-        set((state) => ({
-          assets: [...state.assets, ...createdAssets],
-        }));
-      }
-
-      return createdAssets;
-    } finally {
-      set((state) => {
-        const uploadingCount = Math.max(0, state.uploadingCount - 1);
-        return {
-          uploadingCount,
-          isUploading: uploadingCount > 0,
-        };
-      });
-    }
+  addLocalAssetWithFamily: async (
+    file: File,
+    creationMetadata?: Asset["creationMetadata"],
+    family?: Pick<AssetFamily, "id" | "compatibility">,
+  ) => {
+    const [asset] = await ingestLocalAssetsIntoStore(
+      get,
+      set,
+      [file],
+      creationMetadata,
+      family,
+    );
+    return asset ?? null;
   },
 
   upsertFamily: async (family: AssetFamily) => {
