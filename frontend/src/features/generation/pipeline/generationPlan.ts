@@ -295,7 +295,9 @@ export function buildSubmittedGeneration(
   if (response.comfyui_prompt) {
     generationMetadata.comfyuiPrompt = response.comfyui_prompt;
   }
-  if (response.comfyui_workflow) {
+  if (prepared.plan.workflow.graphData) {
+    generationMetadata.comfyuiWorkflow = prepared.plan.workflow.graphData;
+  } else if (response.comfyui_workflow) {
     generationMetadata.comfyuiWorkflow = response.comfyui_workflow;
   }
 

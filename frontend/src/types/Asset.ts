@@ -92,7 +92,7 @@ export interface GeneratedCreationMetadata {
   generationMaskAssetId?: string;
   /** The ComfyUI API prompt (node_id → {class_type, inputs}) that was executed. */
   comfyuiPrompt?: Record<string, unknown>;
-  /** The ComfyUI visual workflow graph (LiteGraph format) with resolved values. */
+  /** The authored ComfyUI visual workflow graph (LiteGraph format) used for editing/replay. */
   comfyuiWorkflow?: Record<string, unknown>;
 }
 

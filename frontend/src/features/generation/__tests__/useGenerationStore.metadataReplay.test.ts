@@ -156,7 +156,7 @@ describe("useGenerationStore metadata replay", () => {
     });
   });
 
-  it("prefers saved workflow source and replay snapshot data when restoring a generated workflow", async () => {
+  it("prefers the saved visual workflow snapshot and replay state when restoring a generated workflow", async () => {
     const sourceAsset: Asset = {
       id: "source-asset",
       hash: "hash-source",
@@ -224,12 +224,19 @@ describe("useGenerationStore metadata replay", () => {
         },
       },
     };
-
     useAssetStore.setState({ assets: [sourceAsset, generatedAsset] });
 
     vi.spyOn(comfyApi, "listWorkflows").mockResolvedValue([
       { id: "wan2_2_flf2v.json", name: "Wan2.2 I2V & FLF2V" },
     ]);
+    const getWorkflowContentSpy = vi
+      .spyOn(comfyApi, "getWorkflowContent")
+      .mockResolvedValue({
+        nodes: [
+          { id: 62, type: "LoadImage", widgets_values: ["source.png"] },
+          { id: 68, type: "LoadImage", widgets_values: ["example.png"] },
+        ],
+      });
     vi.spyOn(comfyApi, "getWorkflowRules").mockResolvedValue({
       workflow_id: "wan2_2_flf2v.json",
       has_sidecar: true,
@@ -251,7 +258,6 @@ describe("useGenerationStore metadata replay", () => {
       }),
       warnings: [],
     });
-    const getWorkflowContentSpy = vi.spyOn(comfyApi, "getWorkflowContent");
 
     await useGenerationStore
       .getState()
@@ -266,6 +272,9 @@ describe("useGenerationStore metadata replay", () => {
     expect(state.maskCropMode).toBe("full");
     expect(state.maskCropDilation).toBe(0.2);
     expect(state.workflowInputs[0]?.label).toBe("Source Image");
+    expect(state.syncedGraphData).toEqual({
+      nodes: [{ id: 145, type: "LoadImage", widgets_values: ["source.png"] }],
+    });
     expect(state.pendingReplayPanelState).toEqual({
       textValues: {
         "6:text": "hello from replay",
@@ -276,9 +285,9 @@ describe("useGenerationStore metadata replay", () => {
       widgetModes: {
         widget_mode_145_seed: "randomize",
       },
-      derivedWidgetValues: {
-        derived_widget_dual_sampler_denoise: "0.4",
-      },
+        derivedWidgetValues: {
+          derived_widget_dual_sampler_denoise: "0.4",
+        },
     });
     expect(getWorkflowContentSpy).not.toHaveBeenCalled();
   });

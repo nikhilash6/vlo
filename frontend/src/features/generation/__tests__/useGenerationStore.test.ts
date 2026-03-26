@@ -428,6 +428,22 @@ describe("useGenerationStore workflow rules", () => {
       selectedWorkflowId: "wf.json",
       availableWorkflows: [{ id: "wf.json", name: "Workflow Display Name" }],
       syncedWorkflow: {},
+      syncedGraphData: {
+        nodes: [
+          {
+            id: 67,
+            type: "WanFirstLastFrameToVideo",
+            inputs: [
+              { name: "start_image", link: 157 },
+              { name: "end_image", link: 158 },
+            ],
+          },
+        ],
+        links: [
+          [157, 62, 0, 67, 0, "IMAGE"],
+          [158, 68, 0, 67, 1, "IMAGE"],
+        ],
+      },
       workflowInputs: [
         {
           nodeId: "node_timeline",
@@ -485,6 +501,9 @@ describe("useGenerationStore workflow rules", () => {
       prompt_id: "prompt-meta",
       number: 1,
       node_errors: {},
+      comfyui_workflow: {
+        nodes: [{ id: 999, type: "ProjectedWorkflow" }],
+      },
     });
 
     const jobId = await useGenerationStore.getState().submitGeneration({});
@@ -510,6 +529,22 @@ describe("useGenerationStore workflow rules", () => {
           parentAssetId: "asset-1",
         },
       ],
+      comfyuiWorkflow: {
+        nodes: [
+          {
+            id: 67,
+            type: "WanFirstLastFrameToVideo",
+            inputs: [
+              { name: "start_image", link: 157 },
+              { name: "end_image", link: 158 },
+            ],
+          },
+        ],
+        links: [
+          [157, 62, 0, 67, 0, "IMAGE"],
+          [158, 68, 0, 67, 1, "IMAGE"],
+        ],
+      },
       replayState: {
         version: 1,
         workflowSourceId: "wf.json",

@@ -520,19 +520,58 @@ export function buildWorkflowStoreState(
         const state = get();
         const workflow =
           metadata.comfyuiPrompt ?? metadata.comfyuiWorkflow ?? null;
-        const graphData =
+        let graphData =
           metadata.comfyuiWorkflow ?? metadata.comfyuiPrompt ?? null;
         const replayState = metadata.replayState ?? null;
         const preferredWorkflowSourceId =
           replayState?.workflowSourceId ?? metadata.workflowSourceId ?? null;
+        let availableWorkflows = state.availableWorkflows;
+        let preferredRules = EMPTY_WORKFLOW_RULES;
+        let preferredRulesWarnings: WorkflowRuleWarning[] = [];
+        let preferredRulesSourceId: string | null = null;
 
-        if (workflow && graphData) {
-          const resolvedMatch = await resolveMetadataWorkflowMatch(
-            graphData,
+        if (preferredWorkflowSourceId) {
+          const resolvedPreferredSource = await resolveMetadataWorkflowMatch(
+            graphData ?? workflow ?? {},
             state.availableWorkflows,
             preferredWorkflowSourceId,
           );
+          availableWorkflows = resolvedPreferredSource.availableWorkflows;
+          preferredRules = resolvedPreferredSource.rules;
+          preferredRulesWarnings = resolvedPreferredSource.rulesWarnings;
+          preferredRulesSourceId = resolvedPreferredSource.rulesSourceId;
+
+          if (!graphData) {
+            try {
+              graphData = await comfyApi.getWorkflowContent(preferredWorkflowSourceId);
+            } catch (error) {
+              console.warn(
+                "[Generation] Failed to load authored workflow graph for metadata replay:",
+                preferredWorkflowSourceId,
+                error,
+              );
+            }
+          }
+        }
+
+        if (workflow && graphData) {
           const replayWorkflowInputs = parseReplayWorkflowInputs(replayState);
+          let resolvedRules = preferredRules;
+          let resolvedRulesWarnings = preferredRulesWarnings;
+          let resolvedRulesSourceId = preferredRulesSourceId;
+
+          if (!preferredWorkflowSourceId) {
+            const resolvedMatch = await resolveMetadataWorkflowMatch(
+              graphData,
+              availableWorkflows,
+              null,
+            );
+            availableWorkflows = resolvedMatch.availableWorkflows;
+            resolvedRules = resolvedMatch.rules;
+            resolvedRulesWarnings = resolvedMatch.rulesWarnings;
+            resolvedRulesSourceId = resolvedMatch.rulesSourceId;
+          }
+
           const nextTempWorkflow: TempWorkflow = {
             workflow,
             graphData,
@@ -544,15 +583,15 @@ export function buildWorkflowStoreState(
                     state.inputNodeMap,
                   ),
             name: LOADED_WORKFLOW_DISPLAY_NAME,
-            rules: resolvedMatch.rules,
-            rulesSourceId: resolvedMatch.rulesSourceId,
-            rulesWarnings: resolvedMatch.rulesWarnings,
+            rules: resolvedRules,
+            rulesSourceId: resolvedRulesSourceId,
+            rulesWarnings: resolvedRulesWarnings,
           };
 
           set({
             tempWorkflow: nextTempWorkflow,
             availableWorkflows: upsertTempWorkflowOption(
-              resolvedMatch.availableWorkflows,
+              availableWorkflows,
               nextTempWorkflow,
             ),
           });
