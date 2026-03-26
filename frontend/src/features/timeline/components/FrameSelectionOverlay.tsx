@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { Paper, Button, Typography, Box } from "@mui/material";
 import { useExtractStore } from "../../player/useExtractStore";
+import { stopOverlayEventPropagation } from "../utils/stopOverlayEventPropagation";
 
 export function FrameSelectionOverlay() {
   const frameSelectionMode = useExtractStore((s) => s.frameSelectionMode);
@@ -23,10 +24,9 @@ export function FrameSelectionOverlay() {
 
   return (
     <Paper
-      onPointerDown={(e) => {
-        // Prevent clicking through the overlay into the timeline
-        e.stopPropagation();
-      }}
+      onClick={stopOverlayEventPropagation}
+      onMouseDown={stopOverlayEventPropagation}
+      onPointerDown={stopOverlayEventPropagation}
       sx={{
         position: "fixed",
         bottom: 16,

@@ -18,6 +18,7 @@ import {
   snapFrameCountToStep,
   snapTickToFrame,
 } from "../../timelineSelection";
+import { stopOverlayEventPropagation } from "../utils/stopOverlayEventPropagation";
 
 export interface SelectionOverlayProps {
   maxSelectionTicks?: number | null;
@@ -409,6 +410,9 @@ export function SelectionOverlay({
       />
 
       <Paper
+        onClick={stopOverlayEventPropagation}
+        onMouseDown={stopOverlayEventPropagation}
+        onPointerDown={stopOverlayEventPropagation}
         sx={{
           position: "fixed",
           bottom: 16,

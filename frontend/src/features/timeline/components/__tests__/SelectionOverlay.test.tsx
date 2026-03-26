@@ -1,10 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
 import { SelectionOverlay } from "../SelectionOverlay";
 import { useExtractStore } from "../../../player/useExtractStore";
 import { useTimelineSelectionStore } from "../../../timelineSelection";
 import { useTimelineViewStore } from "../../hooks/useTimelineViewStore";
 import { useProjectStore } from "../../../project";
+
+const onConfirmSelection = vi.fn();
+const setOnConfirmSelection = vi.fn();
 
 // Mock the dependencies
 vi.mock("../../../player/useExtractStore", () => {
@@ -61,8 +64,8 @@ describe("SelectionOverlay", () => {
     (useExtractStore as unknown as Mock).mockImplementation(
       (selector: unknown) => {
         const state = {
-          onConfirmSelection: vi.fn(),
-          setOnConfirmSelection: vi.fn(),
+          onConfirmSelection,
+          setOnConfirmSelection,
         };
         if (typeof selector === "function") {
           return selector(state);
@@ -73,7 +76,7 @@ describe("SelectionOverlay", () => {
 
     (useExtractStore as unknown as { getState: Mock }).getState.mockReturnValue(
       {
-        setOnConfirmSelection: vi.fn(),
+        setOnConfirmSelection,
       },
     );
 
@@ -153,6 +156,9 @@ describe("SelectionOverlay", () => {
     (useProjectStore.getState as Mock).mockReturnValue({
       config: { fps: 60 },
     });
+
+    onConfirmSelection.mockReset();
+    setOnConfirmSelection.mockReset();
   });
 
   it("should render selection handles and confirm button when in selection mode", () => {
@@ -182,5 +188,20 @@ describe("SelectionOverlay", () => {
     }
 
     expect(hasColResize).toBe(true);
+  });
+
+  it("does not bubble confirm clicks to the timeline container", () => {
+    const parentClick = vi.fn();
+
+    render(
+      <div onClick={parentClick}>
+        <SelectionOverlay />
+      </div>,
+    );
+
+    fireEvent.click(screen.getByText("Confirm Selection"));
+
+    expect(onConfirmSelection).toHaveBeenCalledTimes(1);
+    expect(parentClick).not.toHaveBeenCalled();
   });
 });
