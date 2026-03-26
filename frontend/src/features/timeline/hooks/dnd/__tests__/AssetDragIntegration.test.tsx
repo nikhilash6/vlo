@@ -86,8 +86,10 @@ const TestDragApp = ({
     handleAssetDragMove,
     handleAssetDragEnd,
     scrollContainerRef,
-    insertGapIndex,
   } = useAssetDrag();
+  const insertGapIndex = useInteractionStore(
+    (state) => state.externalInsertGapIndex,
+  );
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 0 } }),
@@ -144,7 +146,11 @@ describe("Asset Drag Integration", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    useInteractionStore.setState({ activeClip: null, operation: null });
+    useInteractionStore.setState({
+      activeClip: null,
+      operation: null,
+      externalInsertGapIndex: null,
+    });
     useTimelineStore.setState({
       clips: [],
       tracks: [

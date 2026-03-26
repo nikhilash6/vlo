@@ -25,6 +25,12 @@ const TIMELINE_HEIGHT = 280;
 const ASSET_DRAG_ACTIVATION_DISTANCE_PX = 1;
 import { ProjectSettingsMenu } from "./ProjectSettingsMenu";
 
+const ASSET_AUTO_SCROLL = {
+  acceleration: 50,
+  interval: 5,
+  layoutShiftCompensation: false,
+} as const;
+
 interface EditorRegionProps {
   area: string;
   blocked: boolean;
@@ -98,7 +104,6 @@ export function EditorLayout() {
     handleAssetDragStart,
     handleAssetDragMove,
     handleAssetDragEnd,
-    insertGapIndex,
     scrollContainerRef,
   } = useAssetDrag();
 
@@ -147,11 +152,7 @@ export function EditorLayout() {
       onDragStart={handleAssetDragStart}
       onDragMove={handleAssetDragMove}
       onDragEnd={handleAssetDragEnd}
-      autoScroll={{
-        acceleration: 50,
-        interval: 5,
-        layoutShiftCompensation: false,
-      }}
+      autoScroll={ASSET_AUTO_SCROLL}
     >
       <CssBaseline />
       <Box
@@ -250,10 +251,7 @@ export function EditorLayout() {
             flexDirection: "column",
           }}
         >
-          <Timeline
-            scrollContainerRef={scrollContainerRef}
-            insertGapIndex={insertGapIndex}
-          />
+          <Timeline scrollContainerRef={scrollContainerRef} />
         </Box>
       </Box>
 

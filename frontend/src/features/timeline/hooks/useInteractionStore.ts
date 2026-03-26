@@ -16,6 +16,7 @@ interface InteractionState {
   operation: InteractionOperation | null;
   currentDeltaX: number;
   currentDeltaY: number;
+  externalInsertGapIndex: number | null;
 
   // NEW: Track if we are visually "over" the timeline area
   isOverTimeline: boolean;
@@ -41,6 +42,7 @@ interface InteractionState {
   updateDelta: (deltaX: number, deltaY?: number) => void;
   // NEW
   setIsOverTimeline: (isOver: boolean) => void;
+  setExternalInsertGapIndex: (index: number | null) => void;
   updateProjectedEndTime: (time: number | null) => void;
   toggleSnappingEnabled: () => void;
   setSnapPreview: (preview: SnapPreview) => void;
@@ -79,6 +81,7 @@ export const useInteractionStore = create<InteractionState>((set) => ({
   operation: null,
   currentDeltaX: 0,
   currentDeltaY: 0,
+  externalInsertGapIndex: null,
   isOverTimeline: false,
   constraints: null,
   projectedEndTime: null,
@@ -94,6 +97,7 @@ export const useInteractionStore = create<InteractionState>((set) => ({
       operation,
       currentDeltaX: 0,
       currentDeltaY: 0,
+      externalInsertGapIndex: null,
       isOverTimeline: false,
       constraints,
       projectedEndTime: null,
@@ -106,6 +110,7 @@ export const useInteractionStore = create<InteractionState>((set) => ({
     set({ currentDeltaX: deltaX, currentDeltaY: deltaY }),
 
   setIsOverTimeline: (isOver) => set({ isOverTimeline: isOver }),
+  setExternalInsertGapIndex: (index) => set({ externalInsertGapIndex: index }),
   updateProjectedEndTime: (time) => set({ projectedEndTime: time }),
   toggleSnappingEnabled: () =>
     set((state) => ({
@@ -158,6 +163,7 @@ export const useInteractionStore = create<InteractionState>((set) => ({
       operation: null,
       currentDeltaX: 0,
       currentDeltaY: 0,
+      externalInsertGapIndex: null,
       isOverTimeline: false,
       constraints: null,
       projectedEndTime: null,

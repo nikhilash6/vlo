@@ -22,12 +22,34 @@ import {
   snapTickToFrame,
 } from "../../../timelineSelection";
 
+type InsertGapMode = "local" | "external";
+
 export const useClipMove = (
   scrollContainerRef: React.RefObject<HTMLDivElement | null>,
+  insertGapMode: InsertGapMode = "local",
 ) => {
   // We access stores imperatively to avoid re-rendering the EditorLayout
   // every time the timeline state changes (which would happen if we subscribed here).
-  const [insertGapIndex, setInsertGapIndex] = useState<number | null>(null);
+  const [localInsertGapIndex, setLocalInsertGapIndex] = useState<number | null>(
+    null,
+  );
+
+  const getInsertGapIndex = () =>
+    insertGapMode === "external"
+      ? useInteractionStore.getState().externalInsertGapIndex
+      : localInsertGapIndex;
+
+  const setInsertGapIndex = (index: number | null) => {
+    if (insertGapMode === "external") {
+      const interaction = useInteractionStore.getState();
+      if (interaction.externalInsertGapIndex !== index) {
+        interaction.setExternalInsertGapIndex(index);
+      }
+      return;
+    }
+
+    setLocalInsertGapIndex((current) => (current === index ? current : index));
+  };
 
   // Actions can be retrieved once (they are stable) or via getState()
   const { insertTrack, updateClipPosition, addClip } =
@@ -159,8 +181,10 @@ export const useClipMove = (
 
   // 1. Handle Visual Gap Feedback (Interstitial)
   const handleMove = (event: DragMoveEvent) => {
+    const currentInsertGapIndex = getInsertGapIndex();
+
     if (useTimelineStore.getState().selectedClipIds.length > 1) {
-      if (insertGapIndex !== null) setInsertGapIndex(null);
+      if (currentInsertGapIndex !== null) setInsertGapIndex(null);
       useInteractionStore.getState().clearSnapPreview();
       return;
     }
@@ -353,10 +377,11 @@ export const useClipMove = (
     // We prioritize the gap index calculated during the move phase
     let targetTrackId = "";
     let shouldInsert = false;
+    const currentInsertGapIndex = getInsertGapIndex();
 
-    if (insertGapIndex !== null) {
+    if (currentInsertGapIndex !== null) {
       // Case A: Insertion
-      targetTrackId = insertTrack(insertGapIndex);
+      targetTrackId = insertTrack(currentInsertGapIndex);
       shouldInsert = true;
     } else {
       // Case B: Drop on existing track
@@ -521,7 +546,7 @@ export const useClipMove = (
   };
 
   return {
-    insertGapIndex,
+    insertGapIndex: getInsertGapIndex(),
     setInsertGapIndex,
     handleMove,
     handleEnd,

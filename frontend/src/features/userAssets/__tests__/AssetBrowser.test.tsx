@@ -119,6 +119,7 @@ describe("AssetBrowser Component", () => {
       getInput: vi.fn(),
       addLocalAsset: vi.fn(),
       addLocalAssets: mockAddLocalAssets,
+      upsertFamily: vi.fn(),
       updateAsset: vi.fn(),
       scanForNewAssets: vi.fn(),
       _ingestAsset: vi.fn(),

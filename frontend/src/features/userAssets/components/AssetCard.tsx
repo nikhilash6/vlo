@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   Box,
   IconButton,
@@ -139,6 +139,42 @@ const MetadataArea = styled(Box, {
     : {}),
 }));
 
+const ContentRoot = styled(Box)({
+  height: "100%",
+});
+
+const EMPTY_PREVIEW_STYLES = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "100%",
+  height: "100%",
+} as const;
+
+const MEDIA_ACTION_STYLES = {
+  color: "white",
+} as const;
+
+const DURATION_TEXT_STYLES = {
+  fontSize: "0.6rem",
+  color: "white",
+} as const;
+
+const TIMESTAMP_STYLES = {
+  fontSize: "0.65rem",
+  color: "#aaa",
+} as const;
+
+const MENU_ANCHOR_ORIGIN = {
+  vertical: "bottom",
+  horizontal: "right",
+} as const;
+
+const MENU_TRANSFORM_ORIGIN = {
+  vertical: "top",
+  horizontal: "right",
+} as const;
+
 // Helper to format seconds into MM:SS
 const formatDuration = (seconds?: number) => {
   if (!seconds) return "";
@@ -151,7 +187,7 @@ function canRegenerateFromMetadata(asset: Asset): boolean {
   return canRegenerateFromAssetMetadata(asset.creationMetadata);
 }
 
-function AssetCardComponent({
+function AssetCardContent({
   asset,
   onShowFamily,
   layout = "default",
@@ -160,35 +196,8 @@ function AssetCardComponent({
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
 
-  const draggableData = React.useMemo(
-    () => ({
-      type: "asset",
-      clip: createClipFromAsset(asset),
-      asset, // PASS ASSET FOR OVERLAY
-    }),
-    [asset],
-  );
-
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `asset_${asset.id}`,
-    data: draggableData,
-  });
-
   const displayImage =
     asset.thumbnail || (asset.type === "image" ? asset.src : null);
-
-  const handlePlayToggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    if (asset.type === "video") {
-      setIsPreviewOpen(true);
-      return;
-    }
-
-    if (asset.type === "audio") {
-      setIsPlaying((prev) => !prev);
-    }
-  };
 
   const deleteAsset = useAssetStore((state) => state.deleteAsset);
   const updateAsset = useAssetStore((state) => state.updateAsset);
@@ -198,17 +207,24 @@ function AssetCardComponent({
   const canShowFamily = Boolean(asset.familyId && onShowFamily);
   const isMenuOpen = Boolean(menuAnchorEl);
 
-  function handleOpenMenu(event: React.MouseEvent<HTMLButtonElement>) {
-    event.stopPropagation();
-    event.preventDefault();
-    setMenuAnchorEl(event.currentTarget);
-  }
+  const handleMouseLeave = useCallback(() => {
+    setIsPlaying(false);
+  }, []);
 
-  function handleCloseMenu() {
+  const handleOpenMenu = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      event.preventDefault();
+      setMenuAnchorEl(event.currentTarget);
+    },
+    [],
+  );
+
+  const handleCloseMenu = useCallback(() => {
     setMenuAnchorEl(null);
-  }
+  }, []);
 
-  function handleDelete() {
+  const handleDelete = useCallback(() => {
     handleCloseMenu();
     const confirmMessage =
       timelineClipCount > 0
@@ -218,18 +234,18 @@ function AssetCardComponent({
     if (window.confirm(confirmMessage)) {
       void deleteAsset(asset.id);
     }
-  }
+  }, [asset.id, deleteAsset, handleCloseMenu, timelineClipCount]);
 
-  function handleSendToTimeline() {
+  const handleSendToTimeline = useCallback(() => {
     handleCloseMenu();
     if (!timelineSelection) {
       return;
     }
 
     insertAssetAtTime(asset, timelineSelection.start);
-  }
+  }, [asset, handleCloseMenu, timelineSelection]);
 
-  async function handleRegenerate() {
+  const handleRegenerate = useCallback(async () => {
     handleCloseMenu();
 
     try {
@@ -241,34 +257,51 @@ function AssetCardComponent({
           : "Failed to load workflow metadata";
       window.alert(message);
     }
-  }
+  }, [asset, handleCloseMenu]);
 
-  function handleOpenFamily(event: React.MouseEvent<HTMLButtonElement>) {
-    event.stopPropagation();
-    event.preventDefault();
-    if (asset.familyId && onShowFamily) {
-      onShowFamily(asset.familyId);
-    }
-  }
+  const handleOpenFamily = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      event.preventDefault();
+      if (asset.familyId && onShowFamily) {
+        onShowFamily(asset.familyId);
+      }
+    },
+    [asset.familyId, onShowFamily],
+  );
 
-  function handleFavouriteToggle(event: React.MouseEvent<HTMLButtonElement>) {
-    event.stopPropagation();
-    event.preventDefault();
-    void updateAsset(asset.id, { favourite: !asset.favourite });
-  }
+  const handleFavouriteToggle = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      event.preventDefault();
+      void updateAsset(asset.id, { favourite: !asset.favourite });
+    },
+    [asset.favourite, asset.id, updateAsset],
+  );
+
+  const handlePlayToggle = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation();
+
+      if (asset.type === "video") {
+        setIsPreviewOpen(true);
+        return;
+      }
+
+      if (asset.type === "audio") {
+        setIsPlaying((prev) => !prev);
+      }
+    },
+    [asset.type],
+  );
+
+  const handlePreviewClose = useCallback(() => {
+    setIsPreviewOpen(false);
+  }, []);
 
   return (
     <>
-      <StyledCard
-        ref={setNodeRef}
-        {...listeners}
-        {...attributes}
-        elevation={2}
-        isDragging={isDragging}
-        layout={layout}
-        onMouseLeave={() => setIsPlaying(false)}
-        data-testid="asset-card"
-      >
+      <ContentRoot onMouseLeave={handleMouseLeave}>
         {/* Thumbnail / Video Area */}
         <ThumbnailContainer layout={layout}>
           {displayImage ? (
@@ -278,15 +311,7 @@ function AssetCardComponent({
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
           ) : (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: "100%",
-                height: "100%",
-              }}
-            >
+            <Box sx={EMPTY_PREVIEW_STYLES}>
               {asset.type === "audio" ? (
                 <MusicNoteIcon sx={{ fontSize: 40, color: "#888" }} />
               ) : (
@@ -315,7 +340,7 @@ function AssetCardComponent({
                       ? "Pause audio"
                       : "Play audio"
                 }
-                sx={{ color: "white" }}
+                sx={MEDIA_ACTION_STYLES}
               >
                 {asset.type === "audio" && isPlaying ? (
                   <PauseCircleOutlineIcon sx={{ fontSize: 32 }} />
@@ -335,7 +360,7 @@ function AssetCardComponent({
             >
               <Typography
                 variant="caption"
-                sx={{ fontSize: "0.6rem", color: "white" }}
+                sx={DURATION_TEXT_STYLES}
               >
                 {formatDuration(asset.duration)}
               </Typography>
@@ -384,37 +409,39 @@ function AssetCardComponent({
         >
           <MoreVertIcon fontSize="small" />
         </StyledMenuButton>
-        <Menu
-          anchorEl={menuAnchorEl}
-          open={isMenuOpen}
-          onClose={handleCloseMenu}
-          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-          transformOrigin={{ vertical: "top", horizontal: "right" }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          {canRegenerate ? (
-            <MenuItem onClick={() => void handleRegenerate()}>
+        {isMenuOpen ? (
+          <Menu
+            anchorEl={menuAnchorEl}
+            open
+            onClose={handleCloseMenu}
+            anchorOrigin={MENU_ANCHOR_ORIGIN}
+            transformOrigin={MENU_TRANSFORM_ORIGIN}
+            onClick={(event) => event.stopPropagation()}
+          >
+            {canRegenerate ? (
+              <MenuItem onClick={() => void handleRegenerate()}>
+                <ListItemIcon>
+                  <ReplayIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Regenerate</ListItemText>
+              </MenuItem>
+            ) : null}
+            {timelineSelection ? (
+              <MenuItem onClick={handleSendToTimeline}>
+                <ListItemIcon>
+                  <TimelineIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Send to Timeline</ListItemText>
+              </MenuItem>
+            ) : null}
+            <MenuItem onClick={handleDelete}>
               <ListItemIcon>
-                <ReplayIcon fontSize="small" />
+                <DeleteIcon fontSize="small" />
               </ListItemIcon>
-              <ListItemText>Regenerate</ListItemText>
+              <ListItemText>Delete</ListItemText>
             </MenuItem>
-          ) : null}
-          {timelineSelection ? (
-            <MenuItem onClick={handleSendToTimeline}>
-              <ListItemIcon>
-                <TimelineIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Send to Timeline</ListItemText>
-            </MenuItem>
-          ) : null}
-          <MenuItem onClick={handleDelete}>
-            <ListItemIcon>
-              <DeleteIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Delete</ListItemText>
-          </MenuItem>
-        </Menu>
+          </Menu>
+        ) : null}
 
         {/* Metadata Area */}
         <MetadataArea layout={layout}>
@@ -434,7 +461,7 @@ function AssetCardComponent({
           <Typography
             variant="caption"
             display="block"
-            sx={{ fontSize: "0.65rem", color: "#aaa" }}
+            sx={TIMESTAMP_STYLES}
           >
             {asset.createdAt
               ? new Date(asset.createdAt).toLocaleTimeString()
@@ -442,16 +469,56 @@ function AssetCardComponent({
             {/* Fallback added in case createdAt is missing in legacy data */}
           </Typography>
         </MetadataArea>
-      </StyledCard>
+      </ContentRoot>
 
-      {asset.type === "video" ? (
+      {asset.type === "video" && isPreviewOpen ? (
         <AssetPreviewDialog
           asset={asset}
-          open={isPreviewOpen}
-          onClose={() => setIsPreviewOpen(false)}
+          open
+          onClose={handlePreviewClose}
         />
       ) : null}
     </>
+  );
+}
+
+const MemoizedAssetCardContent = React.memo(AssetCardContent);
+
+function AssetCardComponent({
+  asset,
+  onShowFamily,
+  layout = "default",
+}: AssetCardProps) {
+  const draggableData = React.useMemo(
+    () => ({
+      type: "asset",
+      clip: createClipFromAsset(asset),
+      asset,
+    }),
+    [asset],
+  );
+
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `asset_${asset.id}`,
+    data: draggableData,
+  });
+
+  return (
+    <StyledCard
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      elevation={2}
+      isDragging={isDragging}
+      layout={layout}
+      data-testid="asset-card"
+    >
+      <MemoizedAssetCardContent
+        asset={asset}
+        onShowFamily={onShowFamily}
+        layout={layout}
+      />
+    </StyledCard>
   );
 }
 

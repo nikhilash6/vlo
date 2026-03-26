@@ -62,12 +62,12 @@ const scrollStyles = {
 
 interface TimelineContainerProps {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
-  insertGapIndex: number | null; // This comes from the External Asset Drag
+  insertGapIndex?: number | null;
 }
 
 function TimelineContainerComponent({
   scrollContainerRef,
-  insertGapIndex: externalInsertGapIndex,
+  insertGapIndex: externalInsertGapIndexProp,
 }: TimelineContainerProps) {
   const {
     tracks,
@@ -121,15 +121,25 @@ function TimelineContainerComponent({
   } = useTimelineInternalDrag(scrollContainerRef);
 
   // --- INTERACTION STATE (For expanding timeline during drag) ---
-  const { interactionActiveClip, interactionOperation, interactionDeltaX } =
+  const {
+    interactionActiveClip,
+    interactionOperation,
+    interactionDeltaX,
+    externalInsertGapIndex,
+  } =
     useInteractionStore(
       useShallow((state) => ({
         interactionActiveClip: state.activeClip,
         interactionOperation: state.operation,
         interactionDeltaX: state.currentDeltaX,
+        externalInsertGapIndex: state.externalInsertGapIndex,
       })),
     );
   const interactionSnapTick = useInteractionStore((state) => state.snapTick);
+  const resolvedExternalInsertGapIndex =
+    externalInsertGapIndexProp !== undefined
+      ? externalInsertGapIndexProp
+      : externalInsertGapIndex;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -408,7 +418,7 @@ function TimelineContainerComponent({
               gapIndex={
                 internalInsertGapIndex !== null
                   ? internalInsertGapIndex
-                  : externalInsertGapIndex
+                  : resolvedExternalInsertGapIndex
               }
               trackHeight={TRACK_HEIGHT}
             />

@@ -58,6 +58,7 @@ function makeContext(preparedMaskFile: File | null): FrontendPostprocessContext 
       workflowName: "Mask Workflow",
       inputs: [],
     },
+    autoFamilyRequestKey: null,
     previewFrameFiles: [],
     preparedMaskFile,
     fetchedFiles: [],
