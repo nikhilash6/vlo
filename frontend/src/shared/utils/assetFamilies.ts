@@ -87,7 +87,7 @@ export function doesAssetMatchFamilyCompatibility(
   asset: Pick<Asset, "type" | "duration" | "fps">,
   compatibility: AssetFamilyCompatibility | null | undefined,
 ): boolean {
-  if (!isAssetFamilyCompatibilityComplete(compatibility)) {
+  if (!compatibility) {
     return false;
   }
 

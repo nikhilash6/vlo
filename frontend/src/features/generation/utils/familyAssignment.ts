@@ -3,10 +3,7 @@ import type {
   AssetFamilyCompatibility,
   GeneratedCreationInput,
 } from "../../../types/Asset";
-import {
-  areAssetFamilyCompatibilitiesEqual,
-  isAssetFamilyCompatibilityComplete,
-} from "../../../shared/utils/assetFamilies";
+import { areAssetFamilyCompatibilitiesEqual } from "../../../shared/utils/assetFamilies";
 import {
   computeXxhash64Bytes,
   computeXxhash64String,
@@ -196,7 +193,7 @@ export async function buildGenerationFamilyAutoMatchKey(
   requestKey: string | null | undefined,
   compatibility: AssetFamilyCompatibility | null | undefined,
 ): Promise<string | null> {
-  if (!requestKey || !isAssetFamilyCompatibilityComplete(compatibility)) {
+  if (!requestKey || !compatibility) {
     return null;
   }
 
@@ -214,7 +211,7 @@ export function resolveFamilyForGenerationMatchKey(
   compatibility: AssetFamilyCompatibility | null | undefined,
   now = Date.now(),
 ): AssetFamily | undefined {
-  if (!matchKey || !isAssetFamilyCompatibilityComplete(compatibility)) {
+  if (!matchKey || !compatibility) {
     return undefined;
   }
 

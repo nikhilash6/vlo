@@ -916,4 +916,58 @@ describe("generation pipeline", () => {
       createdFamily?.id,
     );
   });
+
+  it("creates an auto-family even when output compatibility is partial", async () => {
+    const requestKey = "generation-family-request:v1:partial-family";
+    const output = new File(["video"], "output.mp4", {
+      type: "video/mp4",
+    });
+
+    mockInspectAssetFamilyCompatibility.mockResolvedValue({
+      assetType: "video",
+      durationMs: 5000,
+      fpsMilli: null,
+    });
+    mockFetchOutputAsFile.mockResolvedValue(output);
+    mockAddLocalAssetWithFamily.mockResolvedValue({ id: "asset-partial-family" });
+
+    await frontendPostprocess(
+      [
+        {
+          filename: "output.mp4",
+          subfolder: "",
+          type: "output",
+          viewUrl: "/output.mp4",
+        },
+      ],
+      {
+        postprocessing: {
+          mode: "none",
+          panel_preview: "raw_outputs",
+          on_failure: "fallback_raw",
+        },
+        aspectRatioProcessing: null,
+        autoFamilyRequestKey: requestKey,
+        generationMetadata: makeGenerationMetadata(),
+        previewFrameFiles: null,
+      },
+    );
+
+    expect(mockAddLocalAssetWithFamily).toHaveBeenCalledWith(
+      output,
+      makeGenerationMetadata(),
+      expect.objectContaining({
+        compatibility: {
+          assetType: "video",
+          durationMs: 5000,
+          fpsMilli: null,
+        },
+      }),
+    );
+    expect(mockUpsertFamily).toHaveBeenCalledWith(
+      expect.objectContaining({
+        representativeAssetId: "asset-partial-family",
+      }),
+    );
+  });
 });

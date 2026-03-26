@@ -249,7 +249,7 @@ describe("familyAssignment", () => {
     expect(left).not.toBe(right);
   });
 
-  it("does not create or resolve auto-families for incomplete compatibility", async () => {
+  it("creates and resolves auto-families for partial compatibility", async () => {
     const requestKey = await buildGenerationFamilyRequestKey({
       workflow: makeWorkflow(1),
       workflowInputs,
@@ -262,19 +262,26 @@ describe("familyAssignment", () => {
       fpsMilli: null,
     };
 
-    expect(
-      await buildGenerationFamilyAutoMatchKey(
-        requestKey,
-        incompleteCompatibility,
-      ),
-    ).toBeNull();
-    expect(
-      resolveFamilyForGenerationMatchKey(
-        [],
-        "generation-family:v1:test",
-        incompleteCompatibility,
-      ),
-    ).toBeUndefined();
+    const matchKey = await buildGenerationFamilyAutoMatchKey(
+      requestKey,
+      incompleteCompatibility,
+    );
+    const family = resolveFamilyForGenerationMatchKey(
+      [],
+      matchKey,
+      incompleteCompatibility,
+      123,
+    );
+
+    expect(matchKey).toEqual(expect.stringContaining("generation-family:v1:"));
+    expect(family).toEqual(
+      expect.objectContaining({
+        autoMatchKeys: [matchKey],
+        compatibility: incompleteCompatibility,
+        createdAt: 123,
+        updatedAt: 123,
+      }),
+    );
   });
 
   it("reuses an existing family id when the match key already exists", async () => {

@@ -267,6 +267,64 @@ describe("useAssetStore", () => {
     expect(useAssetStore.getState().families).toEqual([]);
   });
 
+  it("fetchAssets preserves matching families when compatibility is partial", async () => {
+    (useProjectStore.getState as Mock).mockReturnValue({ rootHandle: {} });
+
+    const mockProjectJson = JSON.stringify({
+      assets: {
+        "asset-video": {
+          id: "asset-video",
+          name: "clip.mp4",
+          hash: "video-hash",
+          src: "clip.mp4",
+          type: "video",
+          duration: 5,
+          familyId: "family-1",
+          createdAt: 1,
+        },
+      },
+      assetFamilies: {
+        "family-1": {
+          id: "family-1",
+          representativeAssetId: "asset-video",
+          autoMatchKeys: ["generation-family:v1:video"],
+          compatibility: {
+            assetType: "video",
+            durationMs: 5000,
+            fpsMilli: null,
+          },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      },
+    });
+
+    (fileSystemService.readFile as Mock).mockImplementation(async (path: string) => {
+      if (path === ".vloproject/project.json") {
+        return { text: async () => mockProjectJson };
+      }
+      if (path === "clip.mp4") {
+        return new File(["video"], "clip.mp4", { type: "video/mp4" });
+      }
+      throw new Error("File not found: " + path);
+    });
+
+    await useAssetStore.getState().fetchAssets();
+
+    expect(useAssetStore.getState().assets).toEqual([
+      expect.objectContaining({
+        id: "asset-video",
+        familyId: "family-1",
+      }),
+    ]);
+    expect(useAssetStore.getState().families).toEqual([
+      expect.objectContaining({
+        id: "family-1",
+        representativeAssetId: "asset-video",
+      }),
+    ]);
+  });
+
   it("updateAsset persists favourite changes to project.json", async () => {
     (useProjectStore.getState as Mock).mockReturnValue({ rootHandle: {} });
 

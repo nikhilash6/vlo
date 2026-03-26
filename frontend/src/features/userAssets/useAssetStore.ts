@@ -1,10 +1,7 @@
 import { create } from "zustand";
 import { Input, UrlSource, BlobSource, ALL_FORMATS } from "mediabunny";
 import type { Asset, AssetFamily } from "../../types/Asset";
-import {
-  doesAssetBelongToFamily,
-  isAssetFamilyCompatibilityComplete,
-} from "../../shared/utils/assetFamilies";
+import { doesAssetBelongToFamily } from "../../shared/utils/assetFamilies";
 import {
   useProjectStore,
   fileSystemService,
@@ -124,10 +121,6 @@ function reconcileFamiliesWithAssets(
   updatedAt = Date.now(),
 ): AssetFamily[] {
   return families.flatMap((family) => {
-    if (!isAssetFamilyCompatibilityComplete(family.compatibility)) {
-      return [];
-    }
-
     const representativeAssetId = pickRepresentativeAssetIdForFamily(assets, family);
     if (!representativeAssetId) {
       return [];
@@ -152,15 +145,8 @@ function sanitizeAssetFamilyState(
   families: readonly AssetFamily[],
   updatedAt = Date.now(),
 ): { assets: Asset[]; families: AssetFamily[] } {
-  const compatibleFamilies = families.filter((family) =>
-    isAssetFamilyCompatibilityComplete(family.compatibility),
-  );
-  const nextAssets = clearInvalidFamilyReferences(assets, compatibleFamilies);
-  const nextFamilies = reconcileFamiliesWithAssets(
-    nextAssets,
-    compatibleFamilies,
-    updatedAt,
-  );
+  const nextAssets = clearInvalidFamilyReferences(assets, families);
+  const nextFamilies = reconcileFamiliesWithAssets(nextAssets, families, updatedAt);
 
   return {
     assets: nextAssets,

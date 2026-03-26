@@ -1,9 +1,6 @@
 import type { Input } from "mediabunny";
 import type { Asset, AssetFamily, AssetFamilyCompatibility } from "../../types/Asset";
-import {
-  buildAssetFamilyCompatibility,
-  isAssetFamilyCompatibilityComplete,
-} from "../../shared/utils/assetFamilies";
+import { buildAssetFamilyCompatibility } from "../../shared/utils/assetFamilies";
 import { useAssetStore } from "./useAssetStore";
 import { mediaProcessingService } from "./services/MediaProcessingService";
 
@@ -112,30 +109,24 @@ export async function inspectAssetFamilyCompatibility(
   }
 
   if (candidateFile.type.startsWith("image/")) {
-    const compatibility = buildAssetFamilyCompatibility({
+    return buildAssetFamilyCompatibility({
       type: "image",
       duration: 5,
     });
-    return isAssetFamilyCompatibilityComplete(compatibility)
-      ? compatibility
-      : null;
   }
 
   if (candidateFile.type.startsWith("audio/")) {
     const duration = await mediaProcessingService.computeDuration(candidateFile);
-    const compatibility = buildAssetFamilyCompatibility({
+    return buildAssetFamilyCompatibility({
       type: "audio",
       duration,
     });
-    return isAssetFamilyCompatibilityComplete(compatibility)
-      ? compatibility
-      : null;
   }
 
   if (candidateFile.type.startsWith("video/")) {
     const metadata =
       await mediaProcessingService.getVideoTimingMetadata(candidateFile);
-    const compatibility = buildAssetFamilyCompatibility({
+    return buildAssetFamilyCompatibility({
       type: "video",
       duration: metadata.duration,
       fps:
@@ -143,9 +134,6 @@ export async function inspectAssetFamilyCompatibility(
           ? metadata.fps
           : undefined,
     });
-    return isAssetFamilyCompatibilityComplete(compatibility)
-      ? compatibility
-      : null;
   }
 
   return null;
