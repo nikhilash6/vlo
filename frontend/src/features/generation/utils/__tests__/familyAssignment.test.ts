@@ -84,6 +84,41 @@ function makeWorkflow(seed: number, imageNodeSource = "2") {
   };
 }
 
+function makeGraphWorkflow(sourceNodeId = 2, imageName = "input.png") {
+  return {
+    nodes: [
+      {
+        id: 1,
+        type: "CLIPTextEncode",
+        inputs: [{ name: "clip", link: 11 }],
+        widgets_values: ["hello world"],
+      },
+      {
+        id: 2,
+        type: "LoadImage",
+        inputs: [],
+        widgets_values: [imageName],
+      },
+      {
+        id: 3,
+        type: "ImageConsumer",
+        inputs: [{ name: "image", link: 12 }],
+        widgets_values: [123],
+      },
+      {
+        id: 4,
+        type: "CLIPLoader",
+        inputs: [],
+        widgets_values: ["clip.safetensors"],
+      },
+    ],
+    links: [
+      [11, 4, 0, 1, 0, "CLIP"],
+      [12, sourceNodeId, 0, 3, 0, "IMAGE"],
+    ],
+  };
+}
+
 function makeSlotValues(prompt: string): Record<string, SlotValue> {
   return {
     "1:text": {
@@ -153,6 +188,41 @@ describe("familyAssignment", () => {
     });
     const right = await buildGenerationFamilyRequestKey({
       workflow: makeWorkflow(1, "1"),
+      workflowInputs,
+      slotValues: makeSlotValues("hello world"),
+      generationInputs,
+    });
+
+    expect(left).not.toBe(right);
+  });
+
+  it("groups graph workflows by topology while ignoring widget values", async () => {
+    const left = await buildGenerationFamilyRequestKey({
+      workflow: makeGraphWorkflow(2, "input-a.png"),
+      workflowInputs,
+      slotValues: makeSlotValues("hello world"),
+      generationInputs,
+    });
+    const right = await buildGenerationFamilyRequestKey({
+      workflow: makeGraphWorkflow(2, "input-b.png"),
+      workflowInputs,
+      slotValues: makeSlotValues("hello world"),
+      generationInputs,
+    });
+
+    expect(left).not.toBeNull();
+    expect(left).toBe(right);
+  });
+
+  it("changes the family hash when graph workflow wiring changes", async () => {
+    const left = await buildGenerationFamilyRequestKey({
+      workflow: makeGraphWorkflow(2),
+      workflowInputs,
+      slotValues: makeSlotValues("hello world"),
+      generationInputs,
+    });
+    const right = await buildGenerationFamilyRequestKey({
+      workflow: makeGraphWorkflow(4),
       workflowInputs,
       slotValues: makeSlotValues("hello world"),
       generationInputs,

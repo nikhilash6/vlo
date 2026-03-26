@@ -105,4 +105,71 @@ describe("workflowNodeSignature", () => {
       buildWorkflowStructureSignature(rewired),
     );
   });
+
+  it("captures LiteGraph wiring changes while ignoring widget values", () => {
+    const left = {
+      nodes: [
+        {
+          id: 1,
+          type: "LoadImage",
+          inputs: [],
+          widgets_values: ["left.png"],
+        },
+        {
+          id: 2,
+          type: "ImageConsumer",
+          inputs: [{ name: "image", link: 10 }],
+          widgets_values: [123],
+        },
+      ],
+      links: [[10, 1, 0, 2, 0, "IMAGE"]],
+    };
+    const right = {
+      nodes: [
+        {
+          id: 1,
+          type: "LoadImage",
+          inputs: [],
+          widgets_values: ["right.png"],
+        },
+        {
+          id: 2,
+          type: "ImageConsumer",
+          inputs: [{ name: "image", link: 10 }],
+          widgets_values: [999],
+        },
+      ],
+      links: [[10, 1, 0, 2, 0, "IMAGE"]],
+    };
+    const rewired = {
+      nodes: [
+        {
+          id: 1,
+          type: "LoadImage",
+          inputs: [],
+          widgets_values: ["right.png"],
+        },
+        {
+          id: 3,
+          type: "LoadImage",
+          inputs: [],
+          widgets_values: ["other.png"],
+        },
+        {
+          id: 2,
+          type: "ImageConsumer",
+          inputs: [{ name: "image", link: 11 }],
+          widgets_values: [999],
+        },
+      ],
+      links: [[11, 3, 0, 2, 0, "IMAGE"]],
+    };
+
+    expect(buildWorkflowStructureSignature(left)).toBe(
+      buildWorkflowStructureSignature(right),
+    );
+    expect(buildWorkflowStructureSignature(left)).not.toBe(
+      buildWorkflowStructureSignature(rewired),
+    );
+  });
 });

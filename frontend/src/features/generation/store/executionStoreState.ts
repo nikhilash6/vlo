@@ -173,7 +173,10 @@ export function buildExecutionStoreState(
       let autoFamilyRequestKey: string | null = null;
       try {
         autoFamilyRequestKey = await buildGenerationFamilyRequestKey({
-          workflow: response.comfyui_prompt ?? prepared.request.workflow,
+          workflow:
+            prepared.plan.workflow.graphData ??
+            response.comfyui_prompt ??
+            prepared.request.workflow,
           workflowInputs: plan.workflow.workflowInputs,
           slotValues: plan.preprocess.slotValues,
           generationInputs: plan.metadata.generationMetadata.inputs,

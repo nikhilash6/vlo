@@ -146,11 +146,126 @@ function normalizeLinkedInput(
   return `${normalizedNodeId}:${String(outputIndex)}`;
 }
 
+interface GraphLinkReference {
+  sourceNodeId: string;
+  outputIndex: number;
+  targetNodeId: string;
+}
+
+function collectGraphLinkReferences(
+  links: unknown,
+): Map<number, GraphLinkReference> {
+  const result = new Map<number, GraphLinkReference>();
+  if (!Array.isArray(links)) {
+    return result;
+  }
+
+  for (const link of links) {
+    if (!Array.isArray(link) || link.length < 5) {
+      continue;
+    }
+
+    const [linkId, sourceNodeId, outputIndex, targetNodeId] = link;
+    if (
+      typeof linkId !== "number" ||
+      (typeof sourceNodeId !== "string" && typeof sourceNodeId !== "number") ||
+      typeof outputIndex !== "number" ||
+      (typeof targetNodeId !== "string" && typeof targetNodeId !== "number")
+    ) {
+      continue;
+    }
+
+    result.set(linkId, {
+      sourceNodeId: String(sourceNodeId),
+      outputIndex,
+      targetNodeId: String(targetNodeId),
+    });
+  }
+
+  return result;
+}
+
+function buildGraphWorkflowStructureSignature(
+  workflowData: Record<string, unknown>,
+): string | null {
+  const nodes = Array.isArray(workflowData.nodes) ? workflowData.nodes : null;
+  if (!nodes) {
+    return null;
+  }
+
+  const knownNodeIds = new Set<string>();
+  for (const node of nodes) {
+    if (!isRecord(node) || node.id == null) {
+      continue;
+    }
+    knownNodeIds.add(String(node.id));
+  }
+
+  const graphLinks = collectGraphLinkReferences(workflowData.links);
+  const nodeEntries = nodes
+    .map((node) => {
+      if (!isRecord(node) || node.id == null || typeof node.type !== "string") {
+        return null;
+      }
+
+      const nodeId = String(node.id);
+      const nodeType = node.type.trim();
+      if (!nodeType) {
+        return null;
+      }
+
+      const inputs = Array.isArray(node.inputs) ? node.inputs : [];
+      const linkedInputs = inputs
+        .map((inputEntry, inputIndex) => {
+          if (!isRecord(inputEntry) || typeof inputEntry.link !== "number") {
+            return null;
+          }
+
+          const graphLink = graphLinks.get(inputEntry.link);
+          if (!graphLink || !knownNodeIds.has(graphLink.sourceNodeId)) {
+            return null;
+          }
+
+          const param =
+            typeof inputEntry.name === "string" && inputEntry.name.trim() !== ""
+              ? inputEntry.name.trim()
+              : `input${inputIndex}`;
+          return `${param}->${graphLink.sourceNodeId}:${graphLink.outputIndex}`;
+        })
+        .filter((entry): entry is string => entry !== null)
+        .sort((left, right) => left.localeCompare(right));
+
+      return {
+        nodeId,
+        signature: `${nodeId}:${nodeType}[${linkedInputs.join(",")}]`,
+      };
+    })
+    .filter(
+      (
+        entry,
+      ): entry is {
+        nodeId: string;
+        signature: string;
+      } => entry !== null,
+    )
+    .sort((left, right) => left.nodeId.localeCompare(right.nodeId));
+
+  if (nodeEntries.length === 0) {
+    return null;
+  }
+
+  return nodeEntries.map((entry) => entry.signature).join("|");
+}
+
 export function buildWorkflowStructureSignature(
   workflowData: Record<string, unknown> | null | undefined,
 ): string | null {
-  if (!workflowData || !isApiWorkflow(workflowData)) {
+  if (!workflowData) {
     return null;
+  }
+
+  if (!isApiWorkflow(workflowData)) {
+    return buildGraphWorkflowStructureSignature(workflowData);
   }
 
   const knownNodeIds = new Set(Object.keys(workflowData));
