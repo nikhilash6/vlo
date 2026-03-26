@@ -221,7 +221,9 @@ describe("AssetBrowser Component", () => {
     render(<AssetBrowser />);
 
     expect(screen.getByText("mixed.mp4")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open family" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open family" }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText("Images"));
 
@@ -363,7 +365,7 @@ describe("AssetBrowser Component", () => {
     expect(screen.queryByText("solo.mp4")).not.toBeInTheDocument();
   });
 
-  it("opens the family dialog from the family folder action", async () => {
+  it("opens a family scope in the browser and only populates the matching media tab", async () => {
     mockStore({
       assets: mockAssets,
       families: mockFamilies,
@@ -371,8 +373,16 @@ describe("AssetBrowser Component", () => {
 
     render(<AssetBrowser />);
 
-    expect(screen.getAllByRole("button", { name: "Open family" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Open family" })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "Asset actions" })).toHaveLength(2);
+
+    const soloCard = screen.getByText("solo.mp4").closest('[data-testid="asset-card"]');
+    expect(soloCard).not.toBeNull();
+    expect(
+      within(soloCard as HTMLElement).queryByRole("button", {
+        name: "Open family",
+      }),
+    ).not.toBeInTheDocument();
 
     const representativeCard = screen
       .getByText("vacation.mp4")
@@ -385,20 +395,59 @@ describe("AssetBrowser Component", () => {
       }),
     );
 
-    expect(
-      screen.getByRole("dialog", { name: /Asset Family/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("asset-browser-family-scope")).toBeInTheDocument();
     expect(screen.getByText("family-1")).toBeInTheDocument();
-    expect(screen.getByText("2 members")).toBeInTheDocument();
+    expect(screen.getByText("vacation.mp4")).toBeInTheDocument();
+    expect(screen.getByText("b-roll.mp4")).toBeInTheDocument();
+    expect(screen.queryByText("solo.mp4")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open family" }),
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Close family dialog" }),
-    );
+    fireEvent.click(screen.getByLabelText("Images"));
+
+    expect(screen.getByText("No image assets in this family.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to all assets" }));
 
     await waitFor(() => {
       expect(
-        screen.queryByRole("dialog", { name: /Asset Family/i }),
+        screen.queryByTestId("asset-browser-family-scope"),
       ).not.toBeInTheDocument();
     });
+
+    expect(screen.getByText("thumbnail.jpg")).toBeInTheDocument();
+    expect(screen.queryByText("vacation.mp4")).not.toBeInTheDocument();
+  });
+
+  it("clears the family scope when escape is pressed", async () => {
+    mockStore({
+      assets: mockAssets,
+      families: mockFamilies,
+    });
+
+    render(<AssetBrowser />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open family" }));
+
+    expect(screen.getByTestId("asset-browser-family-scope")).toBeInTheDocument();
+    expect(screen.getByText("b-roll.mp4")).toBeInTheDocument();
+    expect(screen.queryByText("solo.mp4")).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, {
+      key: "Escape",
+      code: "Escape",
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("asset-browser-family-scope"),
+      ).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByText("vacation.mp4")).toBeInTheDocument();
+    expect(screen.getByText("solo.mp4")).toBeInTheDocument();
+    expect(screen.queryByText("b-roll.mp4")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Open family" })).toHaveLength(1);
   });
 });

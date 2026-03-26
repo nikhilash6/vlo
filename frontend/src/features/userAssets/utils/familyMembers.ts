@@ -1,4 +1,4 @@
-import type { Asset, AssetFamily } from "../../../types/Asset";
+import type { Asset, AssetFamily, AssetType } from "../../../types/Asset";
 import { doesAssetBelongToFamily } from "../../../shared/utils/assetFamilies";
 import { isAssetVisibleInBrowser } from "./assetVisibility";
 
@@ -31,6 +31,7 @@ export function pickRepresentativeAssetId(
 export function getFamilyMembers(
   assets: readonly Asset[],
   family: AssetFamily | null | undefined,
+  assetType?: AssetType,
 ): Asset[] {
   if (!family) {
     return [];
@@ -42,7 +43,8 @@ export function getFamilyMembers(
     .filter((asset) => {
       if (
         !isAssetVisibleInBrowser(asset) ||
-        !doesAssetBelongToFamily(asset, family)
+        !doesAssetBelongToFamily(asset, family) ||
+        (assetType !== undefined && asset.type !== assetType)
       ) {
         return false;
       }

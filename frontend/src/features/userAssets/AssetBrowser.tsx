@@ -13,6 +13,7 @@ import {
 } from "@mui/material";
 
 // Icons
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import VideoLibraryIcon from "@mui/icons-material/VideoLibrary";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
 import LibraryMusicIcon from "@mui/icons-material/LibraryMusic";
@@ -24,11 +25,16 @@ import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 import type { AssetType } from "../../types/Asset";
 import { useAssetStore } from "./useAssetStore";
 import { AssetCard } from "./components/AssetCard";
-import { FamilyDialog } from "./components/FamilyDialog";
 import { isAssetVisibleInBrowser } from "./utils/assetVisibility";
+import { getFamilyMembers } from "./utils/familyMembers";
 
 type SortOption = "dateDesc" | "dateAsc" | "nameAsc";
 const ASSET_TYPE_PRIORITY: AssetType[] = ["video", "image", "audio"];
+
+interface FamilyScope {
+  familyId: string;
+  assetType: AssetType;
+}
 
 function hasDraggedFiles(event: React.DragEvent<HTMLDivElement>): boolean {
   return Array.from(event.dataTransfer.types).includes("Files");
@@ -84,14 +90,10 @@ function AssetBrowserComponent() {
   const [sortAnchorEl, setSortAnchorEl] = useState<null | HTMLElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
-  const [selectedFamilyId, setSelectedFamilyId] = useState<string | null>(null);
+  const [familyScope, setFamilyScope] = useState<FamilyScope | null>(null);
 
   const assets = useAssetStore((state) => state.assets);
   const families = useAssetStore((state) => state.families);
-
-  React.useEffect(() => {
-    console.log("[AssetBrowser] Assets updated. Count:", assets.length);
-  }, [assets]);
 
   const addLocalAssets = useAssetStore((state) => state.addLocalAssets);
   const isUploading = useAssetStore((state) => state.isUploading);
@@ -187,13 +189,84 @@ function AssetBrowserComponent() {
     setSortAnchorEl(null);
   };
 
+  const familyMembersByType = useMemo(() => {
+    const membersByType = new Map<string, number>();
+
+    for (const family of families) {
+      for (const asset of getFamilyMembers(assets, family)) {
+        const key = `${family.id}:${asset.type}`;
+        membersByType.set(key, (membersByType.get(key) ?? 0) + 1);
+      }
+    }
+
+    return membersByType;
+  }, [assets, families]);
+
+  const selectedFamily = useMemo(
+    () =>
+      familyScope
+        ? families.find((family) => family.id === familyScope.familyId)
+        : undefined,
+    [families, familyScope],
+  );
+
+  const scopedFamilyAssets = useMemo(() => {
+    if (!familyScope || !selectedFamily) {
+      return [];
+    }
+
+    return getFamilyMembers(assets, selectedFamily, familyScope.assetType);
+  }, [assets, selectedFamily, familyScope]);
+
+  React.useEffect(() => {
+    if (familyScope && !selectedFamily) {
+      setFamilyScope(null);
+    }
+  }, [familyScope, selectedFamily]);
+
+  React.useEffect(() => {
+    if (!familyScope) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape" || event.defaultPrevented) {
+        return;
+      }
+
+      const target = event.target;
+      if (target instanceof Element && target.closest('[role="dialog"]')) {
+        return;
+      }
+
+      event.preventDefault();
+      setFamilyScope(null);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [familyScope]);
+
   const sortedAssets = useMemo(() => {
-    const filtered = assets.filter(
-      (asset) =>
-        asset.type === activeTab &&
-        (!showFavouritesOnly || asset.favourite) &&
-        isAssetVisibleInBrowser(asset) &&
-        isRepresentativeAsset(asset.id, asset.type, asset.familyId, families, assets),
+    const baseAssets = familyScope
+      ? activeTab === familyScope.assetType
+        ? scopedFamilyAssets
+        : []
+      : assets.filter(
+          (asset) =>
+            asset.type === activeTab &&
+            isAssetVisibleInBrowser(asset) &&
+            isRepresentativeAsset(
+              asset.id,
+              asset.type,
+              asset.familyId,
+              families,
+              assets,
+            ),
+        );
+
+    const filtered = baseAssets.filter(
+      (asset) => !showFavouritesOnly || asset.favourite,
     );
 
     return filtered.sort((a, b) => {
@@ -207,20 +280,28 @@ function AssetBrowserComponent() {
           return (b.createdAt || 0) - (a.createdAt || 0);
       }
     });
-  }, [assets, families, activeTab, sortOption, showFavouritesOnly]);
-
-  const selectedFamily = useMemo(
-    () => families.find((family) => family.id === selectedFamilyId),
-    [families, selectedFamilyId],
-  );
+  }, [
+    assets,
+    families,
+    activeTab,
+    familyScope,
+    scopedFamilyAssets,
+    sortOption,
+    showFavouritesOnly,
+  ]);
 
   const handleShowFamily = (familyId: string) => {
-    setSelectedFamilyId(familyId);
+    setFamilyScope({
+      familyId,
+      assetType: activeTab,
+    });
   };
 
-  const handleCloseFamilyDialog = () => {
-    setSelectedFamilyId(null);
-  };
+  const handleClearFamilyScope = () => setFamilyScope(null);
+  const isFamilyScopeActive = Boolean(familyScope && selectedFamily);
+  const emptyStateMessage = isFamilyScopeActive
+    ? `No ${activeTab} assets in this family.`
+    : `No ${activeTab} assets.`;
 
   return (
     <Box
@@ -251,39 +332,103 @@ function AssetBrowserComponent() {
         }}
       >
         {/* Left: Tabs (Compact) */}
-        <Tabs
-          value={activeTab}
-          onChange={handleTabChange}
-          textColor="primary"
-          indicatorColor="primary"
+        <Box
           sx={{
-            minHeight: 48,
-            "& .MuiTab-root": {
-              minWidth: 50,
-              minHeight: 48,
-              px: 2, // Tighter horizontal padding on tabs
-            },
+            display: "flex",
+            alignItems: "center",
+            minWidth: 0,
+            gap: 1,
           }}
         >
-          <Tab
-            icon={<VideoLibraryIcon fontSize="small" />}
-            value="video"
-            aria-label="Videos"
-            data-testid="asset-browser-tab-video"
-          />
-          <Tab
-            icon={<PhotoLibraryIcon fontSize="small" />}
-            value="image"
-            aria-label="Images"
-            data-testid="asset-browser-tab-image"
-          />
-          <Tab
-            icon={<LibraryMusicIcon fontSize="small" />}
-            value="audio"
-            aria-label="Audio"
-            data-testid="asset-browser-tab-audio"
-          />
-        </Tabs>
+          {isFamilyScopeActive ? (
+            <Tooltip title="Back to all assets">
+              <IconButton
+                aria-label="Back to all assets"
+                onClick={handleClearFamilyScope}
+                size="small"
+                sx={{ color: "#c9d1d9", flexShrink: 0 }}
+              >
+                <ArrowBackIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          ) : null}
+
+          <Tabs
+            value={activeTab}
+            onChange={handleTabChange}
+            textColor="primary"
+            indicatorColor="primary"
+            sx={{
+              minHeight: 48,
+              "& .MuiTab-root": {
+                minWidth: 50,
+                minHeight: 48,
+                px: 2, // Tighter horizontal padding on tabs
+              },
+            }}
+          >
+            <Tab
+              icon={<VideoLibraryIcon fontSize="small" />}
+              value="video"
+              aria-label="Videos"
+              data-testid="asset-browser-tab-video"
+            />
+            <Tab
+              icon={<PhotoLibraryIcon fontSize="small" />}
+              value="image"
+              aria-label="Images"
+              data-testid="asset-browser-tab-image"
+            />
+            <Tab
+              icon={<LibraryMusicIcon fontSize="small" />}
+              value="audio"
+              aria-label="Audio"
+              data-testid="asset-browser-tab-audio"
+            />
+          </Tabs>
+
+          {isFamilyScopeActive && selectedFamily ? (
+            <Box
+              data-testid="asset-browser-family-scope"
+              sx={{
+                display: { xs: "none", sm: "flex" },
+                alignItems: "center",
+                gap: 0.75,
+                minWidth: 0,
+                px: 1.25,
+                py: 0.75,
+                borderRadius: 999,
+                bgcolor: "#1b1b1b",
+                border: "1px solid #2b2b2b",
+              }}
+            >
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "#9aa0a6",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                }}
+              >
+                Family
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "#f1f3f4",
+                  fontFamily: "monospace",
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+                title={selectedFamily.id}
+              >
+                {selectedFamily.id}
+              </Typography>
+            </Box>
+          ) : null}
+        </Box>
 
         {/* Right: Actions Container */}
         <Box
@@ -398,7 +543,7 @@ function AssetBrowserComponent() {
             variant="body2"
             sx={{ textAlign: "center", mt: 4, color: "#666" }}
           >
-            No {activeTab} assets.
+            {emptyStateMessage}
           </Typography>
         ) : (
           <Grid container spacing={2}>
@@ -406,19 +551,20 @@ function AssetBrowserComponent() {
               <Grid size={{ xs: 6 }} key={asset.id}>
                 <AssetCard
                   asset={asset}
-                  onShowFamily={asset.familyId ? handleShowFamily : undefined}
+                  onShowFamily={
+                    !isFamilyScopeActive &&
+                    asset.familyId &&
+                    (familyMembersByType.get(`${asset.familyId}:${asset.type}`) ?? 0) >
+                      1
+                      ? handleShowFamily
+                      : undefined
+                  }
                 />
               </Grid>
             ))}
           </Grid>
         )}
       </Box>
-
-      <FamilyDialog
-        family={selectedFamily}
-        open={Boolean(selectedFamily)}
-        onClose={handleCloseFamilyDialog}
-      />
 
       {(isUploading || isDragOver) && (
         <Box
