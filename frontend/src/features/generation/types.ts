@@ -155,6 +155,7 @@ export interface GenerationFrameInputValue {
   kind: "frame";
   file: File;
   previewUrl: string;
+  timelineSelection?: TimelineSelection | null;
 }
 
 export interface GenerationTimelineSelectionInputValue {

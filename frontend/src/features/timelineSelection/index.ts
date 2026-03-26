@@ -10,6 +10,7 @@ export {
 } from "./utils/timelineSelection";
 export {
   createTimelineSelection,
+  createPointTimelineSelection,
   getDefaultSelectionEnd,
 } from "./utils/createTimelineSelection";
 export { getTimelineSelectionFromAsset } from "./utils/assetSelection";

@@ -390,6 +390,75 @@ describe("useGenerationStore metadata replay", () => {
     });
   });
 
+  it("restores image timeline selections as frame captures", async () => {
+    const restoredFrame = new File(["frame"], "frame.png", {
+      type: "image/png",
+    });
+    const generatedAsset: Asset = {
+      id: "generated-image",
+      hash: "hash-generated-image",
+      name: "generated-image.png",
+      type: "image",
+      src: "generated-image.png",
+      createdAt: Date.now(),
+      creationMetadata: {
+        source: "generated",
+        workflowName: "Original Workflow",
+        inputs: [
+          {
+            nodeId: "145",
+            kind: "timelineSelection",
+            timelineSelection: {
+              start: 10,
+              clips: [],
+              fps: 24,
+            },
+          },
+        ],
+        replayState: {
+          version: 1,
+          workflowInputs: [
+            {
+              nodeId: "145",
+              classType: "LoadImage",
+              inputType: "image",
+              param: "image",
+              label: "Start Frame",
+              origin: "rule",
+            },
+          ],
+        },
+        comfyuiPrompt: {
+          "145": {
+            class_type: "LoadImage",
+            inputs: { image: "frame.png" },
+          },
+        },
+      },
+    };
+
+    mocks.captureFramePngAtTick.mockResolvedValue(restoredFrame);
+    vi.spyOn(comfyApi, "listWorkflows").mockResolvedValue([]);
+
+    await useGenerationStore
+      .getState()
+      .loadWorkflowFromAssetMetadata(generatedAsset);
+
+    const restoredInput = Object.values(
+      useGenerationStore.getState().mediaInputs,
+    )[0];
+
+    expect(restoredInput).toMatchObject({
+      kind: "frame",
+      file: restoredFrame,
+      timelineSelection: {
+        start: 10,
+        clips: [],
+        fps: 24,
+      },
+    });
+  });
+
   it("falls back to the saved workflow name when no workflow snapshot is stored", async () => {
     const sourceAsset: Asset = {
       id: "source-asset",

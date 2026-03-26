@@ -32,6 +32,7 @@ export function buildMediaInputActions(
   GenerationWorkflowState,
   | "setMediaInputAsset"
   | "setMediaInputFrame"
+  | "setMediaInputFrameWithSelection"
   | "setMediaInputTimelineSelection"
   | "clearMediaInput"
 > {
@@ -50,6 +51,17 @@ export function buildMediaInputActions(
           kind: "frame",
           file,
           previewUrl: URL.createObjectURL(file),
+          timelineSelection: null,
+        }),
+      }),
+
+    setMediaInputFrameWithSelection: (inputId, file, timelineSelection) =>
+      set({
+        mediaInputs: updateMediaInputs(get, inputId, {
+          kind: "frame",
+          file,
+          previewUrl: URL.createObjectURL(file),
+          timelineSelection,
         }),
       }),
 

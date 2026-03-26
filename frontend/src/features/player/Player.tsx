@@ -28,8 +28,8 @@ import { usePixiApp } from "./hooks/usePixiApp";
 import { PlayerControls } from "./components/PlayerControls";
 import { ExtractDialog } from "./components/ExtractDialog";
 import {
+  createPointTimelineSelection,
   getDefaultSelectionEnd,
-  getClipsInSelection,
   useTimelineSelectionStore,
 } from "../timelineSelection";
 import {
@@ -330,18 +330,10 @@ function PlayerImpl() {
         mimeType: "image/webp",
         quality: 0.95,
       });
-      const intersectingClips = getClipsInSelection(
-        useTimelineStore.getState().clips,
-        { start: currentTime, clips: [] },
-      );
 
       await addLocalAsset(file, {
         source: "extracted",
-        timelineSelection: {
-          start: currentTime,
-          clips: intersectingClips,
-          fps: config.fps,
-        },
+        timelineSelection: createPointTimelineSelection(currentTime),
       });
     } catch (e) {
       console.error("Frame extraction failed", e);

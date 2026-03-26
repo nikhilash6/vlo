@@ -40,6 +40,22 @@ export function createTimelineSelection(
   };
 }
 
+export function createPointTimelineSelection(
+  tick: number,
+): TimelineSelection {
+  const clips = useTimelineStore.getState().clips;
+  const projectFps = Math.max(1, useProjectStore.getState().config.fps);
+
+  return {
+    start: tick,
+    clips: getClipsInSelection(clips, {
+      start: tick,
+      clips: [],
+    }),
+    fps: projectFps,
+  };
+}
+
 export function getDefaultSelectionEnd(startTick: number): number {
   const fps = useProjectStore.getState().config.fps;
   const { selectionFpsOverride, selectionFrameStep } =

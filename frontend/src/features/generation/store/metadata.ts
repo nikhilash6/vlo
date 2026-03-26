@@ -173,7 +173,9 @@ export async function restoreMediaInputsFromMetadata(
   derivedMaskMappings: DerivedMaskMapping[],
   actions: Pick<
     GenerationWorkflowState,
-    "setMediaInputAsset" | "setMediaInputTimelineSelection"
+    | "setMediaInputAsset"
+    | "setMediaInputFrameWithSelection"
+    | "setMediaInputTimelineSelection"
   >,
 ): Promise<void> {
   const workflowInputByNodeId = new Map<string, WorkflowInput>();
@@ -200,6 +202,19 @@ export async function restoreMediaInputsFromMetadata(
       }
 
       actions.setMediaInputAsset(inputId, asset);
+      continue;
+    }
+
+    if (workflowInput.inputType === "image") {
+      const frameFile = await captureFramePngAtTick(
+        input.timelineSelection.start,
+        "generation-frame",
+      );
+      actions.setMediaInputFrameWithSelection(
+        inputId,
+        frameFile,
+        input.timelineSelection,
+      );
       continue;
     }
 
@@ -292,6 +307,15 @@ export function buildGeneratedCreationMetadata(
     if (!value) continue;
 
     if (value.kind === "timelineSelection") {
+      inputs.push({
+        nodeId: workflowInput.nodeId,
+        kind: "timelineSelection",
+        timelineSelection: value.timelineSelection,
+      });
+      continue;
+    }
+
+    if (value.kind === "frame" && value.timelineSelection) {
       inputs.push({
         nodeId: workflowInput.nodeId,
         kind: "timelineSelection",

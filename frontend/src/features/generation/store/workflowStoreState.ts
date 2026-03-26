@@ -623,6 +623,8 @@ export function buildWorkflowStoreState(
             loadedState.derivedMaskMappings,
             {
               setMediaInputAsset: loadedState.setMediaInputAsset,
+              setMediaInputFrameWithSelection:
+                loadedState.setMediaInputFrameWithSelection,
               setMediaInputTimelineSelection:
                 loadedState.setMediaInputTimelineSelection,
             },

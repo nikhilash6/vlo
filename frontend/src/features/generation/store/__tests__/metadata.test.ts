@@ -189,4 +189,54 @@ describe("generation metadata replay helpers", () => {
       },
     });
   });
+
+  it("persists frame captures through timeline-selection metadata", () => {
+    const timelineSelection = {
+      start: 120,
+      clips: [],
+      fps: 24,
+    };
+    const workflowInputs: WorkflowInput[] = [
+      {
+        id: "145:image",
+        nodeId: "145",
+        classType: "LoadImage",
+        inputType: "image",
+        param: "image",
+        label: "Frame Input",
+        currentValue: null,
+        origin: "rule",
+      },
+    ];
+
+    const metadata = buildGeneratedCreationMetadata({
+      workflowName: "Workflow",
+      workflowSourceId: "workflow.json",
+      workflowInputs,
+      mediaInputs: {
+        "145:image": {
+          kind: "frame",
+          file: new File(["frame"], "frame.png", { type: "image/png" }),
+          previewUrl: "blob:frame",
+          timelineSelection,
+        },
+      },
+      slotValues: {},
+      targetResolution: 720,
+      exactAspectRatio: false,
+      maskCropMode: "crop",
+      maskCropDilation: 0.1,
+      widgetInputs: {},
+      widgetModes: {},
+      derivedWidgetInputs: {},
+    });
+
+    expect(metadata.inputs).toEqual([
+      {
+        nodeId: "145",
+        kind: "timelineSelection",
+        timelineSelection,
+      },
+    ]);
+  });
 });

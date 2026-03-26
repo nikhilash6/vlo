@@ -92,6 +92,11 @@ export interface GenerationWorkflowState {
   clearWorkflowLoadError: () => void;
   setMediaInputAsset: (inputId: string, asset: Asset) => void;
   setMediaInputFrame: (inputId: string, file: File) => void;
+  setMediaInputFrameWithSelection: (
+    inputId: string,
+    file: File,
+    timelineSelection: TimelineSelection,
+  ) => void;
   setMediaInputTimelineSelection: (
     inputId: string,
     timelineSelection: TimelineSelection,

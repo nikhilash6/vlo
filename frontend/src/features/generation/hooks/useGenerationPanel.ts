@@ -6,6 +6,7 @@ import { usePlayerStore } from "../../player/usePlayerStore";
 import { playbackClock } from "../../player/services/PlaybackClock";
 import { TICKS_PER_SECOND, insertAssetAtTime } from "../../timeline";
 import {
+  createPointTimelineSelection,
   createTimelineSelection,
   getDefaultSelectionEnd,
   getTimelineSelectionFromAsset,
@@ -186,7 +187,9 @@ export function useGenerationPanel() {
   const queueGeneration = useGenerationStore((s) => s.queueGeneration);
   const fetchWorkflows = useGenerationStore((s) => s.fetchWorkflows);
   const setMediaInputAsset = useGenerationStore((s) => s.setMediaInputAsset);
-  const setMediaInputFrame = useGenerationStore((s) => s.setMediaInputFrame);
+  const setMediaInputFrameWithSelection = useGenerationStore(
+    (s) => s.setMediaInputFrameWithSelection,
+  );
   const setMediaInputTimelineSelection = useGenerationStore(
     (s) => s.setMediaInputTimelineSelection,
   );
@@ -661,7 +664,11 @@ export function useGenerationPanel() {
                 playbackClock.time,
                 "generation-frame",
               );
-              setMediaInputFrame(inputId, frameFile);
+              setMediaInputFrameWithSelection(
+                inputId,
+                frameFile,
+                createPointTimelineSelection(playbackClock.time),
+              );
             } catch (error) {
               console.error("Failed to capture generation image frame", error);
             } finally {
@@ -841,7 +848,7 @@ export function useGenerationPanel() {
     [
       derivedMaskMappings,
       derivedMaskVideoTreatmentBySourceNodeId,
-      setMediaInputFrame,
+      setMediaInputFrameWithSelection,
       setMediaInputTimelineSelection,
       workflowInputById,
     ],
