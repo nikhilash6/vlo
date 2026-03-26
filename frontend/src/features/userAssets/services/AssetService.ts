@@ -1,5 +1,12 @@
-import type { Asset, AssetFamily } from "../../../types/Asset";
-import { doesAssetMatchFamilyCompatibility } from "../../../shared/utils/assetFamilies";
+import type {
+  Asset,
+  AssetFamily,
+  AssetFamilyCompatibility,
+} from "../../../types/Asset";
+import {
+  doesAssetMatchFamilyCompatibility,
+  isAssetFamilyCompatibilityComplete,
+} from "../../../shared/utils/assetFamilies";
 import { fileSystemService } from "../../project";
 import { projectDocumentService } from "../../project/services/ProjectDocumentService";
 import { mediaProcessingService } from "./MediaProcessingService";
@@ -153,6 +160,7 @@ export class AssetService {
     existingAssets: Asset[],
     creationMetadata?: Asset["creationMetadata"],
     family?: Pick<AssetFamily, "id" | "compatibility">,
+    compatibilityHint?: AssetFamilyCompatibility | null,
   ): Promise<Asset | null> {
     console.time(`[Ingest] ${file.name}`);
     // Use MediaFileProcessor for optimized access to the file
@@ -280,6 +288,20 @@ export class AssetService {
       }
 
       const assetType = isImage ? "image" : isAudio ? "audio" : "video";
+      const resolvedCompatibilityHint =
+        compatibilityHint &&
+        isAssetFamilyCompatibilityComplete(compatibilityHint) &&
+        compatibilityHint.assetType === assetType
+          ? compatibilityHint
+          : null;
+      if (resolvedCompatibilityHint) {
+        duration = resolvedCompatibilityHint.durationMs! / 1000;
+        fps =
+          resolvedCompatibilityHint.assetType === "video"
+            ? resolvedCompatibilityHint.fpsMilli! / 1000
+            : undefined;
+      }
+
       const resolvedFamilyId =
         family &&
         doesAssetMatchFamilyCompatibility(

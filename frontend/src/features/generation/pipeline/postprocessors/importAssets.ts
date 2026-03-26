@@ -1,4 +1,5 @@
 import type { AssetFamily, CreationMetadata } from "../../../../types/Asset";
+import { isAssetFamilyCompatibilityComplete } from "../../../../shared/utils/assetFamilies";
 import { getOutputMediaKindFromFile } from "../../constants/mediaKinds";
 import type { FrontendPostprocessContext, Processor } from "../types";
 import {
@@ -54,11 +55,18 @@ async function ingestGeneratedAsset(
 ): Promise<{ id: string } | null> {
   let family: AssetFamily | undefined;
   let autoMatchKey: string | null = null;
-  let familyExistsInStore = false;
+  let compatibility:
+    | import("../../../../types/Asset").AssetFamilyCompatibility
+    | null = null;
 
   if (ctx.autoFamilyRequestKey) {
     try {
-      const compatibility = await inspectAssetFamilyCompatibility(file);
+      compatibility =
+        ctx.packagedVideo &&
+        file === ctx.packagedVideo &&
+        isAssetFamilyCompatibilityComplete(ctx.packagedVideoCompatibility)
+          ? ctx.packagedVideoCompatibility
+          : await inspectAssetFamilyCompatibility(file);
       autoMatchKey = await buildGenerationFamilyAutoMatchKey(
         ctx.autoFamilyRequestKey,
         compatibility,
@@ -78,11 +86,6 @@ async function ingestGeneratedAsset(
         autoMatchKey,
         compatibility,
       );
-      const resolvedFamilyId = family?.id;
-      familyExistsInStore = Boolean(
-        resolvedFamilyId &&
-          storeFamilies.some((candidate) => candidate.id === resolvedFamilyId),
-      );
       if (family && autoMatchKey) {
         pendingAutoFamilies.set(autoMatchKey, family);
       }
@@ -97,11 +100,14 @@ async function ingestGeneratedAsset(
   const { addLocalAssetWithFamily } = await import("../../../userAssets");
 
   const asset =
-    family && familyExistsInStore
-      ? await addLocalAsset(file, ctx.generationMetadata, family.id)
-      : family
-        ? await addLocalAssetWithFamily(file, ctx.generationMetadata, family)
-        : await addLocalAsset(file, ctx.generationMetadata);
+    family
+      ? await addLocalAssetWithFamily(
+          file,
+          ctx.generationMetadata,
+          family,
+          compatibility,
+        )
+      : await addLocalAsset(file, ctx.generationMetadata);
 
   if (asset && family) {
     const updatedFamily: AssetFamily = {
@@ -138,6 +144,7 @@ export const importAssets: Processor<FrontendPostprocessContext> = {
       "postprocessingConfig",
       "previewFrameFiles",
       "preparedMaskFile",
+      "packagedVideoCompatibility",
     ],
     writes: ["importedAssetIds", "postprocessedPreview", "generationMetadata"],
     description:

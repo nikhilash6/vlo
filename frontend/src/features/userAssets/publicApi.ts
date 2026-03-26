@@ -68,10 +68,16 @@ export async function addLocalAssetWithFamily(
   file: File,
   creationMetadata?: Asset["creationMetadata"],
   family?: Pick<AssetFamily, "id" | "compatibility">,
+  compatibilityHint?: AssetFamilyCompatibility | null,
 ): Promise<Asset | null> {
   return useAssetStore
     .getState()
-    .addLocalAssetWithFamily(file, creationMetadata, family);
+    .addLocalAssetWithFamily(
+      file,
+      creationMetadata,
+      family,
+      compatibilityHint,
+    );
 }
 
 export async function upsertFamily(family: AssetFamily): Promise<void> {
@@ -124,8 +130,9 @@ export async function inspectAssetFamilyCompatibility(
   }
 
   if (candidateFile.type.startsWith("video/")) {
-    const metadata =
-      await mediaProcessingService.getVideoTimingMetadata(candidateFile);
+    const metadata = await mediaProcessingService.generateVideoMetadata(
+      candidateFile,
+    );
     return buildAssetFamilyCompatibility({
       type: "video",
       duration: metadata.duration,

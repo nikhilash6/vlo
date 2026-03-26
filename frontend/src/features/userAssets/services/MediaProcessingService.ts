@@ -82,16 +82,21 @@ export class MediaFileProcessor {
   }
 
   /**
-   * Reads timing metadata for a video file without generating thumbnails.
+   * Generates a thumbnail blob and duration for a video file.
    */
-  async getVideoTimingMetadata(): Promise<{
+  async generateVideoMetadata(): Promise<{
+    thumbnail: Blob | null;
     duration: number;
     fps: number | null;
   }> {
     if (this.isDisposed) throw new Error("MediaFileProcessor is disposed");
     try {
       const input = this.getInput();
+      const THUMBNAIL_MAX_SIZE = 320;
+
+      // 1. Get Duration / FPS
       const durationSec = await input.computeDuration();
+      const duration = durationSec || 0;
       let fps: number | null = null;
       const videoTrack = await input.getPrimaryVideoTrack();
 
@@ -109,41 +114,8 @@ export class MediaFileProcessor {
         }
       }
 
-      return {
-        duration: durationSec || 0,
-        fps,
-      };
-    } catch (error) {
-      console.warn("Failed to read video timing metadata", error);
-      return {
-        duration: 0,
-        fps: null,
-      };
-    }
-  }
-
-  /**
-   * Generates a thumbnail blob and duration for a video file.
-   */
-  async generateVideoMetadata(): Promise<{
-    thumbnail: Blob | null;
-    duration: number;
-    fps: number | null;
-  }> {
-    if (this.isDisposed) throw new Error("MediaFileProcessor is disposed");
-    try {
-      const input = this.getInput();
-      const THUMBNAIL_MAX_SIZE = 320;
-
-      // 1. Get Duration / FPS
-      const timingMetadata = await this.getVideoTimingMetadata();
-      const duration = timingMetadata.duration;
-      let fps = timingMetadata.fps;
-
       // 2. Extract Thumbnail
       let thumbnail: Blob | null = null;
-      const videoTrack = await input.getPrimaryVideoTrack();
-
       if (videoTrack) {
         const { displayWidth, displayHeight } = videoTrack;
         const sinkOptions: {
@@ -343,17 +315,6 @@ export class MediaProcessingService {
     const processor = this.createProcessor(file);
     try {
       return await processor.computeDuration();
-    } finally {
-      processor.dispose();
-    }
-  }
-
-  async getVideoTimingMetadata(
-    file: File,
-  ): Promise<{ duration: number; fps: number | null }> {
-    const processor = this.createProcessor(file);
-    try {
-      return await processor.getVideoTimingMetadata();
     } finally {
       processor.dispose();
     }

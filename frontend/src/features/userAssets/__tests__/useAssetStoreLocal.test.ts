@@ -213,17 +213,21 @@ describe("useAssetStore - Local Assets", () => {
     expect(useAssetStore.getState().assets[0].familyId).toBeUndefined();
   });
 
-  it("assigns a family when both asset and family share partial video compatibility", async () => {
+  it("uses a deterministic compatibility hint when ingesting into a family", async () => {
     const { mediaProcessingService } =
       await import("../services/MediaProcessingService");
+
+    vi.mocked(mediaProcessingService.computeChecksum)
+      .mockResolvedValueOnce("hint-test-hash-1")
+      .mockResolvedValueOnce("hint-test-hash-2");
 
     vi.mocked(mediaProcessingService.createProcessor).mockImplementation(
       () =>
         ({
           detectMimeType: vi.fn(),
-          computeDuration: vi.fn().mockResolvedValue(10),
+          computeDuration: vi.fn().mockResolvedValue(0),
           generateVideoMetadata: vi.fn().mockResolvedValue({
-            duration: 10,
+            duration: 0,
             thumbnail: null,
             fps: undefined,
           }),
@@ -236,13 +240,13 @@ describe("useAssetStore - Local Assets", () => {
     useAssetStore.setState({
       families: [
         {
-          id: "family-video-partial",
+          id: "family-video-complete",
           representativeAssetId: "existing-video",
-          autoMatchKeys: ["generation-family:v1:video-partial"],
+          autoMatchKeys: ["generation-family:v1:video-complete"],
           compatibility: {
             assetType: "video",
             durationMs: 10000,
-            fpsMilli: null,
+            fpsMilli: 24000,
           },
           createdAt: 1,
           updatedAt: 1,
@@ -256,13 +260,33 @@ describe("useAssetStore - Local Assets", () => {
     const asset = await store.addLocalAsset(
       file,
       undefined,
-      "family-video-partial",
+      "family-video-complete",
     );
 
-    expect(asset?.familyId).toBe("family-video-partial");
-    expect(useAssetStore.getState().assets[0].familyId).toBe(
-      "family-video-partial",
+    expect(asset?.familyId).toBeUndefined();
+    expect(useAssetStore.getState().assets[0].familyId).toBeUndefined();
+
+    const hintedAsset = await store.addLocalAssetWithFamily(
+      new File(["video-2"], "family-clip-hinted.mp4", { type: "video/mp4" }),
+      undefined,
+      {
+        id: "family-video-complete",
+        compatibility: {
+          assetType: "video",
+          durationMs: 10000,
+          fpsMilli: 24000,
+        },
+      },
+      {
+        assetType: "video",
+        durationMs: 10000,
+        fpsMilli: 24000,
+      },
     );
+
+    expect(hintedAsset?.familyId).toBe("family-video-complete");
+    expect(hintedAsset?.duration).toBe(10);
+    expect(hintedAsset?.fps).toBe(24);
   });
 
   it("addLocalAsset updates video metadata asynchronously", async () => {

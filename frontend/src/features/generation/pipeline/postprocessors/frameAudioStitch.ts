@@ -62,7 +62,12 @@ export const frameAudioStitch: Processor<FrontendPostprocessContext> = {
       "generationMetadata",
       "previewFrameFiles",
     ],
-    writes: ["packagedVideo", "stitchFailure", "stitchMessage"],
+    writes: [
+      "packagedVideo",
+      "packagedVideoCompatibility",
+      "stitchFailure",
+      "stitchMessage",
+    ],
     description:
       "Stitches frame outputs (optionally with audio) into a packaged video when postprocessing is configured to do so",
   },
@@ -83,6 +88,7 @@ export const frameAudioStitch: Processor<FrontendPostprocessContext> = {
 
   async execute(ctx) {
     ctx.packagedVideo = null;
+    ctx.packagedVideoCompatibility = null;
     ctx.stitchFailure = null;
     ctx.stitchMessage = null;
 
@@ -114,11 +120,13 @@ export const frameAudioStitch: Processor<FrontendPostprocessContext> = {
         ctx.generationMetadata,
         ctx.postprocessingConfig,
       );
-      ctx.packagedVideo = await packageFramesAndAudioToVideo(
+      const packagedVideo = await packageFramesAndAudioToVideo(
         stitchFrameFiles,
         stitchAudioFile,
         stitchFps,
       );
+      ctx.packagedVideo = packagedVideo.file;
+      ctx.packagedVideoCompatibility = packagedVideo.compatibility;
     } catch (error) {
       const detail =
         error instanceof Error ? error.message : "Unknown packaging error";

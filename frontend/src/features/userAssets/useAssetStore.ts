@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import { Input, UrlSource, BlobSource, ALL_FORMATS } from "mediabunny";
-import type { Asset, AssetFamily } from "../../types/Asset";
+import type {
+  Asset,
+  AssetFamily,
+  AssetFamilyCompatibility,
+} from "../../types/Asset";
 import { doesAssetBelongToFamily } from "../../shared/utils/assetFamilies";
 import {
   useProjectStore,
@@ -32,6 +36,7 @@ interface AssetStore {
     file: File,
     creationMetadata?: Asset["creationMetadata"],
     family?: Pick<AssetFamily, "id" | "compatibility">,
+    compatibilityHint?: AssetFamilyCompatibility | null,
   ) => Promise<Asset | null>;
   upsertFamily: (family: AssetFamily) => Promise<void>;
   updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
@@ -160,6 +165,7 @@ async function ingestLocalAssetsIntoStore(
   files: readonly File[],
   creationMetadata?: Asset["creationMetadata"],
   family?: Pick<AssetFamily, "id" | "compatibility">,
+  compatibilityHint?: AssetFamilyCompatibility | null,
 ): Promise<Asset[]> {
   const createdAssets: Asset[] = [];
 
@@ -184,6 +190,7 @@ async function ingestLocalAssetsIntoStore(
         assets,
         creationMetadata,
         family,
+        compatibilityHint,
       );
 
       if (!newAsset) {
@@ -472,6 +479,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     file: File,
     creationMetadata?: Asset["creationMetadata"],
     family?: Pick<AssetFamily, "id" | "compatibility">,
+    compatibilityHint?: AssetFamilyCompatibility | null,
   ) => {
     const [asset] = await ingestLocalAssetsIntoStore(
       get,
@@ -479,6 +487,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       [file],
       creationMetadata,
       family,
+      compatibilityHint,
     );
     return asset ?? null;
   },

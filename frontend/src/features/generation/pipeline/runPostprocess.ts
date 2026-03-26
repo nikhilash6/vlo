@@ -62,6 +62,7 @@ export async function runFrontendPostprocess(
     audioFiles: [],
     videoFiles: [],
     packagedVideo: null,
+    packagedVideoCompatibility: null,
     stitchFailure: null,
     stitchMessage: null,
     importedAssetIds: [],

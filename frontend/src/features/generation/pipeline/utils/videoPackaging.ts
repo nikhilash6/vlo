@@ -2,6 +2,8 @@
  * Frame+audio stitching into an MP4 video for the generation pipeline.
  */
 
+import { buildAssetFamilyCompatibility } from "../../../../shared/utils/assetFamilies";
+import type { AssetFamilyCompatibility } from "../../../../types/Asset";
 import {
   Output,
   Mp4OutputFormat,
@@ -12,6 +14,11 @@ import {
 import { sortFrameFilesBySequence } from "./files";
 import { toPositiveFps } from "./fps";
 import { createOutputCanvas, isCanvas2DContext } from "./media";
+
+export interface PackagedVideoResult {
+  file: File;
+  compatibility: AssetFamilyCompatibility;
+}
 
 export async function decodeAudioBuffer(file: File): Promise<AudioBuffer> {
   const AudioContextCtor =
@@ -35,7 +42,7 @@ export async function packageFramesAndAudioToVideo(
   frameFiles: File[],
   audioFile: File | null,
   fps: number,
-): Promise<File> {
+): Promise<PackagedVideoResult> {
   if (frameFiles.length === 0) {
     throw new Error("No frame files were provided for packaging");
   }
@@ -78,8 +85,10 @@ export async function packageFramesAndAudioToVideo(
   }
   await output.start();
 
+  let audioDurationSeconds = 0;
   if (audioSource && audioFile) {
     const audioBuffer = await decodeAudioBuffer(audioFile);
+    audioDurationSeconds = audioBuffer.duration;
     await audioSource.add(audioBuffer);
     await audioSource.close();
   }
@@ -103,12 +112,18 @@ export async function packageFramesAndAudioToVideo(
     throw new Error("Packaged video output buffer is empty");
   }
 
-  return new File(
-    [bufferTarget.buffer],
-    `generation-packaged-${Date.now()}.mp4`,
-    {
-      type: "video/mp4",
-      lastModified: Date.now(),
-    },
-  );
+  const file = new File([bufferTarget.buffer], `generation-packaged-${Date.now()}.mp4`, {
+    type: "video/mp4",
+    lastModified: Date.now(),
+  });
+  const frameDurationSeconds = orderedFrames.length / safeFps;
+
+  return {
+    file,
+    compatibility: buildAssetFamilyCompatibility({
+      type: "video",
+      duration: Math.max(frameDurationSeconds, audioDurationSeconds),
+      fps: safeFps,
+    }),
+  };
 }

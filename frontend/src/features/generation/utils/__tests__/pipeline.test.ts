@@ -523,7 +523,14 @@ describe("generation pipeline", () => {
       .mockResolvedValueOnce(frameOne)
       .mockResolvedValueOnce(frameTwo)
       .mockResolvedValueOnce(audio);
-    mockPackageFramesAndAudioToVideo.mockResolvedValue(packagedVideo);
+    mockPackageFramesAndAudioToVideo.mockResolvedValue({
+      file: packagedVideo,
+      compatibility: {
+        assetType: "video",
+        durationMs: 2000,
+        fpsMilli: 12000,
+      },
+    });
     mockAddLocalAsset.mockResolvedValue({ id: "asset-packaged" });
 
     const result = await frontendPostprocess(
@@ -638,7 +645,14 @@ describe("generation pipeline", () => {
     mockFetchOutputAsFile
       .mockResolvedValueOnce(frameOne)
       .mockResolvedValueOnce(frameTwo);
-    mockPackageFramesAndAudioToVideo.mockResolvedValue(packagedVideo);
+    mockPackageFramesAndAudioToVideo.mockResolvedValue({
+      file: packagedVideo,
+      compatibility: {
+        assetType: "video",
+        durationMs: 167,
+        fpsMilli: 12000,
+      },
+    });
     mockAddLocalAsset.mockResolvedValue({ id: "asset-packaged-silent" });
 
     const result = await frontendPostprocess(
@@ -701,7 +715,14 @@ describe("generation pipeline", () => {
       type: "video/webm",
     });
 
-    mockPackageFramesAndAudioToVideo.mockResolvedValue(packagedVideo);
+    mockPackageFramesAndAudioToVideo.mockResolvedValue({
+      file: packagedVideo,
+      compatibility: {
+        assetType: "video",
+        durationMs: 167,
+        fpsMilli: 12000,
+      },
+    });
     mockAddLocalAsset.mockResolvedValue({ id: "asset-packaged-ws" });
 
     const result = await frontendPostprocess(
@@ -804,7 +825,7 @@ describe("generation pipeline", () => {
 
     mockFetchOutputAsFile.mockResolvedValue(output);
     mockGetFamilies.mockReturnValue([existingFamily]);
-    mockAddLocalAsset.mockResolvedValue({ id: "asset-family-match" });
+    mockAddLocalAssetWithFamily.mockResolvedValue({ id: "asset-family-match" });
 
     await frontendPostprocess(
       [
@@ -828,10 +849,22 @@ describe("generation pipeline", () => {
       },
     );
 
-    expect(mockAddLocalAsset).toHaveBeenCalledWith(
+    expect(mockAddLocalAssetWithFamily).toHaveBeenCalledWith(
       output,
       makeGenerationMetadata(),
-      "existing-family",
+      expect.objectContaining({
+        id: "existing-family",
+        compatibility: {
+          assetType: "image",
+          durationMs: 5000,
+          fpsMilli: null,
+        },
+      }),
+      {
+        assetType: "image",
+        durationMs: 5000,
+        fpsMilli: null,
+      },
     );
     expect(mockUpsertFamily).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -856,7 +889,7 @@ describe("generation pipeline", () => {
       .mockResolvedValueOnce(firstOutput)
       .mockResolvedValueOnce(secondOutput);
     mockAddLocalAssetWithFamily.mockResolvedValueOnce({ id: "asset-family-1" });
-    mockAddLocalAsset.mockResolvedValueOnce({ id: "asset-family-2" });
+    mockAddLocalAssetWithFamily.mockResolvedValueOnce({ id: "asset-family-2" });
     mockUpsertFamily.mockImplementation(async (family) => {
       createdFamilies.splice(0, createdFamilies.length, family);
     });
@@ -910,41 +943,66 @@ describe("generation pipeline", () => {
       },
     );
 
-    expect(mockAddLocalAsset).toHaveBeenLastCalledWith(
+    expect(mockAddLocalAssetWithFamily).toHaveBeenLastCalledWith(
       secondOutput,
       makeGenerationMetadata(),
-      createdFamily?.id,
+      expect.objectContaining({
+        id: createdFamily?.id,
+      }),
+      {
+        assetType: "image",
+        durationMs: 5000,
+        fpsMilli: null,
+      },
     );
   });
 
-  it("creates an auto-family even when output compatibility is partial", async () => {
+  it("creates an auto-family for stitched videos from deterministic compatibility", async () => {
     const requestKey = "generation-family-request:v1:partial-family";
+    const frameOne = new File(["frame-1"], "frame_0001.png", {
+      type: "image/png",
+    });
+    const frameTwo = new File(["frame-2"], "frame_0002.png", {
+      type: "image/png",
+    });
     const output = new File(["video"], "output.mp4", {
       type: "video/mp4",
     });
 
-    mockInspectAssetFamilyCompatibility.mockResolvedValue({
-      assetType: "video",
-      durationMs: 5000,
-      fpsMilli: null,
+    mockFetchOutputAsFile
+      .mockResolvedValueOnce(frameOne)
+      .mockResolvedValueOnce(frameTwo);
+    mockPackageFramesAndAudioToVideo.mockResolvedValue({
+      file: output,
+      compatibility: {
+        assetType: "video",
+        durationMs: 167,
+        fpsMilli: 12000,
+      },
     });
-    mockFetchOutputAsFile.mockResolvedValue(output);
     mockAddLocalAssetWithFamily.mockResolvedValue({ id: "asset-partial-family" });
 
     await frontendPostprocess(
       [
         {
-          filename: "output.mp4",
+          filename: "frame_0001.png",
           subfolder: "",
           type: "output",
-          viewUrl: "/output.mp4",
+          viewUrl: "/frame_0001.png",
+        },
+        {
+          filename: "frame_0002.png",
+          subfolder: "",
+          type: "output",
+          viewUrl: "/frame_0002.png",
         },
       ],
       {
         postprocessing: {
-          mode: "none",
+          mode: "stitch_frames_with_audio",
           panel_preview: "raw_outputs",
           on_failure: "fallback_raw",
+          stitch_fps: 12,
         },
         aspectRatioProcessing: null,
         autoFamilyRequestKey: requestKey,
@@ -959,11 +1017,17 @@ describe("generation pipeline", () => {
       expect.objectContaining({
         compatibility: {
           assetType: "video",
-          durationMs: 5000,
-          fpsMilli: null,
+          durationMs: 167,
+          fpsMilli: 12000,
         },
       }),
+      {
+        assetType: "video",
+        durationMs: 167,
+        fpsMilli: 12000,
+      },
     );
+    expect(mockInspectAssetFamilyCompatibility).not.toHaveBeenCalled();
     expect(mockUpsertFamily).toHaveBeenCalledWith(
       expect.objectContaining({
         representativeAssetId: "asset-partial-family",

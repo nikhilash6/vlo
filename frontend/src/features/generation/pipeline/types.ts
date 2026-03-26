@@ -7,7 +7,10 @@ import type {
   WorkflowPostprocessingConfig,
 } from "../types";
 import type { DerivedMaskSourceVideoTreatment } from "../derivedMaskVideoTreatment";
-import type { GeneratedCreationMetadata } from "../../../types/Asset";
+import type {
+  AssetFamilyCompatibility,
+  GeneratedCreationMetadata,
+} from "../../../types/Asset";
 import type { TimelineSelection } from "../../../types/TimelineTypes";
 import type { WorkflowRuleWarning } from "../services/workflowRules";
 
@@ -220,6 +223,7 @@ export interface FrontendPostprocessContext {
   audioFiles: File[];
   videoFiles: File[];
   packagedVideo: File | null;
+  packagedVideoCompatibility: AssetFamilyCompatibility | null;
   stitchFailure: string | null;
   stitchMessage: string | null;
   importedAssetIds: string[];
