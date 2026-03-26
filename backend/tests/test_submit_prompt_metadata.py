@@ -302,7 +302,7 @@ def test_project_prompt_to_graph_data_preserves_linked_widget_defaults():
     assert [12, 6, 0, 5, 0, "IMAGE"] in projected["links"]
 
 
-def test_project_prompt_to_graph_data_clears_stale_links_missing_from_prompt():
+def test_project_prompt_to_graph_data_preserves_authored_links_missing_from_prompt():
     workflow = {
         "67": {
             "class_type": "WanFirstLastFrameToVideo",
@@ -364,9 +364,12 @@ def test_project_prompt_to_graph_data_clears_stale_links_missing_from_prompt():
 
     consumer_inputs = node_by_id["67"]["inputs"]
     assert consumer_inputs[0]["link"] == 157
-    assert consumer_inputs[1]["link"] is None
-    assert projected["links"] == [[157, 62, 0, 67, 0, "IMAGE"]]
-    assert node_by_id["68"]["outputs"][0]["links"] is None
+    assert consumer_inputs[1]["link"] == 158
+    assert projected["links"] == [
+        [157, 62, 0, 67, 0, "IMAGE"],
+        [158, 68, 0, 67, 1, "IMAGE"],
+    ]
+    assert node_by_id["68"]["outputs"][0]["links"] == [158]
 
 
 @pytest.mark.anyio

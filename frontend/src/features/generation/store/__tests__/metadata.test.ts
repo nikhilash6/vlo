@@ -1,0 +1,192 @@
+import { describe, expect, it } from "vitest";
+import {
+  buildGeneratedCreationMetadata,
+  extractReplayPanelState,
+  parseReplayWorkflowInputs,
+} from "../metadata";
+import type { WorkflowInput } from "../../types";
+
+describe("generation metadata replay helpers", () => {
+  it("captures replay-oriented frontend state alongside legacy generation metadata", () => {
+    const workflowInputs: WorkflowInput[] = [
+      {
+        id: "6:text",
+        nodeId: "6",
+        classType: "CLIPTextEncode",
+        inputType: "text",
+        param: "text",
+        label: "Prompt",
+        description: "Main prompt",
+        currentValue: "old prompt",
+        origin: "rule",
+      },
+      {
+        id: "145:image",
+        nodeId: "145",
+        classType: "LoadImage",
+        inputType: "image",
+        param: "image",
+        label: "Start Frame",
+        currentValue: null,
+        origin: "rule",
+        dispatch: {
+          kind: "node",
+          selectionConfig: {
+            exportFps: 12,
+            frameStep: 2,
+          },
+        },
+      },
+    ];
+
+    const metadata = buildGeneratedCreationMetadata({
+      workflowName: "Workflow",
+      workflowSourceId: "wan2_2_flf2v.json",
+      workflowInputs,
+      mediaInputs: {},
+      slotValues: {
+        "6:text": {
+          type: "text",
+          value: "updated prompt",
+        },
+      },
+      targetResolution: 720,
+      exactAspectRatio: true,
+      maskCropMode: "full",
+      maskCropDilation: 0.2,
+      widgetInputs: {
+        widget_145_strength_model: "0.5",
+      },
+      widgetModes: {
+        widget_mode_145_seed: "randomize",
+      },
+      derivedWidgetInputs: {
+        derived_widget_dual_sampler_denoise: "0.4",
+      },
+    });
+
+    expect(metadata).toEqual({
+      source: "generated",
+      workflowName: "Workflow",
+      workflowSourceId: "wan2_2_flf2v.json",
+      inputs: [],
+      targetResolution: 720,
+      replayState: {
+        version: 1,
+        workflowSourceId: "wan2_2_flf2v.json",
+        workflowInputs: [
+          {
+            id: "6:text",
+            nodeId: "6",
+            classType: "CLIPTextEncode",
+            inputType: "text",
+            param: "text",
+            label: "Prompt",
+            description: "Main prompt",
+            origin: "rule",
+          },
+          {
+            id: "145:image",
+            nodeId: "145",
+            classType: "LoadImage",
+            inputType: "image",
+            param: "image",
+            label: "Start Frame",
+            origin: "rule",
+            dispatch: {
+              kind: "node",
+              selectionConfig: {
+                exportFps: 12,
+                frameStep: 2,
+              },
+            },
+          },
+        ],
+        textValues: {
+          "6:text": "updated prompt",
+        },
+        widgetValues: {
+          widget_145_strength_model: "0.5",
+        },
+        widgetModes: {
+          widget_mode_145_seed: "randomize",
+        },
+        derivedWidgetValues: {
+          derived_widget_dual_sampler_denoise: "0.4",
+        },
+        exactAspectRatio: true,
+        maskCropMode: "full",
+        maskCropDilation: 0.2,
+      },
+    });
+  });
+
+  it("restores replay workflow inputs and panel state from saved metadata", () => {
+    const replayState = {
+      version: 1 as const,
+      workflowSourceId: "wan2_2_flf2v.json",
+      workflowInputs: [
+        {
+          id: "145:image",
+          nodeId: "145",
+          classType: "LoadImage",
+          inputType: "image" as const,
+          param: "image",
+          label: "Start Frame",
+          origin: "rule" as const,
+        },
+      ],
+      textValues: {
+        "6:text": "updated prompt",
+      },
+      widgetValues: {
+        widget_145_strength_model: "0.5",
+      },
+      widgetModes: {
+        widget_mode_145_seed: "randomize" as const,
+      },
+      derivedWidgetValues: {
+        derived_widget_dual_sampler_denoise: "0.4",
+      },
+      exactAspectRatio: true,
+      maskCropMode: "full" as const,
+      maskCropDilation: 0.2,
+    };
+
+    expect(parseReplayWorkflowInputs(replayState)).toEqual([
+      {
+        id: "145:image",
+        nodeId: "145",
+        classType: "LoadImage",
+        inputType: "image",
+        param: "image",
+        label: "Start Frame",
+        description: null,
+        currentValue: null,
+        origin: "rule",
+      },
+    ]);
+
+    expect(
+      extractReplayPanelState({
+        source: "generated",
+        workflowName: "Workflow",
+        inputs: [],
+        replayState,
+      }),
+    ).toEqual({
+      textValues: {
+        "6:text": "updated prompt",
+      },
+      widgetValues: {
+        widget_145_strength_model: "0.5",
+      },
+      widgetModes: {
+        widget_mode_145_seed: "randomize",
+      },
+      derivedWidgetValues: {
+        derived_widget_dual_sampler_denoise: "0.4",
+      },
+    });
+  });
+});

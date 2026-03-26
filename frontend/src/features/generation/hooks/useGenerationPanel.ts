@@ -16,6 +16,7 @@ import { useProjectStore } from "../../project";
 import type {
   GenerationMediaInputValue,
   WorkflowSelectionConfig,
+  WorkflowWidgetInput,
 } from "../types";
 import type { SlotValue } from "../utils/pipeline";
 import {
@@ -93,6 +94,35 @@ function setNodeParamValue(
   };
 }
 
+function parseStoredWidgetValue(
+  widget: WorkflowWidgetInput,
+  storedValue: string,
+): unknown {
+  const valueType = widget.config.valueType;
+  const fallbackValue = widget.currentValue;
+
+  if (
+    valueType === "int" ||
+    valueType === "float" ||
+    typeof fallbackValue === "number"
+  ) {
+    const parsed = Number(storedValue);
+    return Number.isFinite(parsed) ? parsed : fallbackValue;
+  }
+
+  if (valueType === "boolean" || typeof fallbackValue === "boolean") {
+    if (storedValue === "true") {
+      return true;
+    }
+    if (storedValue === "false") {
+      return false;
+    }
+    return fallbackValue;
+  }
+
+  return storedValue;
+}
+
 export function useGenerationPanel() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [urlAnchorEl, setUrlAnchorEl] = useState<null | HTMLElement>(null);
@@ -161,6 +191,12 @@ export function useGenerationPanel() {
     (s) => s.setMediaInputTimelineSelection,
   );
   const clearMediaInput = useGenerationStore((s) => s.clearMediaInput);
+  const pendingReplayPanelState = useGenerationStore(
+    (s) => s.pendingReplayPanelState,
+  );
+  const clearPendingReplayPanelState = useGenerationStore(
+    (s) => s.clearPendingReplayPanelState,
+  );
   const selectionExtractionRequestIdsRef = useRef<Record<string, number>>({});
 
   const activeJob = activeJobId ? (jobs.get(activeJobId) ?? null) : null;
@@ -274,6 +310,84 @@ export function useGenerationPanel() {
       return next;
     });
   }, [lastAppliedWidgetValues]);
+
+  useEffect(() => {
+    if (!pendingReplayPanelState) {
+      return;
+    }
+
+    setTextValues((prev) => {
+      const next = { ...prev };
+      for (const input of workflowInputs) {
+        if (input.inputType !== "text") {
+          continue;
+        }
+        const inputId = getWorkflowInputId(input);
+        if (
+          Object.prototype.hasOwnProperty.call(
+            pendingReplayPanelState.textValues,
+            inputId,
+          )
+        ) {
+          next[inputId] = pendingReplayPanelState.textValues[inputId] ?? "";
+        }
+      }
+      return next;
+    });
+
+    if (
+      Object.keys(pendingReplayPanelState.widgetValues).length > 0 ||
+      Object.keys(pendingReplayPanelState.derivedWidgetValues).length > 0
+    ) {
+      const nextWidgetValues: Record<string, Record<string, unknown>> = {};
+
+      for (const widget of widgetInputs) {
+        if (!nextWidgetValues[widget.nodeId]) {
+          nextWidgetValues[widget.nodeId] = {};
+        }
+
+        let restoredValue: unknown = widget.currentValue;
+        if (widget.kind === "derived") {
+          const replayKey = `derived_widget_${widget.derivedWidgetId}`;
+          const storedValue =
+            pendingReplayPanelState.derivedWidgetValues[replayKey];
+          if (typeof storedValue === "string") {
+            restoredValue = parseStoredWidgetValue(widget, storedValue);
+          }
+        } else {
+          const replayKey = `widget_${widget.nodeId}_${widget.param}`;
+          const storedValue = pendingReplayPanelState.widgetValues[replayKey];
+          if (typeof storedValue === "string") {
+            restoredValue = parseStoredWidgetValue(widget, storedValue);
+          }
+        }
+
+        nextWidgetValues[widget.nodeId][widget.param] = restoredValue;
+      }
+
+      widgetValuesRef.current = nextWidgetValues;
+      setWidgetValues(nextWidgetValues);
+    }
+
+    if (Object.keys(pendingReplayPanelState.widgetModes).length > 0) {
+      setRandomizeToggles((prev) => {
+        const next = { ...prev };
+        for (const widget of widgetInputs) {
+          if (!widget.config.controlAfterGenerate) {
+            continue;
+          }
+          const replayKey = `widget_mode_${widget.nodeId}_${widget.param}`;
+          const restoredMode = pendingReplayPanelState.widgetModes[replayKey];
+          if (!restoredMode) {
+            continue;
+          }
+          next[`${widget.nodeId}:${widget.param}`] =
+            restoredMode === "randomize";
+        }
+        return next;
+      });
+    }
+  }, [pendingReplayPanelState, widgetInputs, workflowInputs]);
 
   useEffect(() => {
     const store = useGenerationStore.getState();
@@ -734,16 +848,18 @@ export function useGenerationPanel() {
   );
 
   const handleTextValueCommit = useCallback((inputId: string, value: string) => {
+    clearPendingReplayPanelState();
     const canonicalInputId =
       resolveWorkflowInputKeys(inputId, workflowInputById)[0] ?? inputId;
     setTextValues((prev) => {
       if (prev[canonicalInputId] === value) return prev;
       return { ...prev, [canonicalInputId]: value };
     });
-  }, [workflowInputById]);
+  }, [clearPendingReplayPanelState, workflowInputById]);
 
   const handleWidgetChange = useCallback(
     (nodeId: string, param: string, value: unknown) => {
+      clearPendingReplayPanelState();
       widgetValuesRef.current = setNodeParamValue(
         widgetValuesRef.current,
         nodeId,
@@ -757,16 +873,17 @@ export function useGenerationPanel() {
         return setNodeParamValue(prev, nodeId, param, value);
       });
     },
-    [],
+    [clearPendingReplayPanelState],
   );
 
   const handleToggleRandomize = useCallback((nodeId: string, param: string) => {
+    clearPendingReplayPanelState();
     const key = `${nodeId}:${param}`;
     setRandomizeToggles((prev) => ({
       ...prev,
       [key]: !prev[key],
     }));
-  }, []);
+  }, [clearPendingReplayPanelState]);
 
   const isRunning =
     activeJob?.status === "running" || activeJob?.status === "queued";

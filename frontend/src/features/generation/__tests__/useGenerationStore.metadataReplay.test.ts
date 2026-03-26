@@ -40,6 +40,7 @@ describe("useGenerationStore metadata replay", () => {
       syncedGraphData: null,
       workflowInputs: [],
       mediaInputs: {},
+      pendingReplayPanelState: null,
       derivedMaskMappings: [],
       isWorkflowLoading: false,
       workflowLoadState: "idle",
@@ -153,6 +154,133 @@ describe("useGenerationStore metadata replay", () => {
       kind: "asset",
       asset: { id: sourceAsset.id },
     });
+  });
+
+  it("prefers saved workflow source and replay snapshot data when restoring a generated workflow", async () => {
+    const sourceAsset: Asset = {
+      id: "source-asset",
+      hash: "hash-source",
+      name: "source.png",
+      type: "image",
+      src: "source.png",
+      createdAt: Date.now(),
+    };
+    const generatedAsset: Asset = {
+      id: "generated-asset",
+      hash: "hash-generated",
+      name: "generated.png",
+      type: "image",
+      src: "generated.png",
+      createdAt: Date.now(),
+      creationMetadata: {
+        source: "generated",
+        workflowName: "Original Workflow",
+        workflowSourceId: "wan2_2_flf2v.json",
+        targetResolution: 720,
+        inputs: [
+          {
+            nodeId: "145",
+            kind: "draggedAsset",
+            parentAssetId: sourceAsset.id,
+          },
+        ],
+        replayState: {
+          version: 1,
+          workflowSourceId: "wan2_2_flf2v.json",
+          workflowInputs: [
+            {
+              nodeId: "145",
+              classType: "LoadImage",
+              inputType: "image",
+              param: "image",
+              label: "Replay Source Image",
+              origin: "rule",
+            },
+          ],
+          textValues: {
+            "6:text": "hello from replay",
+          },
+          widgetValues: {
+            widget_145_strength_model: "0.5",
+          },
+          widgetModes: {
+            widget_mode_145_seed: "randomize",
+          },
+          derivedWidgetValues: {
+            derived_widget_dual_sampler_denoise: "0.4",
+          },
+          exactAspectRatio: true,
+          maskCropMode: "full",
+          maskCropDilation: 0.2,
+        },
+        comfyuiPrompt: {
+          "999": {
+            class_type: "RuntimeOnlyNode",
+            inputs: {},
+          },
+        },
+        comfyuiWorkflow: {
+          nodes: [{ id: 145, type: "LoadImage", widgets_values: ["source.png"] }],
+        },
+      },
+    };
+
+    useAssetStore.setState({ assets: [sourceAsset, generatedAsset] });
+
+    vi.spyOn(comfyApi, "listWorkflows").mockResolvedValue([
+      { id: "wan2_2_flf2v.json", name: "Wan2.2 I2V & FLF2V" },
+    ]);
+    vi.spyOn(comfyApi, "getWorkflowRules").mockResolvedValue({
+      workflow_id: "wan2_2_flf2v.json",
+      has_sidecar: true,
+      rules: createDefaultWorkflowRules({
+        aspect_ratio_processing: {
+          enabled: true,
+          resolutions: [480, 720, 1080],
+        },
+        nodes: {
+          "145": {
+            present: {
+              label: "Source Image",
+              input_type: "image",
+              param: "image",
+              class_type: "LoadImage",
+            },
+          },
+        },
+      }),
+      warnings: [],
+    });
+    const getWorkflowContentSpy = vi.spyOn(comfyApi, "getWorkflowContent");
+
+    await useGenerationStore
+      .getState()
+      .loadWorkflowFromAssetMetadata(generatedAsset);
+
+    const state = useGenerationStore.getState();
+
+    expect(state.selectedWorkflowId).toBe(TEMP_WORKFLOW_ID);
+    expect(state.rulesWorkflowSourceId).toBe("wan2_2_flf2v.json");
+    expect(state.targetResolution).toBe(720);
+    expect(state.exactAspectRatio).toBe(true);
+    expect(state.maskCropMode).toBe("full");
+    expect(state.maskCropDilation).toBe(0.2);
+    expect(state.workflowInputs[0]?.label).toBe("Source Image");
+    expect(state.pendingReplayPanelState).toEqual({
+      textValues: {
+        "6:text": "hello from replay",
+      },
+      widgetValues: {
+        widget_145_strength_model: "0.5",
+      },
+      widgetModes: {
+        widget_mode_145_seed: "randomize",
+      },
+      derivedWidgetValues: {
+        derived_widget_dual_sampler_denoise: "0.4",
+      },
+    });
+    expect(getWorkflowContentSpy).not.toHaveBeenCalled();
   });
 
   it("clamps a saved target resolution to the closest supported workflow value", async () => {

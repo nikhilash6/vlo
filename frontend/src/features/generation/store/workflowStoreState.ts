@@ -10,6 +10,8 @@ import { mergeRuleWarnings } from "../services/warnings";
 import { buildMediaInputActions } from "./mediaInputActions";
 import { pruneMediaInputs } from "./mediaInputState";
 import {
+  extractReplayPanelState,
+  parseReplayWorkflowInputs,
   parseMetadataWorkflowInputs,
   resolveMetadataWorkflowMatch,
   restoreMediaInputsFromMetadata,
@@ -105,6 +107,10 @@ export function buildWorkflowStoreState(
     setMaskCropDilation: (dilation: number) =>
       set({ maskCropDilation: Math.max(0, Math.min(0.5, dilation)) }),
     mediaInputs: {},
+    pendingReplayPanelState: null,
+    setPendingReplayPanelState: (pendingReplayPanelState) =>
+      set({ pendingReplayPanelState }),
+    clearPendingReplayPanelState: () => set({ pendingReplayPanelState: null }),
     editorRef: null,
 
     registerEditor: (iframe) => {
@@ -336,6 +342,7 @@ export function buildWorkflowStoreState(
         isWorkflowReady: false,
         workflowWarning: null,
         workflowRuleWarnings: [],
+        pendingReplayPanelState: null,
       });
 
       let deferred = false;
@@ -506,6 +513,7 @@ export function buildWorkflowStoreState(
         isWorkflowReady: false,
         workflowWarning: null,
         workflowRuleWarnings: [],
+        pendingReplayPanelState: null,
       });
 
       try {
@@ -514,19 +522,27 @@ export function buildWorkflowStoreState(
           metadata.comfyuiPrompt ?? metadata.comfyuiWorkflow ?? null;
         const graphData =
           metadata.comfyuiWorkflow ?? metadata.comfyuiPrompt ?? null;
+        const replayState = metadata.replayState ?? null;
+        const preferredWorkflowSourceId =
+          replayState?.workflowSourceId ?? metadata.workflowSourceId ?? null;
 
         if (workflow && graphData) {
           const resolvedMatch = await resolveMetadataWorkflowMatch(
             graphData,
             state.availableWorkflows,
+            preferredWorkflowSourceId,
           );
+          const replayWorkflowInputs = parseReplayWorkflowInputs(replayState);
           const nextTempWorkflow: TempWorkflow = {
             workflow,
             graphData,
-            inputs: parseMetadataWorkflowInputs(
-              metadata.comfyuiPrompt ?? null,
-              state.inputNodeMap,
-            ),
+            inputs:
+              replayWorkflowInputs.length > 0
+                ? replayWorkflowInputs
+                : parseMetadataWorkflowInputs(
+                    metadata.comfyuiPrompt ?? null,
+                    state.inputNodeMap,
+                  ),
             name: LOADED_WORKFLOW_DISPLAY_NAME,
             rules: resolvedMatch.rules,
             rulesSourceId: resolvedMatch.rulesSourceId,
@@ -574,6 +590,19 @@ export function buildWorkflowStoreState(
                     supportedResolutions,
                   )
                 : savedTargetResolution,
+          });
+        }
+
+        const savedReplayState = metadata.replayState;
+        if (savedReplayState) {
+          set({
+            exactAspectRatio: savedReplayState.exactAspectRatio ?? false,
+            maskCropMode: savedReplayState.maskCropMode ?? get().maskCropMode,
+            maskCropDilation:
+              typeof savedReplayState.maskCropDilation === "number"
+                ? Math.max(0, Math.min(0.5, savedReplayState.maskCropDilation))
+                : get().maskCropDilation,
+            pendingReplayPanelState: extractReplayPanelState(metadata),
           });
         }
 

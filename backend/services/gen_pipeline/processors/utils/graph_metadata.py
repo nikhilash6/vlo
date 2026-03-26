@@ -273,19 +273,6 @@ def _sync_link_input(
     _ensure_output_link(source_node, output_index, current_link_id)
 
 
-def _clear_graph_input_link(
-    graph_data: dict[str, Any],
-    graph_nodes_by_id: dict[str, dict[str, Any]],
-    input_entry: dict[str, Any],
-) -> None:
-    current_link_id = input_entry.get("link")
-    if not isinstance(current_link_id, int):
-        return
-
-    _remove_link(graph_data, graph_nodes_by_id, current_link_id)
-    input_entry["link"] = None
-
-
 def project_prompt_to_graph_data(
     workflow: dict[str, Any],
     graph_data: dict[str, Any] | None,
@@ -322,15 +309,6 @@ def project_prompt_to_graph_data(
             str(node_id),
             class_type if isinstance(class_type, str) else None,
         )
-
-        # Prompt inputs are the source of truth for active graph links. If a
-        # visual workflow still has a connection for a param the final prompt no
-        # longer includes, clear that stale link so metadata replay won't
-        # resurrect bypassed optional inputs.
-        for param, (_, input_entry) in graph_input_index.items():
-            if param in prompt_inputs:
-                continue
-            _clear_graph_input_link(projected_graph, graph_nodes_by_id, input_entry)
 
         for param, value in prompt_inputs.items():
             if not isinstance(param, str):

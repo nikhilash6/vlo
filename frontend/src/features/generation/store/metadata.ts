@@ -1,4 +1,8 @@
-import type { GeneratedCreationMetadata } from "../../../types/Asset";
+import type {
+  GeneratedCreationMetadata,
+  GeneratedCreationReplayState,
+  GeneratedCreationWorkflowInputSnapshot,
+} from "../../../types/Asset";
 import { getAssetById } from "../../userAssets/publicApi";
 import type { DerivedMaskMapping } from "../pipeline/types";
 import {
@@ -19,14 +23,23 @@ import type {
   WorkflowRuleWarning,
   WorkflowRules,
 } from "../services/workflowRules";
-import type { WorkflowInput } from "../types";
+import type {
+  GenerationMediaInputValue,
+  WorkflowInput,
+  WorkflowMaskCroppingMode,
+} from "../types";
 import { TEMP_WORKFLOW_ID } from "./constants";
 import { EMPTY_WORKFLOW_RULES } from "./workflowState";
-import type { GenerationWorkflowState, WorkflowOption } from "./types";
+import type {
+  GenerationWorkflowState,
+  WorkflowOption,
+  WorkflowReplayPanelState,
+} from "./types";
 
 export async function resolveMetadataWorkflowMatch(
   workflowData: Record<string, unknown>,
   availableWorkflows: WorkflowOption[],
+  preferredWorkflowSourceId: string | null = null,
 ): Promise<{
   availableWorkflows: WorkflowOption[];
   matchedWorkflow: WorkflowOption | null;
@@ -45,6 +58,42 @@ export async function resolveMetadataWorkflowMatch(
       "[Generation] Failed to refresh workflows for metadata match:",
       error,
     );
+  }
+
+  const preferredWorkflow =
+    preferredWorkflowSourceId !== null
+      ? candidateWorkflows.find(
+          (workflow) => workflow.id === preferredWorkflowSourceId,
+        ) ?? null
+      : null;
+
+  if (preferredWorkflowSourceId) {
+    try {
+      const response = await comfyApi.getWorkflowRules(preferredWorkflowSourceId);
+      return {
+        availableWorkflows: candidateWorkflows,
+        matchedWorkflow: preferredWorkflow,
+        rules: response.has_sidecar ? response.rules : EMPTY_WORKFLOW_RULES,
+        rulesWarnings: response.warnings ?? [],
+        rulesSourceId: preferredWorkflowSourceId,
+      };
+    } catch (error) {
+      return {
+        availableWorkflows: candidateWorkflows,
+        matchedWorkflow: preferredWorkflow,
+        rules: EMPTY_WORKFLOW_RULES,
+        rulesWarnings: [
+          {
+            code: "rules_fetch_failed",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Failed to fetch workflow rules; defaulting to inferred behavior",
+          },
+        ],
+        rulesSourceId: preferredWorkflowSourceId,
+      };
+    }
   }
 
   const workflowMatches = await Promise.all(
@@ -216,16 +265,30 @@ export async function restoreMediaInputsFromMetadata(
 }
 
 export function buildGeneratedCreationMetadata(
-  workflowName: string,
-  workflowInputs: WorkflowInput[],
-  mediaInputs: Record<string, import("../types").GenerationMediaInputValue | null>,
-  targetResolution: number,
+  options: {
+    workflowName: string;
+    workflowSourceId: string | null;
+    workflowInputs: WorkflowInput[];
+    mediaInputs: Record<string, GenerationMediaInputValue | null>;
+    slotValues: Record<string, import("../utils/pipeline").SlotValue>;
+    targetResolution: number;
+    exactAspectRatio: boolean;
+    maskCropMode: WorkflowMaskCroppingMode;
+    maskCropDilation: number;
+    widgetInputs: Record<string, string>;
+    widgetModes: Record<string, "fixed" | "randomize">;
+    derivedWidgetInputs: Record<string, string>;
+  },
 ): GeneratedCreationMetadata {
   const inputs: GeneratedCreationMetadata["inputs"] = [];
-  const inputById = buildWorkflowInputLookup(workflowInputs);
+  const inputById = buildWorkflowInputLookup(options.workflowInputs);
 
-  for (const workflowInput of workflowInputs) {
-    const value = getWorkflowInputValue(mediaInputs, workflowInput, inputById);
+  for (const workflowInput of options.workflowInputs) {
+    const value = getWorkflowInputValue(
+      options.mediaInputs,
+      workflowInput,
+      inputById,
+    );
     if (!value) continue;
 
     if (value.kind === "timelineSelection") {
@@ -246,12 +309,33 @@ export function buildGeneratedCreationMetadata(
     }
   }
 
-  return {
+  const replayState = buildGeneratedCreationReplayState({
+    workflowSourceId: options.workflowSourceId,
+    workflowInputs: options.workflowInputs,
+    slotValues: options.slotValues,
+    widgetInputs: options.widgetInputs,
+    widgetModes: options.widgetModes,
+    derivedWidgetInputs: options.derivedWidgetInputs,
+    exactAspectRatio: options.exactAspectRatio,
+    maskCropMode: options.maskCropMode,
+    maskCropDilation: options.maskCropDilation,
+  });
+
+  const metadata: GeneratedCreationMetadata = {
     source: "generated",
-    workflowName,
+    workflowName: options.workflowName,
     inputs,
-    targetResolution,
+    targetResolution: options.targetResolution,
   };
+
+  if (options.workflowSourceId) {
+    metadata.workflowSourceId = options.workflowSourceId;
+  }
+  if (replayState) {
+    metadata.replayState = replayState;
+  }
+
+  return metadata;
 }
 
 export function findPreparedMaskFallback(
@@ -296,4 +380,224 @@ export function parseMetadataWorkflowInputs(
 ): WorkflowInput[] {
   if (!prompt) return [];
   return parseWorkflowInputs(prompt, inputNodeMap);
+}
+
+export function parseReplayWorkflowInputs(
+  replayState: GeneratedCreationReplayState | null | undefined,
+): WorkflowInput[] {
+  if (!Array.isArray(replayState?.workflowInputs)) {
+    return [];
+  }
+
+  return replayState.workflowInputs.flatMap((snapshot) => {
+    if (!isWorkflowInputSnapshot(snapshot)) {
+      return [];
+    }
+
+    return [
+      {
+        id: snapshot.id,
+        nodeId: snapshot.nodeId,
+        classType: snapshot.classType,
+        inputType: snapshot.inputType,
+        param: snapshot.param,
+        label: snapshot.label,
+        description: snapshot.description ?? null,
+        currentValue: null,
+        origin: snapshot.origin,
+        dispatch:
+          snapshot.dispatch?.kind === "node"
+            ? {
+                kind: "node" as const,
+                ...(snapshot.dispatch.selectionConfig
+                  ? {
+                      selectionConfig: {
+                        ...snapshot.dispatch.selectionConfig,
+                      },
+                    }
+                  : {}),
+              }
+            : undefined,
+      },
+    ];
+  });
+}
+
+export function extractReplayPanelState(
+  metadata: GeneratedCreationMetadata,
+): WorkflowReplayPanelState | null {
+  const replayState = metadata.replayState;
+  if (!replayState) {
+    return null;
+  }
+
+  const textValues = isStringRecord(replayState.textValues)
+    ? replayState.textValues
+    : {};
+  const widgetValues = isStringRecord(replayState.widgetValues)
+    ? replayState.widgetValues
+    : {};
+  const widgetModes = isWidgetModesRecord(replayState.widgetModes)
+    ? replayState.widgetModes
+    : {};
+  const derivedWidgetValues = isStringRecord(replayState.derivedWidgetValues)
+    ? replayState.derivedWidgetValues
+    : {};
+
+  if (
+    Object.keys(textValues).length === 0 &&
+    Object.keys(widgetValues).length === 0 &&
+    Object.keys(widgetModes).length === 0 &&
+    Object.keys(derivedWidgetValues).length === 0
+  ) {
+    return null;
+  }
+
+  return {
+    textValues: { ...textValues },
+    widgetValues: { ...widgetValues },
+    widgetModes: { ...widgetModes },
+    derivedWidgetValues: { ...derivedWidgetValues },
+  };
+}
+
+function buildWorkflowInputSnapshot(
+  workflowInput: WorkflowInput,
+): GeneratedCreationWorkflowInputSnapshot {
+  const snapshot: GeneratedCreationWorkflowInputSnapshot = {
+    nodeId: workflowInput.nodeId,
+    classType: workflowInput.classType,
+    inputType: workflowInput.inputType,
+    param: workflowInput.param,
+    label: workflowInput.label,
+    origin: workflowInput.origin,
+  };
+
+  if (workflowInput.id) {
+    snapshot.id = workflowInput.id;
+  }
+  if (workflowInput.description !== undefined) {
+    snapshot.description = workflowInput.description;
+  }
+  if (workflowInput.dispatch?.kind === "node") {
+    snapshot.dispatch = {
+      kind: "node",
+      ...(workflowInput.dispatch.selectionConfig
+        ? {
+            selectionConfig: {
+              ...(workflowInput.dispatch.selectionConfig.exportFps != null
+                ? {
+                    exportFps: workflowInput.dispatch.selectionConfig.exportFps,
+                  }
+                : {}),
+              ...(workflowInput.dispatch.selectionConfig.frameStep != null
+                ? {
+                    frameStep: workflowInput.dispatch.selectionConfig.frameStep,
+                  }
+                : {}),
+              ...(workflowInput.dispatch.selectionConfig.maxFrames != null
+                ? {
+                    maxFrames: workflowInput.dispatch.selectionConfig.maxFrames,
+                  }
+                : {}),
+            },
+          }
+        : {}),
+    };
+  }
+
+  return snapshot;
+}
+
+function buildGeneratedCreationReplayState(options: {
+  workflowSourceId: string | null;
+  workflowInputs: WorkflowInput[];
+  slotValues: Record<string, import("../utils/pipeline").SlotValue>;
+  widgetInputs: Record<string, string>;
+  widgetModes: Record<string, "fixed" | "randomize">;
+  derivedWidgetInputs: Record<string, string>;
+  exactAspectRatio: boolean;
+  maskCropMode: WorkflowMaskCroppingMode;
+  maskCropDilation: number;
+}): GeneratedCreationReplayState | undefined {
+  const textValues: Record<string, string> = {};
+  for (const input of options.workflowInputs) {
+    if (input.inputType !== "text") {
+      continue;
+    }
+    const inputId = getWorkflowInputId(input);
+    const slotValue = options.slotValues[inputId];
+    if (slotValue?.type !== "text") {
+      continue;
+    }
+    textValues[inputId] = slotValue.value;
+  }
+
+  const replayState: GeneratedCreationReplayState = {
+    version: 1,
+    workflowInputs: options.workflowInputs.map(buildWorkflowInputSnapshot),
+    exactAspectRatio: options.exactAspectRatio,
+    maskCropMode: options.maskCropMode,
+    maskCropDilation: options.maskCropDilation,
+  };
+
+  if (options.workflowSourceId) {
+    replayState.workflowSourceId = options.workflowSourceId;
+  }
+  if (Object.keys(textValues).length > 0) {
+    replayState.textValues = textValues;
+  }
+  if (Object.keys(options.widgetInputs).length > 0) {
+    replayState.widgetValues = { ...options.widgetInputs };
+  }
+  if (Object.keys(options.widgetModes).length > 0) {
+    replayState.widgetModes = { ...options.widgetModes };
+  }
+  if (Object.keys(options.derivedWidgetInputs).length > 0) {
+    replayState.derivedWidgetValues = { ...options.derivedWidgetInputs };
+  }
+
+  return replayState;
+}
+
+function isWorkflowInputSnapshot(
+  value: unknown,
+): value is GeneratedCreationWorkflowInputSnapshot {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as Partial<GeneratedCreationWorkflowInputSnapshot>;
+  return (
+    typeof candidate.nodeId === "string" &&
+    typeof candidate.classType === "string" &&
+    (candidate.inputType === "text" ||
+      candidate.inputType === "image" ||
+      candidate.inputType === "video") &&
+    typeof candidate.param === "string" &&
+    typeof candidate.label === "string" &&
+    (candidate.origin === "rule" || candidate.origin === "inferred")
+  );
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  return Object.entries(value).every(
+    ([key, entryValue]) => typeof key === "string" && typeof entryValue === "string",
+  );
+}
+
+function isWidgetModesRecord(
+  value: unknown,
+): value is Record<string, "fixed" | "randomize"> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  return Object.values(value).every(
+    (entryValue) => entryValue === "fixed" || entryValue === "randomize",
+  );
 }

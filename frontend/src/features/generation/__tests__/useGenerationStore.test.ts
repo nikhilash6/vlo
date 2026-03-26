@@ -497,6 +497,7 @@ describe("useGenerationStore workflow rules", () => {
     expect(submittedJob?.generationMetadata).toEqual({
       source: "generated",
       workflowName: "Workflow Display Name",
+      workflowSourceId: "wf.json",
       inputs: [
         {
           nodeId: "node_timeline",
@@ -509,6 +510,31 @@ describe("useGenerationStore workflow rules", () => {
           parentAssetId: "asset-1",
         },
       ],
+      replayState: {
+        version: 1,
+        workflowSourceId: "wf.json",
+        workflowInputs: [
+          {
+            nodeId: "node_timeline",
+            classType: "LoadVideo",
+            inputType: "video",
+            param: "file",
+            label: "Timeline Input",
+            origin: "rule",
+          },
+          {
+            nodeId: "node_dragged",
+            classType: "LoadVideo",
+            inputType: "video",
+            param: "file",
+            label: "Dragged Input",
+            origin: "rule",
+          },
+        ],
+        exactAspectRatio: false,
+        maskCropMode: "crop",
+        maskCropDilation: 0.1,
+      },
       targetResolution: 1080,
     });
     expect(submittedJob?.postprocessConfig).toEqual({

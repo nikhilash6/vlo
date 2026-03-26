@@ -204,10 +204,20 @@ export function createGenerationPlan(
     metadata: {
       generationMetadata: cloneSerializableValue(
         buildGeneratedCreationMetadata(
-          options.workflowName,
-          options.workflowInputs,
-          options.mediaInputs,
-          options.targetResolution,
+          {
+            workflowName: options.workflowName,
+            workflowSourceId: options.workflowId,
+            workflowInputs: options.workflowInputs,
+            mediaInputs: options.mediaInputs,
+            slotValues: options.slotValues,
+            targetResolution: options.targetResolution,
+            exactAspectRatio: options.exactAspectRatio,
+            maskCropMode: options.maskCropMode,
+            maskCropDilation: options.maskCropDilation,
+            widgetInputs: options.widgetInputs,
+            widgetModes: options.widgetModes,
+            derivedWidgetInputs: options.derivedWidgetInputs,
+          },
         ),
       ),
       workflowWarnings: cloneSerializableValue(options.workflowWarnings),

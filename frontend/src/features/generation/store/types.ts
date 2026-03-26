@@ -46,6 +46,13 @@ export interface PreviewAnimation {
   totalFrames: number;
 }
 
+export interface WorkflowReplayPanelState {
+  textValues: Record<string, string>;
+  widgetValues: Record<string, string>;
+  widgetModes: Record<string, "fixed" | "randomize">;
+  derivedWidgetValues: Record<string, string>;
+}
+
 export interface GenerationWorkflowState {
   syncedWorkflow: Record<string, unknown> | null;
   syncedGraphData: Record<string, unknown> | null;
@@ -73,6 +80,9 @@ export interface GenerationWorkflowState {
   maskCropDilation: number;
   setMaskCropDilation: (dilation: number) => void;
   mediaInputs: Record<string, GenerationMediaInputValue | null>;
+  pendingReplayPanelState: WorkflowReplayPanelState | null;
+  setPendingReplayPanelState: (state: WorkflowReplayPanelState | null) => void;
+  clearPendingReplayPanelState: () => void;
   editorRef: HTMLIFrameElement | null;
   registerEditor: (iframe: HTMLIFrameElement) => void;
   unregisterEditor: () => void;

@@ -29,6 +29,42 @@ export type GeneratedCreationInput =
       parentAssetId: string;
     };
 
+export interface GeneratedCreationWorkflowSelectionConfig {
+  exportFps?: number;
+  frameStep?: number;
+  maxFrames?: number;
+}
+
+export interface GeneratedCreationWorkflowInputDispatch {
+  kind: "node";
+  selectionConfig?: GeneratedCreationWorkflowSelectionConfig;
+}
+
+export interface GeneratedCreationWorkflowInputSnapshot {
+  id?: string;
+  nodeId: string;
+  classType: string;
+  inputType: "text" | "image" | "video";
+  param: string;
+  label: string;
+  description?: string | null;
+  origin: "rule" | "inferred";
+  dispatch?: GeneratedCreationWorkflowInputDispatch;
+}
+
+export interface GeneratedCreationReplayState {
+  version: 1;
+  workflowSourceId?: string | null;
+  workflowInputs?: GeneratedCreationWorkflowInputSnapshot[];
+  textValues?: Record<string, string>;
+  widgetValues?: Record<string, string>;
+  widgetModes?: Record<string, "fixed" | "randomize">;
+  derivedWidgetValues?: Record<string, string>;
+  exactAspectRatio?: boolean;
+  maskCropMode?: "crop" | "full";
+  maskCropDilation?: number;
+}
+
 export type MaskCropMetadata =
   | { mode: "full" }
   | {
@@ -50,6 +86,8 @@ export interface GeneratedCreationMetadata {
   workflowName: string;
   inputs: GeneratedCreationInput[];
   targetResolution?: number;
+  workflowSourceId?: string;
+  replayState?: GeneratedCreationReplayState;
   maskCropMetadata?: MaskCropMetadata;
   generationMaskAssetId?: string;
   /** The ComfyUI API prompt (node_id → {class_type, inputs}) that was executed. */
