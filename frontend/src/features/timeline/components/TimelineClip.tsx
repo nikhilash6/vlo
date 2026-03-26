@@ -15,10 +15,11 @@ import type {
   BaseClip,
   TimelineClip as TimelineClipType,
 } from "../../../types/TimelineTypes";
+import type { TimelineClipOverlayDefinition } from "../clipOverlayApi";
 import { useTimelineStore } from "../useTimelineStore";
 import { useInteractionStore } from "../hooks/useInteractionStore";
 import { ThumbnailCanvas } from "./ThumbnailCanvas";
-import { SplineOverlay } from "./SplineOverlay";
+import { TimelineClipOverlayLayer } from "./TimelineClipOverlayLayer";
 
 // --- Sub-component for Handles ---
 interface HandleProps {
@@ -85,12 +86,18 @@ const ClipRoot = styled(Paper)(({ theme }) => ({
 interface TimelineClipProps {
   clip: BaseClip | TimelineClipType;
   isOverlay?: boolean;
+  clipOverlays?: readonly TimelineClipOverlayDefinition[];
 }
 
-function TimelineClipComponent({ clip, isOverlay = false }: TimelineClipProps) {
+function TimelineClipComponent({
+  clip,
+  isOverlay = false,
+  clipOverlays = [],
+}: TimelineClipProps) {
   const domRef = useRef<HTMLElement | null>(null);
 
   const startTime = "start" in clip ? (clip as TimelineClipType).start : 0;
+  const timelineClip = "start" in clip ? (clip as TimelineClipType) : null;
 
   // --- SELECTORS ---
   const isSelected = useTimelineStore((state) =>
@@ -280,9 +287,13 @@ function TimelineClipComponent({ clip, isOverlay = false }: TimelineClipProps) {
       data-track-visible={isTrackVisible ? "true" : "false"}
     >
       <ThumbnailCanvas clip={clip} isDragging={isDragging} />
-      {!isDragging && !isOverlay && (
-        <SplineOverlay clip={clip as TimelineClipType} />
-      )}
+      {!isDragging && !isOverlay && timelineClip ? (
+        <TimelineClipOverlayLayer
+          clip={timelineClip}
+          isSelected={isSelected}
+          clipOverlays={clipOverlays}
+        />
+      ) : null}
       {isSelected && !isDragging && !isOverlay && (
         <>
           <ResizeHandle

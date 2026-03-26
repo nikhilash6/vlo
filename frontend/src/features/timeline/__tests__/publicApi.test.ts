@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { TimelineClip, TimelineTrack } from "../../../types/TimelineTypes";
 import {
+  createEndpointOverlayItem,
+  createLayerTimeOverlayItem,
+  createSourceTimeOverlayItem,
   getPrimaryActiveClip,
   getTimelineClipById,
   getTimelineClipCountForAsset,
@@ -115,5 +118,25 @@ describe("timeline public API", () => {
     expect(selectTimelineClipCountForAsset(state, "asset-video")).toBe(1);
     expect(getTimelineClipCountForAsset("asset-audio")).toBe(1);
     expect(getTimelineClipCountForAsset("missing")).toBe(0);
+  });
+
+  it("exposes clip overlay builders through the timeline public API", () => {
+    expect(typeof createEndpointOverlayItem).toBe("function");
+    expect(typeof createSourceTimeOverlayItem).toBe("function");
+    expect(typeof createLayerTimeOverlayItem).toBe("function");
+
+    expect(
+      createEndpointOverlayItem({
+        id: "endpoint-item",
+        edge: "start",
+        content: "endpoint",
+      }).placement,
+    ).toMatchObject({
+      kind: "endpoint",
+      edge: "start",
+      lane: "middle",
+      insetPx: 8,
+      order: 0,
+    });
   });
 });

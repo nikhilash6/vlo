@@ -354,6 +354,19 @@ export function mapLayerInputToVisualTime(
 }
 
 /**
+ * Maps absolute source/input time directly to clip-local visual time.
+ * This is used for overlay items that stay locked to source time even when
+ * downstream speed transforms reshape their on-screen position.
+ */
+export function mapSourceTimeToVisualTime(
+  clip: TimelineClip,
+  sourceTime: number,
+): number {
+  return pushTimeThroughTransforms(clip.transformations || [], sourceTime) -
+    (clip.transformedOffset || 0);
+}
+
+/**
  * Resolves the input-layer time for a specific transform at a given visual clip-local time.
  *
  * This mirrors the backward time propagation used in `applyClipTransforms` so UI controls can

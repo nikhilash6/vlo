@@ -36,6 +36,7 @@ import { SelectionOverlay } from "./components/SelectionOverlay";
 import { FrameSelectionOverlay } from "./components/FrameSelectionOverlay";
 import { playbackClock } from "../player/services/PlaybackClock";
 import { type TimelineClip } from "../../types";
+import type { TimelineClipOverlayDefinition } from "./clipOverlayApi";
 import { useTimelineSelectionStore } from "../timelineSelection";
 
 const containerStyles = {
@@ -60,14 +61,16 @@ const scrollStyles = {
   },
 };
 
-interface TimelineContainerProps {
+export interface TimelineContainerProps {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   insertGapIndex?: number | null;
+  clipOverlays?: readonly TimelineClipOverlayDefinition[];
 }
 
 function TimelineContainerComponent({
   scrollContainerRef,
   insertGapIndex: externalInsertGapIndexProp,
+  clipOverlays = [],
 }: TimelineContainerProps) {
   const {
     tracks,
@@ -444,7 +447,11 @@ function TimelineContainerComponent({
               }}
             >
               {timelineClips.map((clip) => (
-                <TimelineClipItem key={clip.id} clip={clip} />
+                <TimelineClipItem
+                  key={clip.id}
+                  clip={clip}
+                  clipOverlays={clipOverlays}
+                />
               ))}
             </Box>
           </Box>
