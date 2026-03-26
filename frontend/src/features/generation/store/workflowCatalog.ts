@@ -31,6 +31,27 @@ export function formatWorkflowName(filename: string): string {
   return filename.replace(/\.json$/i, "");
 }
 
+export function isTemporaryWorkflowPersistenceId(
+  workflowId: string | null,
+): boolean {
+  if (!workflowId) return false;
+  if (workflowId === TEMP_WORKFLOW_ID) return true;
+
+  const normalizedWorkflowId = normalizeWorkflowFilename(workflowId);
+  const normalizedTempWorkflowId = normalizeWorkflowFilename(TEMP_WORKFLOW_ID);
+  if (!normalizedWorkflowId || !normalizedTempWorkflowId) {
+    return false;
+  }
+
+  return (
+    normalizedWorkflowId === normalizedTempWorkflowId ||
+    isTemporaryWorkflowDuplicateFilename(
+      normalizedWorkflowId,
+      normalizedTempWorkflowId,
+    )
+  );
+}
+
 export function resolveWorkflowPersistenceId(
   selectedWorkflowId: string | null,
   filename: string | null,
@@ -41,22 +62,27 @@ export function resolveWorkflowPersistenceId(
       : null;
   const normalizedSelectedWorkflowId =
     selectedWorkflowId &&
-    selectedWorkflowId !== TEMP_WORKFLOW_ID &&
+    !isTemporaryWorkflowPersistenceId(selectedWorkflowId) &&
     isSafeWorkflowFilename(selectedWorkflowId)
       ? normalizeWorkflowFilename(selectedWorkflowId)
       : null;
+
+  const persistedFilename =
+    normalizedFilename && !isTemporaryWorkflowPersistenceId(normalizedFilename)
+      ? normalizedFilename
+      : null;
   if (
-    normalizedFilename &&
+    persistedFilename &&
     normalizedSelectedWorkflowId &&
     isTemporaryWorkflowDuplicateFilename(
-      normalizedFilename,
+      persistedFilename,
       normalizedSelectedWorkflowId,
     )
   ) {
     return normalizedSelectedWorkflowId;
   }
-  if (normalizedFilename) {
-    return normalizedFilename;
+  if (persistedFilename) {
+    return persistedFilename;
   }
 
   if (normalizedSelectedWorkflowId) {

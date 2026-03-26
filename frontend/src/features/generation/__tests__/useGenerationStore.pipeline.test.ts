@@ -472,6 +472,32 @@ describe("useGenerationStore pipeline phases", () => {
     );
   });
 
+  it("dispatches replay-derived temp workflows with their original rules source id", async () => {
+    makeReadyStoreState();
+    useGenerationStore.setState({
+      selectedWorkflowId: "__temp__.json",
+      rulesWorkflowSourceId: "wan2_2_flf2v.json",
+    });
+
+    await useGenerationStore.getState().submitGeneration({});
+
+    expect(mockFrontendPreprocess).toHaveBeenCalledWith(
+      {},
+      "wan2_2_flf2v.json",
+      [],
+      {},
+      "client-id",
+      [],
+      0.1,
+      expect.objectContaining({
+        maskCropMode: "crop",
+        targetResolution: 1080,
+        signal: expect.any(AbortSignal),
+      }),
+      null,
+    );
+  });
+
   it("cancels preprocess locally, ignores stale completion, and leaves no error job", async () => {
     makeReadyStoreState();
     const preprocessDeferred = createDeferred<{

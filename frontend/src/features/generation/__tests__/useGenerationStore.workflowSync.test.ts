@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useGenerationStore } from "../useGenerationStore";
+import { TEMP_WORKFLOW_ID, useGenerationStore } from "../useGenerationStore";
 import type { WorkflowInput } from "../types";
 import * as comfyApi from "../services/comfyuiApi";
 import { createDefaultWorkflowRules } from "../services/workflowRules";
@@ -142,6 +142,40 @@ describe("useGenerationStore workflow editor sync", () => {
       { id: "wf.json", name: "wf" },
     ]);
     expect(state.tempWorkflow).toBeNull();
+  });
+
+  it("keeps replay-derived temp workflows attached to their source rules when the iframe reports a synthetic temp filename", async () => {
+    useGenerationStore.setState({
+      selectedWorkflowId: TEMP_WORKFLOW_ID,
+      availableWorkflows: [{ id: TEMP_WORKFLOW_ID, name: "Edited Workflow" }],
+      activeRulesWarnings: [],
+      activeWorkflowRules: createDefaultWorkflowRules(),
+      rulesWorkflowSourceId: "wan2_2_flf2v.json",
+      tempWorkflow: {
+        workflow: { "1": { class_type: "LoadImage", inputs: {} } },
+        graphData: { nodes: [{ id: 1 }] },
+        inputs: makeInputs(),
+        rules: createDefaultWorkflowRules(),
+        rulesSourceId: "wan2_2_flf2v.json",
+        rulesWarnings: [],
+      },
+    });
+
+    await useGenerationStore.getState().registerWorkflowFromEditor(
+      { "1": { class_type: "LoadImage", inputs: { image: "input.png" } } },
+      { nodes: [{ id: 4 }] },
+      makeInputs(),
+      "__temp__.json",
+    );
+
+    const state = useGenerationStore.getState();
+    expect(state.selectedWorkflowId).toBe(TEMP_WORKFLOW_ID);
+    expect(state.rulesWorkflowSourceId).toBe("wan2_2_flf2v.json");
+    expect(state.tempWorkflow?.rulesSourceId).toBe("wan2_2_flf2v.json");
+    expect(state.availableWorkflows).toEqual([
+      { id: TEMP_WORKFLOW_ID, name: "Edited Workflow" },
+    ]);
+    expect(state.syncedGraphData).toEqual({ nodes: [{ id: 4 }] });
   });
 
   it("loads workflow content from backend assets", async () => {

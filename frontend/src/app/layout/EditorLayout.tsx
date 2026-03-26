@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import type { MouseEventHandler, ReactNode } from "react";
 import { Box, CssBaseline } from "@mui/material";
 import {
@@ -15,16 +15,15 @@ import {
   AssetDragOverlay,
 } from "../../features/timeline";
 import { useTimelineSelectionStore } from "../../features/timelineSelection";
-import { useTimelineKeyframeClipOverlay } from "../../features/transformations";
 import { AssetBrowser, useAssetStore } from "../../features/userAssets";
 import { Player } from "../../features/player/Player";
 import { useExtractStore } from "../../features/player/useExtractStore";
 import { RightSidebarPanel } from "./RightSidebarPanel";
-import { ProjectSettingsMenu } from "./ProjectSettingsMenu";
 
 const SIDEBAR_WIDTH = 300;
 const TIMELINE_HEIGHT = 280;
 const ASSET_DRAG_ACTIVATION_DISTANCE_PX = 1;
+import { ProjectSettingsMenu } from "./ProjectSettingsMenu";
 
 const ASSET_AUTO_SCROLL = {
   acceleration: 50,
@@ -96,14 +95,9 @@ export function EditorLayout() {
     (state) => state.frameSelectionMode,
   );
   const selectionOverlayActive = selectionMode || frameSelectionMode;
-  const keyframeClipOverlay = useTimelineKeyframeClipOverlay();
 
   // Default to compact if not set
   const layoutMode = config.layoutMode || "compact";
-  const clipOverlays = useMemo(
-    () => [keyframeClipOverlay],
-    [keyframeClipOverlay],
-  );
 
   // Use the Asset Drag Hook
   const {
@@ -257,10 +251,7 @@ export function EditorLayout() {
             flexDirection: "column",
           }}
         >
-          <Timeline
-            scrollContainerRef={scrollContainerRef}
-            clipOverlays={clipOverlays}
-          />
+          <Timeline scrollContainerRef={scrollContainerRef} />
         </Box>
       </Box>
 

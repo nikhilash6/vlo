@@ -1,5 +1,4 @@
 export { TimelineContainer as Timeline } from "./TimelineContainer";
-export type { TimelineContainerProps } from "./TimelineContainer";
 export {
   useTimelineStore,
   countSam2MaskAssetConsumers,
@@ -22,19 +21,6 @@ export {
   MAX_ZOOM,
 } from "./constants";
 export { AssetDragOverlay } from "./components/AssetDragOverlay";
-export {
-  createEndpointOverlayItem,
-  createLayerTimeOverlayItem,
-  createSourceTimeOverlayItem,
-} from "./clipOverlayApi";
-export type {
-  TimelineClipOverlayDefinition,
-  TimelineClipOverlayDragContext,
-  TimelineClipOverlayItem,
-  TimelineClipOverlayRenderContext,
-  TimelineClipOverlaySourceProps,
-  TimelineClipOverlayVisibility,
-} from "./clipOverlayApi";
 export { useAssetDrag } from "./hooks/dnd/useAssetDrag";
 export { insertAssetAtTime } from "./utils/insertAssetToTimeline";
 export { createClipFromAsset } from "./utils/clipFactory";

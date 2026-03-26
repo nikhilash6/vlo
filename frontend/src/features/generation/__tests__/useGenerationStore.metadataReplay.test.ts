@@ -292,6 +292,118 @@ describe("useGenerationStore metadata replay", () => {
     expect(getWorkflowContentSpy).not.toHaveBeenCalled();
   });
 
+  it("keeps replayed workflows temporary when the iframe sync reports a synthetic temp filename", async () => {
+    const generatedAsset: Asset = {
+      id: "generated-asset",
+      hash: "hash-generated",
+      name: "generated.png",
+      type: "image",
+      src: "generated.png",
+      createdAt: Date.now(),
+      creationMetadata: {
+        source: "generated",
+        workflowName: "Original Workflow",
+        workflowSourceId: "wan2_2_flf2v.json",
+        targetResolution: 720,
+        inputs: [],
+        replayState: {
+          version: 1,
+          workflowSourceId: "wan2_2_flf2v.json",
+          workflowInputs: [
+            {
+              nodeId: "68",
+              classType: "LoadImage",
+              inputType: "image",
+              param: "image",
+              label: "Start Frame",
+              origin: "rule",
+            },
+          ],
+        },
+        comfyuiPrompt: {
+          "67": {
+            class_type: "WanFirstLastFrameToVideo",
+            inputs: {},
+          },
+        },
+        comfyuiWorkflow: {
+          nodes: [{ id: 67, type: "WanFirstLastFrameToVideo" }],
+        },
+      },
+    };
+
+    useGenerationStore.setState({
+      editorRef: {} as HTMLIFrameElement,
+    });
+
+    vi.spyOn(comfyApi, "listWorkflows").mockResolvedValue([
+      { id: "wan2_2_flf2v.json", name: "Wan2.2 I2V & FLF2V" },
+    ]);
+    vi.spyOn(comfyApi, "getWorkflowRules").mockResolvedValue({
+      workflow_id: "wan2_2_flf2v.json",
+      has_sidecar: true,
+      rules: createDefaultWorkflowRules({
+        nodes: {
+          "68": {
+            present: {
+              label: "Start Frame",
+              input_type: "image",
+              param: "image",
+              class_type: "LoadImage",
+              required: false,
+            },
+          },
+        },
+      }),
+      warnings: [],
+    });
+    mocks.injectWorkflowAndRead.mockResolvedValue({
+      ok: true,
+      deferred: false,
+      reason: null,
+      warnings: null,
+      workflowResult: {
+        workflow: {
+          "68": {
+            class_type: "LoadImage",
+            inputs: { image: "example.png" },
+          },
+          "67": {
+            class_type: "WanFirstLastFrameToVideo",
+            inputs: { start_image: ["68", 0] },
+          },
+        },
+        graphData: {
+          nodes: [
+            { id: 68, type: "LoadImage", widgets_values: ["example.png"] },
+            { id: 67, type: "WanFirstLastFrameToVideo" },
+          ],
+        },
+        inputs: [
+          {
+            nodeId: "68",
+            classType: "LoadImage",
+            inputType: "image",
+            param: "image",
+            label: "Start Frame",
+            currentValue: "example.png",
+            origin: "inferred",
+          },
+        ],
+        filename: "__temp__.json",
+      },
+    });
+
+    await useGenerationStore
+      .getState()
+      .loadWorkflowFromAssetMetadata(generatedAsset);
+
+    const state = useGenerationStore.getState();
+    expect(state.selectedWorkflowId).toBe(TEMP_WORKFLOW_ID);
+    expect(state.rulesWorkflowSourceId).toBe("wan2_2_flf2v.json");
+    expect(state.tempWorkflow?.rulesSourceId).toBe("wan2_2_flf2v.json");
+  });
+
   it("clamps a saved target resolution to the closest supported workflow value", async () => {
     const generatedAsset: Asset = {
       id: "generated-asset",

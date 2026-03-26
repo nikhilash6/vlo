@@ -17,6 +17,7 @@ import {
 } from "./jobMutations";
 import { buildGenerationFamilyRequestKey } from "../utils/familyAssignment";
 import { resolveWorkflowDisplayName } from "./workflowCatalog";
+import { isTemporaryWorkflowPersistenceId } from "./workflowCatalog";
 import type {
   GenerationExecutionState,
   GenerationStoreGet,
@@ -61,7 +62,8 @@ function buildGenerationPlanFromState(
   derivedWidgetInputs: Record<string, string>,
 ): GenerationPlan {
   const workflowId =
-    state.selectedWorkflowId === TEMP_WORKFLOW_ID
+    state.selectedWorkflowId === TEMP_WORKFLOW_ID ||
+    isTemporaryWorkflowPersistenceId(state.selectedWorkflowId)
       ? state.rulesWorkflowSourceId
       : state.selectedWorkflowId;
   const workflowName = resolveWorkflowDisplayName(

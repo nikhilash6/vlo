@@ -19,24 +19,17 @@ export {
 export { createAddTransform } from "./hooks/controller/transformFactory";
 export { insertTransformRespectingDefaultOrder } from "./hooks/controller/transformOrdering";
 export { useActiveTransformationSection } from "./hooks/useActiveTransformationSection";
-export { useTimelineKeyframeClipOverlay } from "./hooks/useTimelineKeyframeClipOverlay";
 export { useTransformationController } from "./hooks/useTransformationController";
 export { liveParamStore } from "./services/liveParamStore";
 export { livePreviewParamStore } from "./services/livePreviewParamStore";
 export { useTransformationViewStore } from "./store/useTransformationViewStore";
-export {
-  getDefaultSectionId,
-  getDynamicSectionId,
-  collectSectionKeyframes,
-} from "./publicApi";
+export { getDefaultSectionId, collectSectionKeyframes } from "./publicApi";
 export {
   calculateClipTime,
   getDefaultTransforms,
   getEntryByType,
   getSegmentContentDuration,
   getTransformInputTimeAtVisualOffset,
-  mapLayerInputToVisualTime,
-  mapSourceTimeToVisualTime,
   pullTimeThroughTransforms,
   resolveScalar,
   solveTimelineDuration,
