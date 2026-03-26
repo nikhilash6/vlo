@@ -3,12 +3,26 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AssetBrowser } from "../AssetBrowser";
 import { useAssetStore } from "../useAssetStore";
 import type { Asset, AssetFamily } from "../../../types/Asset";
+import type { BaseClip } from "../../../types/TimelineTypes";
+import { useInteractionStore } from "../../timeline/hooks/useInteractionStore";
 
 // Mock the Zustand store hook
 vi.mock("../useAssetStore");
 
 describe("AssetBrowser Component", () => {
   const mockAddLocalAssets = vi.fn();
+  const externalAssetDragClip: BaseClip = {
+    id: "dragged-asset",
+    type: "video",
+    name: "Dragged asset",
+    sourceDuration: null,
+    transformedDuration: 100,
+    transformedOffset: 0,
+    timelineDuration: 100,
+    croppedSourceDuration: 100,
+    offset: 0,
+    transformations: [],
+  };
 
   const mockAssets: Asset[] = [
     {
@@ -104,6 +118,7 @@ describe("AssetBrowser Component", () => {
     vi.clearAllMocks();
     mockAddLocalAssets.mockReset();
     mockAddLocalAssets.mockResolvedValue([]);
+    useInteractionStore.getState().stopDrag();
   });
 
   const mockStore = (state: Partial<ReturnType<typeof useAssetStore>> = {}) => {
@@ -354,6 +369,27 @@ describe("AssetBrowser Component", () => {
     expect(
       screen.getByRole("button", { name: /Import Asset/i }),
     ).toBeDisabled();
+  });
+
+  it("locks the asset browser scroll region during an external asset drag", async () => {
+    mockStore({ assets: mockAssets, families: mockFamilies });
+    useInteractionStore.setState({
+      activeClip: externalAssetDragClip,
+      operation: "move",
+    });
+
+    render(<AssetBrowser />);
+
+    const scrollRegion = screen.getByTestId("asset-browser-scroll-region");
+
+    expect(scrollRegion).toHaveAttribute("data-scroll-locked", "true");
+
+    scrollRegion.scrollTop = 120;
+    fireEvent.scroll(scrollRegion);
+
+    await waitFor(() => {
+      expect(scrollRegion.scrollTop).toBe(0);
+    });
   });
 
   it("filters the current tab to favourite assets when the toolbar heart is enabled", () => {

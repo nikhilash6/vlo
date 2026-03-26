@@ -24,6 +24,7 @@ import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 
 import type { AssetType } from "../../types/Asset";
 import { doesAssetBelongToFamily } from "../../shared/utils/assetFamilies";
+import { useInteractionStore } from "../timeline/hooks/useInteractionStore";
 import { useAssetStore } from "./useAssetStore";
 import { AssetCard } from "./components/AssetCard";
 import { isAssetVisibleInBrowser } from "./utils/assetVisibility";
@@ -109,6 +110,57 @@ function AssetBrowserComponent() {
   const isUploading = useAssetStore((state) => state.isUploading);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragDepthRef = useRef(0);
+  const scrollRegionRef = useRef<HTMLDivElement>(null);
+  const isAssetDragActive = useInteractionStore(
+    (state) =>
+      state.operation === "move" &&
+      state.activeClip !== null &&
+      !("trackId" in state.activeClip),
+  );
+
+  React.useLayoutEffect(() => {
+    const scrollRegion = scrollRegionRef.current;
+    if (!scrollRegion || !isAssetDragActive) {
+      return;
+    }
+
+    const lockedScrollTop = scrollRegion.scrollTop;
+    const lockedScrollLeft = scrollRegion.scrollLeft;
+
+    const restoreScrollPosition = () => {
+      if (scrollRegion.scrollTop !== lockedScrollTop) {
+        scrollRegion.scrollTop = lockedScrollTop;
+      }
+      if (scrollRegion.scrollLeft !== lockedScrollLeft) {
+        scrollRegion.scrollLeft = lockedScrollLeft;
+      }
+    };
+
+    const preventWheelScroll = (event: WheelEvent) => {
+      event.preventDefault();
+      restoreScrollPosition();
+    };
+
+    const preventTouchScroll = (event: TouchEvent) => {
+      event.preventDefault();
+      restoreScrollPosition();
+    };
+
+    restoreScrollPosition();
+    scrollRegion.addEventListener("scroll", restoreScrollPosition);
+    scrollRegion.addEventListener("wheel", preventWheelScroll, {
+      passive: false,
+    });
+    scrollRegion.addEventListener("touchmove", preventTouchScroll, {
+      passive: false,
+    });
+
+    return () => {
+      scrollRegion.removeEventListener("scroll", restoreScrollPosition);
+      scrollRegion.removeEventListener("wheel", preventWheelScroll);
+      scrollRegion.removeEventListener("touchmove", preventTouchScroll);
+    };
+  }, [isAssetDragActive]);
 
   const handleTabChange = (
     _event: React.SyntheticEvent,
@@ -547,7 +599,19 @@ function AssetBrowserComponent() {
       </Box>
 
       {/* 2. Scrollable Grid Area */}
-      <Box sx={{ flexGrow: 1, overflowY: "auto", p: 2 }}>
+      <Box
+        ref={scrollRegionRef}
+        data-testid="asset-browser-scroll-region"
+        data-scroll-locked={isAssetDragActive ? "true" : "false"}
+        sx={{
+          flexGrow: 1,
+          overflowY: isAssetDragActive ? "hidden" : "auto",
+          overscrollBehaviorY: isAssetDragActive ? "none" : "auto",
+          scrollbarGutter: "stable",
+          touchAction: isAssetDragActive ? "none" : "auto",
+          p: 2,
+        }}
+      >
         {sortedAssets.length === 0 ? (
           <Typography
             variant="body2"
