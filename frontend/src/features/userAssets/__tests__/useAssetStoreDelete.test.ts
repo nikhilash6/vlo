@@ -39,6 +39,10 @@ vi.mock("../../timeline", () => ({
   },
 }));
 
+if (globalThis.URL) {
+  globalThis.URL.revokeObjectURL = vi.fn();
+}
+
 describe("useAssetStore - Deletion", () => {
   beforeEach(() => {
     useAssetStore.setState({
@@ -62,6 +66,7 @@ describe("useAssetStore - Deletion", () => {
       ],
       families: [],
       isUploading: false,
+      inputCache: new Map(),
     });
     vi.clearAllMocks();
     mockRemoveClipsByAssetId.mockReset();

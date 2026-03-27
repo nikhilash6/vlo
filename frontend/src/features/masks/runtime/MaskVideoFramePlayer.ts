@@ -1,6 +1,7 @@
 import { Sprite, Texture } from "pixi.js";
 import type { Asset } from "../../../types/Asset";
 import { DecoderWorker } from "../../renderer";
+import { ensureAssetSourceLoaded } from "../../userAssets";
 
 interface WorkerReadyMessage {
   type: "ready";
@@ -66,6 +67,20 @@ export class MaskVideoFramePlayer {
     this.resetSpriteFrameState();
     this.sourceAssetId = asset.id;
 
+    let preparedAsset = asset;
+    const needsSourceHydration =
+      !asset.file &&
+      !asset.src.startsWith("blob:") &&
+      !asset.src.startsWith("http://") &&
+      !asset.src.startsWith("https://");
+    if (needsSourceHydration) {
+      const hydratedAsset = await ensureAssetSourceLoaded(asset.id);
+      if (!hydratedAsset) {
+        throw new Error("Failed to hydrate mask video source");
+      }
+      preparedAsset = hydratedAsset;
+    }
+
     const worker = new DecoderWorker();
     this.worker = worker;
     worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
@@ -79,10 +94,10 @@ export class MaskVideoFramePlayer {
 
     worker.postMessage({
       type: "prepare",
-      url: asset.src,
+      url: preparedAsset.src,
       clipId: this.clipId,
       kind: "mask_video",
-      file: asset.file,
+      file: preparedAsset.file,
     });
 
     const timeoutId = setTimeout(() => {

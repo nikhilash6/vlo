@@ -14,6 +14,7 @@ import { findActiveClipAtTicks } from "../utils/clipLookup";
 import { applyClipTransforms } from "../../transformations";
 import { SpriteClipMaskController } from "../../masks/runtime/SpriteClipMaskController";
 import { TICKS_PER_SECOND } from "../../timeline";
+import { ensureAssetSourceLoaded } from "../../userAssets";
 
 function createRenderAbortError(): Error {
   const error = new Error("Render cancelled");
@@ -78,6 +79,7 @@ export class TrackRenderEngine {
 
   // Live synchronized pipeline
   private liveRenderQueue: LiveRenderRequest[] = [];
+  private pendingAssetHydrations = new Set<string>();
   private livePipelineBusy = false;
 
   // Deferred texture cleanup to avoid null-source races during hot swaps
@@ -538,6 +540,46 @@ export class TrackRenderEngine {
 
       const asset = clip.assetId ? assetById.get(clip.assetId) : undefined;
       if (!asset || !clip.assetId) {
+        return;
+      }
+
+      const needsSourceHydration =
+        asset.type === "video" &&
+        !asset.file &&
+        !asset.src.startsWith("blob:") &&
+        !asset.src.startsWith("http://") &&
+        !asset.src.startsWith("https://");
+      if (needsSourceHydration) {
+        if (!this.pendingAssetHydrations.has(asset.id)) {
+          this.pendingAssetHydrations.add(asset.id);
+          const expectedClipId = clip.id;
+          const expectedAssetId = clip.assetId;
+          const clipKind = clip.type;
+          void ensureAssetSourceLoaded(asset.id)
+            .then((hydratedAsset) => {
+              if (
+                this.disposed ||
+                !hydratedAsset ||
+                hydratedAsset.id !== expectedAssetId ||
+                this.preparedClips.get(expectedClipId) === expectedAssetId
+              ) {
+                return;
+              }
+
+              this.worker.postMessage({
+                type: "prepare",
+                url: hydratedAsset.src,
+                clipId: expectedClipId,
+                kind: clipKind,
+                file: hydratedAsset.file,
+              });
+              this.preparedClips.set(expectedClipId, expectedAssetId);
+              this.preparedClipTouchedAtMs.set(expectedClipId, performance.now());
+            })
+            .finally(() => {
+              this.pendingAssetHydrations.delete(asset.id);
+            });
+        }
         return;
       }
 

@@ -8,6 +8,8 @@ export {
   addLocalAsset,
   addLocalAssetWithFamily,
   deleteAsset,
+  ensureAssetFileLoaded,
+  ensureAssetSourceLoaded,
   getAssetById,
   getFamilyById,
   getFamilies,
@@ -17,5 +19,6 @@ export {
   scanForNewAssets,
   upsertFamily,
   useAsset,
+  useAssetSourceUrl,
   useFamily,
 } from "./publicApi";

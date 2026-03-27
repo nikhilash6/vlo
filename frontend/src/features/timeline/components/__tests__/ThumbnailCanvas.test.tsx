@@ -61,6 +61,7 @@ vi.mock("../../hooks/useTimelineViewStore", () => ({
 
 vi.mock("../../../userAssets", () => ({
   useAsset: vi.fn(),
+  ensureAssetSourceLoaded: vi.fn(),
 }));
 
 vi.mock("../../hooks/useInteractionStore", () => ({
@@ -132,7 +133,7 @@ describe("ThumbnailCanvas Virtualization", () => {
     vi.mocked(useAsset).mockReturnValue({
       id: "asset-1",
       type: "video",
-      src: "test.mp4",
+      src: "blob:test.mp4",
     } as never);
 
     const { useInteractionStore } =

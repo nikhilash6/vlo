@@ -6,8 +6,10 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  Typography,
 } from "@mui/material";
 import type { Asset } from "../../../types/Asset";
+import { useAssetSourceUrl } from "../publicApi";
 
 interface AssetPreviewDialogProps {
   asset: Asset;
@@ -20,6 +22,8 @@ export function AssetPreviewDialog({
   open,
   onClose,
 }: AssetPreviewDialogProps) {
+  const sourceUrl = useAssetSourceUrl(asset.id, open);
+
   useEffect(() => {
     if (!open) {
       return undefined;
@@ -65,20 +69,34 @@ export function AssetPreviewDialog({
         <CloseIcon />
       </IconButton>
       <DialogContent sx={{ p: 0, bgcolor: "#000" }}>
-        <Box
-          component="video"
-          src={asset.src}
-          autoPlay
-          controls
-          playsInline
-          aria-label={`${asset.name} preview`}
-          sx={{
-            display: "block",
-            width: "100%",
-            maxHeight: "75vh",
-            backgroundColor: "#000",
-          }}
-        />
+        {sourceUrl ? (
+          <Box
+            component="video"
+            src={sourceUrl}
+            autoPlay
+            controls
+            playsInline
+            aria-label={`${asset.name} preview`}
+            sx={{
+              display: "block",
+              width: "100%",
+              maxHeight: "75vh",
+              backgroundColor: "#000",
+            }}
+          />
+        ) : (
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: 280,
+              color: "#9aa0a6",
+            }}
+          >
+            <Typography variant="body2">Loading preview...</Typography>
+          </Box>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -17,7 +17,7 @@ import {
 } from "../../timeline";
 import { useMaskViewStore } from "../store/useMaskViewStore";
 import { createMask } from "../model/maskFactory";
-import { useAssetStore } from "../../userAssets";
+import { ensureAssetFileLoaded, useAssetStore } from "../../userAssets";
 import { playbackClock } from "../../player/services/PlaybackClock";
 import { calculateClipTime } from "../../transformations";
 import { useProjectStore } from "../../project/useProjectStore";
@@ -48,9 +48,13 @@ function hashSam2Points(points: ClipMaskPoint[]): string {
 }
 
 async function resolveAssetFile(
-  asset: { file?: File; src: string; name: string },
+  asset: { id: string; file?: File; src: string; name: string },
 ): Promise<File> {
   if (asset.file) return asset.file;
+  const hydratedFile = await ensureAssetFileLoaded(asset.id);
+  if (hydratedFile) {
+    return hydratedFile;
+  }
   const response = await fetch(asset.src);
   if (!response.ok) {
     throw new Error(`Failed to fetch source asset file (${response.status})`);

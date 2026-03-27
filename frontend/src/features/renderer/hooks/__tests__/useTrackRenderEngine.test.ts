@@ -149,6 +149,24 @@ vi.mock("../../../timeline/useTimelineStore", () => ({
 vi.mock("../../../userAssets", () => ({
   useAssetStore: (selector: (state: { assets: Asset[] }) => unknown) =>
     selector(mockAssetState),
+  ensureAssetSourceLoaded: vi.fn(async (assetId: string) => {
+    const asset =
+      mockAssetState.assets.find((candidate) => candidate.id === assetId) ?? null;
+    if (!asset) {
+      return null;
+    }
+
+    if (!asset.file) {
+      asset.file = new File(["video"], asset.name || `${assetId}.mp4`, {
+        type: asset.type === "image" ? "image/png" : "video/mp4",
+      });
+    }
+    if (!asset.src.startsWith("blob:")) {
+      asset.src = `blob:${assetId}`;
+    }
+
+    return asset;
+  }),
 }));
 
 vi.mock("../../../player/services/PlaybackClock", () => ({
@@ -705,7 +723,7 @@ describe("useTrackRenderEngine Integration", () => {
         expect.objectContaining({
           type: "prepare",
           clipId,
-          url: "test-b.mp4",
+          url: "blob:asset-B",
         }),
       );
       expect(worker.postMessage).toHaveBeenCalledWith(

@@ -42,6 +42,7 @@ interface AssetStore {
   updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
   fetchAssets: () => Promise<void>;
   scanForNewAssets: () => Promise<void>;
+  ensureAssetSourceLoaded: (assetId: string) => Promise<Asset | null>;
   getInput: (assetId: string) => Promise<Input | null>;
   deleteAsset: (id: string) => Promise<void>;
 }
@@ -60,6 +61,53 @@ interface AssetDurationRepair {
 function hasValidDuration(duration: number | undefined): duration is number {
   return typeof duration === "number" && Number.isFinite(duration) && duration > 0;
 }
+
+function isHydratedAssetUrl(url: string | undefined): boolean {
+  return (
+    typeof url === "string" &&
+    (url.startsWith("blob:") || url.startsWith("http://") || url.startsWith("https://"))
+  );
+}
+
+function revokeBlobUrl(url: string | undefined): void {
+  if (typeof url === "string" && url.startsWith("blob:")) {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function disposeInput(input: Input | undefined): void {
+  if (!input) {
+    return;
+  }
+
+  try {
+    input.dispose();
+  } catch (error) {
+    console.warn("[AssetStore] Failed to dispose cached media input", error);
+  }
+}
+
+function disposeAssetRuntimeResources(asset: Asset | undefined): void {
+  if (!asset) {
+    return;
+  }
+
+  revokeBlobUrl(asset.src);
+  revokeBlobUrl(asset.thumbnail);
+  revokeBlobUrl(asset.proxySrc);
+}
+
+function disposeAssetCollectionRuntimeResources(
+  assets: readonly Asset[],
+  inputCache: ReadonlyMap<string, Input>,
+): void {
+  for (const asset of assets) {
+    disposeAssetRuntimeResources(asset);
+    disposeInput(inputCache.get(asset.id));
+  }
+}
+
+const sourceHydrationPromises = new Map<string, Promise<Asset | null>>();
 
 function toAssetFamilyRecordMap(
   families: readonly AssetFamily[],
@@ -267,6 +315,8 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
 
     set({ isLoading: true });
     try {
+      const previousAssets = get().assets;
+      const previousInputCache = new Map(get().inputCache);
       const data = await projectDocumentService.readProjectDocument();
       const assetsMap = (data.assets || {}) as Record<string, Asset>;
       const assetFamiliesMap = (data.assetFamilies || {}) as Record<
@@ -282,10 +332,16 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
             // 1. Resolve Main Source
             let src = rawAsset.src;
             let fileObj: File | undefined;
+            const sourcePath = !isHydratedAssetUrl(rawAsset.src)
+              ? rawAsset.src
+              : undefined;
 
-            if (!src.startsWith("http") && !src.startsWith("blob:")) {
+            if (
+              sourcePath &&
+              rawAsset.type !== "video"
+            ) {
               try {
-                fileObj = await fileSystemService.readFile(src);
+                fileObj = await fileSystemService.readFile(sourcePath);
                 src = URL.createObjectURL(fileObj);
               } catch (e) {
                 console.warn(`Failed to read asset file: ${src}`, e);
@@ -294,13 +350,13 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
 
             // 2. Resolve Thumbnail
             let thumbnail = rawAsset.thumbnail;
+            const thumbnailPath =
+              thumbnail && !isHydratedAssetUrl(thumbnail) ? thumbnail : undefined;
             if (
-              thumbnail &&
-              !thumbnail.startsWith("http") &&
-              !thumbnail.startsWith("blob:")
+              thumbnailPath
             ) {
               try {
-                const thumbFile = await fileSystemService.readFile(thumbnail);
+                const thumbFile = await fileSystemService.readFile(thumbnailPath);
                 thumbnail = URL.createObjectURL(thumbFile);
               } catch (e) {
                 console.warn(`Failed to read thumbnail: ${thumbnail}`, e);
@@ -310,13 +366,13 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
             // 3. Resolve Proxy
             let proxySrc = rawAsset.proxySrc;
             let proxyFile: Blob | undefined;
+            const proxyPath =
+              proxySrc && !isHydratedAssetUrl(proxySrc) ? proxySrc : undefined;
             if (
-              proxySrc &&
-              !proxySrc.startsWith("http") &&
-              !proxySrc.startsWith("blob:")
+              proxyPath
             ) {
               try {
-                const proxyBlob = await fileSystemService.readFile(proxySrc);
+                const proxyBlob = await fileSystemService.readFile(proxyPath);
                 proxyFile = proxyBlob;
                 proxySrc = URL.createObjectURL(proxyBlob);
               } catch (e) {
@@ -326,7 +382,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
 
             const repairedDuration = await resolveAssetDurationRepair(
               rawAsset,
-              fileObj,
+              fileObj ?? (proxyFile instanceof File ? proxyFile : undefined),
             );
             if (repairedDuration !== undefined) {
               durationRepairs.push({
@@ -338,8 +394,11 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
             return {
               ...rawAsset,
               src,
+              sourcePath,
               thumbnail,
+              thumbnailPath,
               proxySrc,
+              proxyPath,
               proxyFile,
               file: fileObj,
               duration: repairedDuration ?? rawAsset.duration,
@@ -376,7 +435,9 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       set({
         assets: sanitizedState.assets,
         families: sanitizedState.families,
+        inputCache: new Map(),
       });
+      disposeAssetCollectionRuntimeResources(previousAssets, previousInputCache);
     } catch (err) {
       console.error("Failed to load assets from project.json", err);
     } finally {
@@ -492,6 +553,72 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     return asset ?? null;
   },
 
+  ensureAssetSourceLoaded: async (assetId: string) => {
+    const existingAsset = get().assets.find((asset) => asset.id === assetId);
+    if (!existingAsset) {
+      return null;
+    }
+
+    if (existingAsset.file || isHydratedAssetUrl(existingAsset.src)) {
+      return existingAsset;
+    }
+
+    const existingPromise = sourceHydrationPromises.get(assetId);
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const hydrationPromise = (async () => {
+      const currentAsset = get().assets.find((asset) => asset.id === assetId);
+      if (!currentAsset) {
+        return null;
+      }
+
+      const sourcePath =
+        currentAsset.sourcePath ??
+        (!isHydratedAssetUrl(currentAsset.src) ? currentAsset.src : undefined);
+      if (!sourcePath) {
+        return currentAsset;
+      }
+
+      const file = await fileSystemService.readFile(sourcePath);
+      const sourceUrl = URL.createObjectURL(file);
+      let hydratedAsset: Asset | null = null;
+
+      set((state) => {
+        const nextAssets = state.assets.map((asset) => {
+          if (asset.id !== assetId) {
+            return asset;
+          }
+
+          if (asset.src !== sourceUrl) {
+            revokeBlobUrl(asset.src);
+          }
+
+          const nextAsset: Asset = {
+            ...asset,
+            src: sourceUrl,
+            sourcePath,
+            file,
+          };
+          hydratedAsset = nextAsset;
+          return nextAsset;
+        });
+
+        return {
+          assets: nextAssets,
+        };
+      });
+
+      return hydratedAsset ?? get().assets.find((asset) => asset.id === assetId) ?? null;
+    })().finally(() => {
+      sourceHydrationPromises.delete(assetId);
+    });
+
+    sourceHydrationPromises.set(assetId, hydrationPromise);
+    return hydrationPromise;
+  },
+
   upsertFamily: async (family: AssetFamily) => {
     const previousAssets = get().assets;
     const previousFamilies = get().families;
@@ -579,13 +706,20 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   },
 
   getInput: async (assetId: string) => {
-    const { assets, inputCache } = get();
+    const { inputCache } = get();
     if (inputCache.has(assetId)) {
       return inputCache.get(assetId)!;
     }
 
-    const asset = assets.find((a) => a.id === assetId);
+    let asset = get().assets.find((a) => a.id === assetId);
     if (!asset) return null;
+
+    if (!asset.file && !isHydratedAssetUrl(asset.src)) {
+      asset = await get().ensureAssetSourceLoaded(assetId);
+      if (!asset) {
+        return null;
+      }
+    }
 
     try {
       const source = asset.file
@@ -606,6 +740,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
 
   deleteAsset: async (id: string) => {
     const assetToDelete = get().assets.find((a) => a.id === id);
+    const cachedInput = get().inputCache.get(id);
     if (
       assetToDelete?.creationMetadata?.source === "generation_mask" &&
       countGenerationMaskAssetConsumers(get().assets, id) > 0
@@ -674,10 +809,17 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     }
 
     // 2. Remove from memory immediately for UI responsiveness
-    set({
-      assets: sanitizedState.assets,
-      families: sanitizedState.families,
+    set((state) => {
+      const nextInputCache = new Map(state.inputCache);
+      nextInputCache.delete(id);
+      return {
+        assets: sanitizedState.assets,
+        families: sanitizedState.families,
+        inputCache: nextInputCache,
+      };
     });
+    disposeInput(cachedInput);
+    disposeAssetRuntimeResources(assetToDelete);
 
     // 3. Delete files from disk using paths found in JSON
     if (pathsToDelete.src) {

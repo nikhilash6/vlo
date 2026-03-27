@@ -7,7 +7,7 @@ import {
 } from "react";
 import { TICKS_PER_SECOND, PIXELS_PER_SECOND, CLIP_HEIGHT } from "../constants";
 import type { BaseClip, TimelineClip } from "../../../types/TimelineTypes";
-import { useAsset } from "../../userAssets";
+import { ensureAssetSourceLoaded, useAsset } from "../../userAssets";
 import { useTimelineViewStore } from "./useTimelineViewStore";
 import { useInteractionStore } from "../hooks/useInteractionStore";
 import {
@@ -375,14 +375,23 @@ export function useThumbnailRenderer({
         }
 
         if (asset.type === "video") {
+          const hydratedVideoAsset =
+            asset.proxyFile ||
+            asset.src.startsWith("blob:") ||
+            asset.src.startsWith("http://") ||
+            asset.src.startsWith("https://")
+              ? asset
+              : await ensureAssetSourceLoaded(asset.id);
+          if (!hydratedVideoAsset) return;
+
           const cachedMetadata = thumbnailCacheService.getMetadata(clip.assetId!);
           let aspectRatio = cachedMetadata?.aspectRatio;
           let firstTimestampSeconds = cachedMetadata?.firstTimestampSeconds;
 
           if (!aspectRatio || firstTimestampSeconds === undefined) {
-            const source = asset.proxyFile
-              ? new BlobSource(asset.proxyFile)
-              : new UrlSource(asset.src);
+            const source = hydratedVideoAsset.proxyFile
+              ? new BlobSource(hydratedVideoAsset.proxyFile)
+              : new UrlSource(hydratedVideoAsset.src);
             using input = new Input({ source, formats: ALL_FORMATS });
             const vt = await input.getPrimaryVideoTrack();
             if (!vt) return;
@@ -457,9 +466,9 @@ export function useThumbnailRenderer({
             ),
           );
 
-          const source = asset.proxyFile
-            ? new BlobSource(asset.proxyFile)
-            : new UrlSource(asset.src);
+          const source = hydratedVideoAsset.proxyFile
+            ? new BlobSource(hydratedVideoAsset.proxyFile)
+            : new UrlSource(hydratedVideoAsset.src);
           using input = new Input({ source, formats: ALL_FORMATS });
           const vt = await input.getPrimaryVideoTrack();
           if (!vt) return;

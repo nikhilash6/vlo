@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { Input } from "mediabunny";
 import type { Asset, AssetFamily, AssetFamilyCompatibility } from "../../types/Asset";
 import { buildAssetFamilyCompatibility } from "../../shared/utils/assetFamilies";
@@ -13,6 +14,19 @@ function findAssetById(
   }
 
   return assets.find((asset) => asset.id === assetId);
+}
+
+function isHydratedAssetUrl(url: string | undefined): boolean {
+  return (
+    typeof url === "string" &&
+    (url.startsWith("blob:") || url.startsWith("http://") || url.startsWith("https://"))
+  );
+}
+
+function resolveHydratedSourceUrl(
+  asset: Asset | null | undefined,
+): string | null {
+  return asset && isHydratedAssetUrl(asset.src) ? asset.src : null;
 }
 
 export function useAsset(assetId: string | null | undefined): Asset | undefined {
@@ -90,6 +104,52 @@ export async function deleteAsset(assetId: string): Promise<void> {
 
 export async function scanForNewAssets(): Promise<void> {
   await useAssetStore.getState().scanForNewAssets();
+}
+
+export async function ensureAssetSourceLoaded(
+  assetId: string,
+): Promise<Asset | null> {
+  return useAssetStore.getState().ensureAssetSourceLoaded(assetId);
+}
+
+export async function ensureAssetFileLoaded(
+  assetId: string,
+): Promise<File | null> {
+  const asset = await useAssetStore.getState().ensureAssetSourceLoaded(assetId);
+  return asset?.file ?? null;
+}
+
+export function useAssetSourceUrl(
+  assetId: string | null | undefined,
+  enabled = true,
+): string | null {
+  const asset = useAsset(assetId);
+  const [sourceUrl, setSourceUrl] = useState<string | null>(() =>
+    resolveHydratedSourceUrl(asset),
+  );
+
+  useEffect(() => {
+    setSourceUrl(resolveHydratedSourceUrl(asset));
+  }, [asset]);
+
+  useEffect(() => {
+    if (!enabled || !asset || resolveHydratedSourceUrl(asset)) {
+      return;
+    }
+
+    let canceled = false;
+    void ensureAssetSourceLoaded(asset.id).then((nextAsset) => {
+      if (!canceled) {
+        setSourceUrl(resolveHydratedSourceUrl(nextAsset));
+      }
+    });
+
+    return () => {
+      canceled = true;
+    };
+  }, [asset, enabled]);
+
+  return sourceUrl;
 }
 
 export async function getAssetInput(assetId: string): Promise<Input | null> {

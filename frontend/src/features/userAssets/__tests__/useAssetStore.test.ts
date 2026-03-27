@@ -50,8 +50,12 @@ vi.mock("../services/MediaProcessingService", () => ({
 // Mock URL.createObjectURL
 if (globalThis.URL) {
   globalThis.URL.createObjectURL = vi.fn(() => "blob:mocked-url");
+  globalThis.URL.revokeObjectURL = vi.fn();
 } else {
-  vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:mocked-url") });
+  vi.stubGlobal("URL", {
+    createObjectURL: vi.fn(() => "blob:mocked-url"),
+    revokeObjectURL: vi.fn(),
+  });
 }
 
 describe("useAssetStore", () => {
@@ -59,10 +63,15 @@ describe("useAssetStore", () => {
     vi.clearAllMocks();
     mockRemoveClipsByAssetId.mockReset();
     projectDocumentService.resetProjectDocumentCache();
-    useAssetStore.setState({ assets: [], families: [], isLoading: false });
+    useAssetStore.setState({
+      assets: [],
+      families: [],
+      isLoading: false,
+      inputCache: new Map(),
+    });
   });
 
-  it("fetchAssets should hydrate proxyFile from local FS", async () => {
+  it("fetchAssets should keep video sources lazy while hydrating proxyFile from local FS", async () => {
     // Arrange
     (useProjectStore.getState as Mock).mockReturnValue({ rootHandle: {} });
 
@@ -77,7 +86,6 @@ describe("useAssetStore", () => {
       },
     });
 
-    const mockFile = new File([""], "video.mp4");
     const mockProxyBlob = new Blob(["proxy-data"], { type: "video/mp4" });
 
     (fileSystemService.readFile as Mock).mockImplementation(
@@ -85,7 +93,6 @@ describe("useAssetStore", () => {
         if (path === ".vloproject/project.json") {
           return { text: async () => mockProjectJson };
         }
-        if (path === "video.mp4") return mockFile;
         if (path === ".vloproject/proxies/video_proxy.mp4")
           return mockProxyBlob;
         throw new Error("File not found: " + path);
@@ -98,11 +105,51 @@ describe("useAssetStore", () => {
     // Assert
     const assets = useAssetStore.getState().assets;
     expect(assets).toHaveLength(1);
+    expect(assets[0].src).toBe("video.mp4");
+    expect(assets[0].sourcePath).toBe("video.mp4");
+    expect(assets[0].file).toBeUndefined();
     expect(assets[0].proxySrc).toBe("blob:mocked-url"); // Should be convt to blob URL
     expect(assets[0].proxyFile).toBeDefined();
     // Check if the Blob is actually the one we returned
     // Strict equality check on Blob instances might work if reference is preserved
     expect(assets[0].proxyFile).toBe(mockProxyBlob);
+    expect(fileSystemService.readFile).not.toHaveBeenCalledWith("video.mp4");
+  });
+
+  it("ensureAssetSourceLoaded hydrates a lazy video source on demand", async () => {
+    (useProjectStore.getState as Mock).mockReturnValue({ rootHandle: {} });
+
+    const mockProjectJson = JSON.stringify({
+      assets: {
+        "asset-1": {
+          id: "asset-1",
+          name: "video.mp4",
+          hash: "video-hash",
+          src: "video.mp4",
+          type: "video",
+          createdAt: 1,
+        },
+      },
+    });
+
+    const mockFile = new File(["video"], "video.mp4", { type: "video/mp4" });
+    (fileSystemService.readFile as Mock).mockImplementation(async (path: string) => {
+      if (path === ".vloproject/project.json") {
+        return { text: async () => mockProjectJson };
+      }
+      if (path === "video.mp4") {
+        return mockFile;
+      }
+      throw new Error("File not found: " + path);
+    });
+
+    await useAssetStore.getState().fetchAssets();
+
+    const hydrated = await useAssetStore.getState().ensureAssetSourceLoaded("asset-1");
+    expect(hydrated?.src).toBe("blob:mocked-url");
+    expect(hydrated?.file).toBe(mockFile);
+    expect(useAssetStore.getState().assets[0]?.file).toBe(mockFile);
+    expect(fileSystemService.readFile).toHaveBeenCalledWith("video.mp4");
   });
 
   it("deleteAsset should remove entries from project.json and delete files from disk", async () => {

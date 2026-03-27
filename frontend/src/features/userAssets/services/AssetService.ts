@@ -133,8 +133,12 @@ export class AssetService {
    */
   private toPersisted(asset: Asset): Asset {
     const persistedAsset: Asset = {
-      ...asset,
-      // Remove blob URLs and use file paths
+      id: asset.id,
+      hash: asset.hash,
+      familyId: asset.familyId,
+      name: asset.name,
+      type: asset.type,
+      favourite: asset.favourite,
       src: asset.name, // Main source is stored at project root
       thumbnail: asset.thumbnail
         ? `.vloproject/thumbnails/${asset.name}_thumb.webp`
@@ -142,9 +146,11 @@ export class AssetService {
       proxySrc: asset.proxySrc
         ? `.vloproject/proxies/${asset.name}_proxy.mp4`
         : undefined,
-      // Remove runtime-only properties
-      file: undefined,
-      proxyFile: undefined,
+      duration: asset.duration,
+      fps: asset.fps,
+      hasAudio: asset.hasAudio,
+      createdAt: asset.createdAt,
+      creationMetadata: asset.creationMetadata,
     };
     return persistedAsset;
   }
@@ -330,12 +336,15 @@ export class AssetService {
         name: assetFileName,
         type: assetType,
         src: URL.createObjectURL(file),
+        sourcePath: storageSrc,
         thumbnail: thumbnailBlob
           ? URL.createObjectURL(thumbnailBlob)
           : undefined,
+        thumbnailPath: storageThumbnail,
         proxySrc: proxyBlob // Use the blob directly!
           ? URL.createObjectURL(proxyBlob)
           : undefined,
+        proxyPath: storageProxy,
         proxyFile: proxyBlob || undefined,
         duration: duration,
         fps,
@@ -347,11 +356,20 @@ export class AssetService {
 
       // 6. Define Persistence Object
       const newAssetPersisted: Asset = {
-        ...newAssetInMemory,
+        id: newAssetInMemory.id,
+        hash: newAssetInMemory.hash,
+        familyId: newAssetInMemory.familyId,
+        name: newAssetInMemory.name,
+        type: newAssetInMemory.type,
+        favourite: newAssetInMemory.favourite,
         src: storageSrc,
         thumbnail: storageThumbnail,
         proxySrc: storageProxy,
-        file: undefined,
+        duration: newAssetInMemory.duration,
+        fps: newAssetInMemory.fps,
+        hasAudio: newAssetInMemory.hasAudio,
+        createdAt: newAssetInMemory.createdAt,
+        creationMetadata: newAssetInMemory.creationMetadata,
       };
       console.timeEnd(`[Ingest] Object Creation ${file.name}`);
 

@@ -121,8 +121,14 @@ export interface Asset {
   type: AssetType;
   favourite?: boolean;
   src: string; // Runtime: "blob:http://..." | Disk: "assets/my-video.mp4"
+  /** Runtime-only persisted source path retained for lazy hydration/cleanup. */
+  sourcePath?: string;
   thumbnail?: string; // Server URL for the thumbnail
+  /** Runtime-only persisted thumbnail path retained for cleanup. */
+  thumbnailPath?: string;
   proxySrc?: string; // Server URL for the proxy video
+  /** Runtime-only persisted proxy path retained for cleanup. */
+  proxyPath?: string;
   proxyFile?: Blob; // Need Blob instead of File for when first ingested
   duration?: number;
   fps?: number;

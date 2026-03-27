@@ -58,6 +58,7 @@ vi.mock("../../hooks/useTimelineViewStore", () => ({
 
 vi.mock("../../../userAssets", () => ({
   useAsset: vi.fn(),
+  ensureAssetSourceLoaded: vi.fn(),
 }));
 
 // Mock calculateClipTime to verify it's called
@@ -122,7 +123,7 @@ describe("ThumbnailCanvas Speed Ramp", () => {
     vi.mocked(useAsset).mockReturnValue({
       id: "asset-1",
       type: "video",
-      src: "test.mp4",
+      src: "blob:test.mp4",
     } as never);
   });
 
