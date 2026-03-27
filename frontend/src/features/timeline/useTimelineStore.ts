@@ -19,6 +19,7 @@ import type {
   StandardTimelineClip,
   TimelineClipComponentRef,
 } from "../../types/TimelineTypes";
+import type { Asset } from "../../types/Asset";
 import type { TimelineSnapshot } from "../project/types/ProjectDocument";
 import { fileSystemService } from "../project/services/FileSystemService";
 import { projectDocumentService } from "../project/services/ProjectDocumentService";
@@ -588,6 +589,7 @@ interface TimelineState {
 
   removeClip: (id: string) => void;
   removeClipsByAssetId: (assetId: string) => number;
+  replaceClipAsset: (clipId: string, asset: Asset) => void;
 
   selectClip: (id: string | null, isMulti?: boolean) => void;
 
@@ -1134,6 +1136,26 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
       }
 
       return directlyReferencedClipIds.length;
+    },
+
+    replaceClipAsset: (clipId, asset) => {
+      commitModelMutation((draft) => {
+        draft.clips = draft.clips.map((clip) => {
+          if (clip.id !== clipId || clip.type === "mask") {
+            return clip;
+          }
+
+          if (clip.type !== asset.type) {
+            return clip;
+          }
+
+          return {
+            ...clip,
+            assetId: asset.id,
+            name: asset.name,
+          };
+        });
+      });
     },
 
     selectClip: (id, isMulti = false) => {

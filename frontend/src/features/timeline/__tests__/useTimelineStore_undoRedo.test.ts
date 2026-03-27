@@ -208,4 +208,42 @@ describe("useTimelineStore undo/redo", () => {
       true,
     );
   });
+
+  it("hot-swaps a clip asset and records the change in undo history", () => {
+    const clip: TimelineClip = {
+      ...createClip("clip-family", "track_current", 0, 120),
+      assetId: "asset-a",
+      name: "Asset A",
+    };
+
+    act(() => {
+      useTimelineStore.getState().addClip(clip);
+      useTimelineStore.getState().replaceClipAsset(clip.id, {
+        id: "asset-b",
+        type: "video",
+        name: "Asset B",
+        src: "asset-b.mp4",
+        hash: "hash-b",
+        duration: 1,
+        fps: 24,
+        createdAt: 1,
+      });
+    });
+
+    expect(useTimelineStore.getState().clips[0]).toMatchObject({
+      assetId: "asset-b",
+      name: "Asset B",
+      timelineDuration: 120,
+    });
+
+    act(() => {
+      expect(useTimelineStore.getState().undo()).toBe(true);
+    });
+
+    expect(useTimelineStore.getState().clips[0]).toMatchObject({
+      assetId: "asset-a",
+      name: "Asset A",
+      timelineDuration: 120,
+    });
+  });
 });

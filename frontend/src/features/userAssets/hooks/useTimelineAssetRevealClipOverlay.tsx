@@ -1,12 +1,16 @@
-import { useMemo } from "react";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ImageSearchIcon from "@mui/icons-material/ImageSearch";
 import { Box } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import {
   createEndpointOverlayItem,
   type TimelineClipOverlayDefinition,
+  useTimelineStore,
 } from "../../timeline";
 import { revealAssetInBrowser } from "../useAssetBrowserRevealStore";
+import { useAssetStore } from "../useAssetStore";
+import { getAdjacentFamilyMemberForAsset } from "../utils/familyMembers";
 
 const RevealAssetBadge = styled(Box)({
   width: 18,
@@ -26,33 +30,103 @@ const RevealAssetBadge = styled(Box)({
   },
 });
 
+const FamilySwapBadge = styled(RevealAssetBadge)({
+  width: 16,
+  height: 16,
+});
+
 function useAssetRevealOverlayItems({
   clip,
 }: Parameters<TimelineClipOverlayDefinition["useItems"]>[0]) {
-  return useMemo(() => {
-    const assetId = clip.assetId;
-    if (!assetId) {
-      return [];
-    }
+  const assets = useAssetStore((state) => state.assets);
+  const families = useAssetStore((state) => state.families);
 
-    return [
-      createEndpointOverlayItem({
-        id: `reveal-asset:${clip.id}`,
-        edge: "end",
-        lane: "bottom",
-        insetPx: 8,
-        minClipWidthPx: 56,
-        content: (
-          <RevealAssetBadge title="Reveal asset in browser">
-            <ImageSearchIcon sx={{ fontSize: 13 }} />
-          </RevealAssetBadge>
-        ),
-        onClick: () => {
-          revealAssetInBrowser(assetId);
-        },
-      }),
-    ];
-  }, [clip.assetId, clip.id]);
+  const assetId = clip.assetId;
+  if (!assetId) {
+    return [];
+  }
+
+  const asset = assets.find((candidate) => candidate.id === assetId);
+  if (!asset) {
+    return [];
+  }
+
+  const previousAsset = getAdjacentFamilyMemberForAsset(
+    assets,
+    families,
+    asset,
+    "previous",
+  );
+  const nextAsset = getAdjacentFamilyMemberForAsset(
+    assets,
+    families,
+    asset,
+    "next",
+  );
+  const hasFamilyNavigation =
+    previousAsset !== null &&
+    nextAsset !== null &&
+    previousAsset.id !== asset.id &&
+    nextAsset.id !== asset.id;
+
+  const items = [
+    createEndpointOverlayItem({
+      id: `reveal-asset:${clip.id}`,
+      edge: "end",
+      lane: "bottom",
+      insetPx: hasFamilyNavigation ? 8 : 28,
+      minClipWidthPx: 56,
+      order: hasFamilyNavigation ? 1 : 0,
+      content: (
+        <RevealAssetBadge title="Reveal asset in browser">
+          <ImageSearchIcon sx={{ fontSize: 13 }} />
+        </RevealAssetBadge>
+      ),
+      onClick: () => {
+        revealAssetInBrowser(assetId);
+      },
+    }),
+  ];
+
+  if (!hasFamilyNavigation) {
+    return items;
+  }
+
+  items.push(
+    createEndpointOverlayItem({
+      id: `swap-family-next:${clip.id}`,
+      edge: "end",
+      lane: "bottom",
+      insetPx: 8,
+      minClipWidthPx: 56,
+      order: 0,
+      content: (
+        <FamilySwapBadge title={`Swap to ${nextAsset.name}`}>
+          <ChevronRightIcon sx={{ fontSize: 12 }} />
+        </FamilySwapBadge>
+      ),
+      onClick: () => {
+        useTimelineStore.getState().replaceClipAsset(clip.id, nextAsset);
+      },
+    }),
+    createEndpointOverlayItem({
+      id: `swap-family-previous:${clip.id}`,
+      edge: "end",
+      lane: "bottom",
+      minClipWidthPx: 56,
+      order: 2,
+      content: (
+        <FamilySwapBadge title={`Swap to ${previousAsset.name}`}>
+          <ChevronLeftIcon sx={{ fontSize: 12 }} />
+        </FamilySwapBadge>
+      ),
+      onClick: () => {
+        useTimelineStore.getState().replaceClipAsset(clip.id, previousAsset);
+      },
+    }),
+  );
+
+  return items;
 }
 
 const TIMELINE_ASSET_REVEAL_CLIP_OVERLAY: TimelineClipOverlayDefinition = {

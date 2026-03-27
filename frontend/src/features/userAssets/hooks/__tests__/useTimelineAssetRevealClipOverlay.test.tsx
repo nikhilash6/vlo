@@ -1,8 +1,10 @@
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
+import type { Asset, AssetFamily } from "../../../../types/Asset";
 import type { TimelineClip } from "../../../../types/TimelineTypes";
-import { TICKS_PER_SECOND } from "../../../timeline";
+import { TICKS_PER_SECOND, useTimelineStore } from "../../../timeline";
 import { useAssetBrowserRevealStore } from "../../useAssetBrowserRevealStore";
+import { useAssetStore } from "../../useAssetStore";
 import { useTimelineAssetRevealClipOverlay } from "../useTimelineAssetRevealClipOverlay";
 
 const baseClip: TimelineClip = {
@@ -21,6 +23,57 @@ const baseClip: TimelineClip = {
   transformations: [],
 };
 
+const familyAssets: Asset[] = [
+  {
+    id: "asset-1",
+    type: "video",
+    name: "Newest.mp4",
+    src: "newest.mp4",
+    hash: "hash-1",
+    familyId: "family-1",
+    duration: 10,
+    fps: 24,
+    createdAt: 300,
+  },
+  {
+    id: "asset-2",
+    type: "video",
+    name: "Middle.mp4",
+    src: "middle.mp4",
+    hash: "hash-2",
+    familyId: "family-1",
+    duration: 10,
+    fps: 24,
+    createdAt: 200,
+  },
+  {
+    id: "asset-3",
+    type: "video",
+    name: "Oldest.mp4",
+    src: "oldest.mp4",
+    hash: "hash-3",
+    familyId: "family-1",
+    duration: 10,
+    fps: 24,
+    createdAt: 100,
+  },
+];
+
+const families: AssetFamily[] = [
+  {
+    id: "family-1",
+    representativeAssetId: "asset-1",
+    autoMatchKeys: ["generation-family:v1:test"],
+    compatibility: {
+      assetType: "video",
+      durationMs: 10000,
+      fpsMilli: 24000,
+    },
+    createdAt: 100,
+    updatedAt: 300,
+  },
+];
+
 function useOverlayItems(clip: TimelineClip) {
   const overlay = useTimelineAssetRevealClipOverlay();
   return overlay.useItems({ clip, isSelected: false });
@@ -29,17 +82,49 @@ function useOverlayItems(clip: TimelineClip) {
 describe("useTimelineAssetRevealClipOverlay", () => {
   beforeEach(() => {
     useAssetBrowserRevealStore.setState({ revealRequest: null });
+    useAssetStore.setState({
+      assets: familyAssets,
+      families,
+    });
+    useTimelineStore.setState({
+      tracks: [
+        {
+          id: "track-1",
+          label: "Track 1",
+          isVisible: true,
+          isLocked: false,
+          isMuted: false,
+          type: "visual",
+        },
+      ],
+      clips: [baseClip],
+      selectedClipIds: [],
+      copiedClips: [],
+    });
   });
 
-  it("creates a bottom-right endpoint overlay that reveals the asset in the browser", () => {
-    const { result } = renderHook(() => useOverlayItems(baseClip));
+  it("creates family navigation arrows around the reveal control and swaps the clip asset", () => {
+    const { result, rerender } = renderHook(
+      ({ clip }) => useOverlayItems(clip),
+      {
+        initialProps: {
+          clip: baseClip,
+        },
+      },
+    );
 
-    expect(result.current).toHaveLength(1);
+    expect(result.current).toHaveLength(3);
+    expect(result.current.map((item) => item.id)).toEqual([
+      "reveal-asset:clip-1",
+      "swap-family-next:clip-1",
+      "swap-family-previous:clip-1",
+    ]);
     expect(result.current[0].placement).toMatchObject({
       kind: "endpoint",
       edge: "end",
       lane: "bottom",
       insetPx: 8,
+      order: 1,
     });
 
     result.current[0].onClick?.();
@@ -47,6 +132,21 @@ describe("useTimelineAssetRevealClipOverlay", () => {
     expect(useAssetBrowserRevealStore.getState().revealRequest).toMatchObject({
       assetId: "asset-1",
       requestId: expect.any(Number),
+    });
+
+    result.current[1].onClick?.();
+    expect(useTimelineStore.getState().clips[0]).toMatchObject({
+      assetId: "asset-2",
+      name: "Middle.mp4",
+    });
+
+    rerender({
+      clip: useTimelineStore.getState().clips[0],
+    });
+    result.current[2].onClick?.();
+    expect(useTimelineStore.getState().clips[0]).toMatchObject({
+      assetId: "asset-1",
+      name: "Newest.mp4",
     });
   });
 
@@ -56,5 +156,25 @@ describe("useTimelineAssetRevealClipOverlay", () => {
     );
 
     expect(result.current).toEqual([]);
+  });
+
+  it("renders only the shifted reveal icon when the clip asset has no family siblings", () => {
+    useAssetStore.setState({
+      assets: [{ ...familyAssets[0], familyId: undefined }],
+      families: [],
+    });
+
+    const { result } = renderHook(() =>
+      useOverlayItems({ ...baseClip, assetId: "asset-1" }),
+    );
+
+    expect(result.current).toHaveLength(1);
+    expect(result.current[0].placement).toMatchObject({
+      kind: "endpoint",
+      edge: "end",
+      lane: "bottom",
+      insetPx: 28,
+      order: 0,
+    });
   });
 });

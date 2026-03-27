@@ -65,3 +65,41 @@ export function getFamilyMembers(
       return left.name.localeCompare(right.name);
     });
 }
+
+export function getFamilyMembersForAsset(
+  assets: readonly Asset[],
+  families: readonly AssetFamily[],
+  asset: Asset | null | undefined,
+): Asset[] {
+  if (!asset?.familyId) {
+    return [];
+  }
+
+  const family = families.find((candidate) => candidate.id === asset.familyId);
+  return getFamilyMembers(assets, family, asset.type);
+}
+
+export function getAdjacentFamilyMemberForAsset(
+  assets: readonly Asset[],
+  families: readonly AssetFamily[],
+  asset: Asset | null | undefined,
+  direction: "previous" | "next",
+): Asset | null {
+  const familyMembers = getFamilyMembersForAsset(assets, families, asset);
+  if (!asset || familyMembers.length <= 1) {
+    return null;
+  }
+
+  const currentIndex = familyMembers.findIndex(
+    (candidate) => candidate.id === asset.id,
+  );
+  if (currentIndex < 0) {
+    return null;
+  }
+
+  const delta = direction === "previous" ? -1 : 1;
+  const nextIndex =
+    (currentIndex + delta + familyMembers.length) % familyMembers.length;
+
+  return familyMembers[nextIndex] ?? null;
+}

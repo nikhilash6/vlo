@@ -595,6 +595,142 @@ describe("useTrackRenderEngine Integration", () => {
     unmount();
   });
 
+  it("refreshes the paused synchronized frame when the active clip asset changes", async () => {
+    const trackId = "track-1";
+    const clipId = "clip-A";
+    const registeredRenderers = new Map<
+      string,
+      (time: number) => Promise<void>
+    >();
+
+    mockPlaybackState.time = 2 * TICKS_PER_SECOND;
+    mockTimelineState.clips = [
+      {
+        id: clipId,
+        trackId,
+        assetId: "asset-A",
+        name: "Test Clip",
+        start: 0,
+        timelineDuration: 10 * TICKS_PER_SECOND,
+        sourceDuration: 10 * TICKS_PER_SECOND,
+        transformedDuration: 10 * TICKS_PER_SECOND,
+        transformedOffset: 0,
+        croppedSourceDuration: 10 * TICKS_PER_SECOND,
+        offset: 0,
+        type: "video",
+        transformations: [],
+      },
+    ];
+    mockAssetState.assets = [
+      {
+        id: "asset-A",
+        src: "test-a.mp4",
+        name: "Test Asset A",
+        hash: "abc123hash-a",
+        type: "video",
+        createdAt: 0,
+      },
+      {
+        id: "asset-B",
+        src: "test-b.mp4",
+        name: "Test Asset B",
+        hash: "abc123hash-b",
+        type: "video",
+        createdAt: 0,
+      },
+    ];
+
+    const { rerender, unmount } = renderHook(() =>
+      useTrackRenderEngine(
+        trackId,
+        mockApp,
+        mockContainer,
+        1,
+        {
+          width: 800,
+          height: 600,
+        },
+        (registeredTrackId, renderer) => {
+          if (renderer) {
+            registeredRenderers.set(registeredTrackId, renderer);
+            return;
+          }
+          registeredRenderers.delete(registeredTrackId);
+        },
+      ),
+    );
+
+    const playbackRenderer = registeredRenderers.get(trackId);
+    expect(playbackRenderer).toBeTypeOf("function");
+
+    const worker = mockWorkerInstances[0];
+    let renderPromise: Promise<void> | undefined;
+    await act(async () => {
+      renderPromise = playbackRenderer?.(mockPlaybackState.time);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      worker.onmessage?.({
+        data: {
+          type: "frame",
+          clipId,
+          bitmap: { width: 100, height: 100, close: vi.fn() },
+          transformTime: mockPlaybackState.time,
+        },
+      } as MessageEvent);
+      await renderPromise;
+    });
+
+    worker.postMessage.mockClear();
+
+    mockTimelineState.clips = [
+      {
+        ...mockTimelineState.clips[0],
+        assetId: "asset-B",
+        name: "Test Asset B",
+      },
+    ];
+
+    await act(async () => {
+      rerender();
+    });
+
+    await waitFor(() => {
+      expect(worker.postMessage).toHaveBeenCalledWith({
+        type: "dispose",
+        clipId,
+      });
+      expect(worker.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "prepare",
+          clipId,
+          url: "test-b.mp4",
+        }),
+      );
+      expect(worker.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "render",
+          clipId,
+        }),
+      );
+    });
+
+    await act(async () => {
+      worker.onmessage?.({
+        data: {
+          type: "frame",
+          clipId,
+          bitmap: { width: 100, height: 100, close: vi.fn() },
+          transformTime: mockPlaybackState.time,
+        },
+      } as MessageEvent);
+      await Promise.resolve();
+    });
+
+    unmount();
+  });
+
   it("registers a synchronized playback renderer during live playback", async () => {
     const trackId = "track-1";
     const clipId = "clip-A";

@@ -63,6 +63,7 @@ export class TrackRenderEngine {
   private lastRenderRequest: {
     time: number;
     clipId: string;
+    assetId?: string | null;
     frameIndex?: number;
   } | null = null;
   private lastUpdateTime: number | null = null;
@@ -199,12 +200,14 @@ export class TrackRenderEngine {
       !this.lastRenderRequest ||
       this.lastRenderRequest.frameIndex !== currentFrameIndex ||
       this.lastRenderRequest.clipId !== activeClip.id ||
+      this.lastRenderRequest.assetId !== activeClip.assetId ||
       this.pendingResolve !== null; // Always send if strictly awaiting (Export)
 
     if (shouldSend && shouldRender) {
       this.lastRenderRequest = {
         time: renderTimeSeconds,
         clipId: activeClip.id,
+        assetId: activeClip.assetId,
         frameIndex: currentFrameIndex,
       };
 
@@ -296,12 +299,14 @@ export class TrackRenderEngine {
     const shouldSend =
       !this.lastRenderRequest ||
       this.lastRenderRequest.frameIndex !== currentFrameIndex ||
-      this.lastRenderRequest.clipId !== activeClip.id;
+      this.lastRenderRequest.clipId !== activeClip.id ||
+      this.lastRenderRequest.assetId !== activeClip.assetId;
 
     if (shouldSend) {
       this.lastRenderRequest = {
         time: renderTimeSeconds,
         clipId: activeClip.id,
+        assetId: activeClip.assetId,
         frameIndex: currentFrameIndex,
       };
 
@@ -525,6 +530,12 @@ export class TrackRenderEngine {
         return;
       }
 
+      if (storedAssetId !== undefined) {
+        this.worker.postMessage({ type: "dispose", clipId: clip.id });
+        this.preparedClips.delete(clip.id);
+        this.preparedClipTouchedAtMs.delete(clip.id);
+      }
+
       const asset = clip.assetId ? assetById.get(clip.assetId) : undefined;
       if (!asset || !clip.assetId) {
         return;
@@ -538,6 +549,7 @@ export class TrackRenderEngine {
         file: asset.file,
       });
       this.preparedClips.set(clip.id, clip.assetId);
+      this.preparedClipTouchedAtMs.set(clip.id, nowMs);
     });
 
     for (const [clipId] of this.preparedClips) {
