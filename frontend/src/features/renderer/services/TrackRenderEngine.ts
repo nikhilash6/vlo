@@ -672,6 +672,9 @@ export class TrackRenderEngine {
             this.onFrameReady(request.clip.id, request.rawTimeTicks);
           }
         } catch (error) {
+          if (error instanceof Error && error.name === "AbortError") {
+            continue;
+          }
           console.warn("Failed to render synchronized live frame", error);
         }
       }
@@ -692,7 +695,7 @@ export class TrackRenderEngine {
     clipId: string;
     transformTime: number | undefined;
   }> {
-    this.rejectPendingLiveFrame(new Error("Superseded live frame request"));
+    this.rejectPendingLiveFrame(createRenderAbortError());
 
     return new Promise((resolve, reject) => {
       this.pendingLiveFrame = { resolve, reject };

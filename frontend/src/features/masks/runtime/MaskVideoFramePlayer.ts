@@ -27,6 +27,14 @@ interface PendingStrictFrame {
   reject: (error: Error) => void;
 }
 
+function createMaskRenderAbortError(
+  message: string = "Mask render cancelled",
+): Error {
+  const error = new Error(message);
+  error.name = "AbortError";
+  return error;
+}
+
 export class MaskVideoFramePlayer {
   public readonly sprite: Sprite;
 
@@ -37,6 +45,7 @@ export class MaskVideoFramePlayer {
   private resolvePrepare: (() => void) | null = null;
   private rejectPrepare: ((error: Error) => void) | null = null;
   private pendingStrictFrame: PendingStrictFrame | null = null;
+  private strictRenderChain: Promise<void> = Promise.resolve();
   private readonly retiredTextures = new Set<Texture>();
   private retiredTextureFlushHandle:
     | number
@@ -122,14 +131,14 @@ export class MaskVideoFramePlayer {
     const strict = options.strict === true;
     if (this.disposed) {
       if (strict) {
-        throw new Error("Mask player has been disposed");
+        throw createMaskRenderAbortError("Mask player has been disposed");
       }
       return;
     }
 
     if (!this.worker || !this.sourceAssetId) {
       if (strict) {
-        throw new Error("Mask player has no source");
+        throw createMaskRenderAbortError("Mask player has no source");
       }
       return;
     }
@@ -147,20 +156,12 @@ export class MaskVideoFramePlayer {
       return;
     }
 
-    await new Promise<void>((resolve, reject) => {
-      if (this.pendingStrictFrame) {
-        this.pendingStrictFrame.reject(
-          new Error("Concurrent strict mask frame request"),
-        );
-      }
-      this.pendingStrictFrame = { resolve, reject };
-      this.worker?.postMessage({
-        type: "render",
-        clipId: this.clipId,
-        time: timeSeconds,
-        strict: true,
-      });
-    });
+    const previousStrictRender = this.strictRenderChain.catch(() => undefined);
+    const nextStrictRender = previousStrictRender.then(() =>
+      this.requestStrictFrame(timeSeconds),
+    );
+    this.strictRenderChain = nextStrictRender.catch(() => undefined);
+    await nextStrictRender;
   }
 
   public dispose(): void {
@@ -233,7 +234,9 @@ export class MaskVideoFramePlayer {
   private disposeWorker(): void {
     if (this.pendingStrictFrame) {
       this.pendingStrictFrame.reject(
-        new Error("SAM2 mask player disposed during strict render"),
+        createMaskRenderAbortError(
+          "Mask player disposed during strict render",
+        ),
       );
       this.pendingStrictFrame = null;
     }
@@ -294,6 +297,43 @@ export class MaskVideoFramePlayer {
       this.retiredTextureFlushKind = null;
       this.flushRetiredTextures();
     }, 0);
+  }
+
+  private async requestStrictFrame(timeSeconds: number): Promise<void> {
+    if (this.disposed) {
+      throw createMaskRenderAbortError("Mask player has been disposed");
+    }
+
+    if (!this.worker || !this.sourceAssetId) {
+      throw createMaskRenderAbortError("Mask player has no source");
+    }
+
+    if (this.preparePromise) {
+      await this.preparePromise;
+    }
+
+    if (this.disposed) {
+      throw createMaskRenderAbortError("Mask player has been disposed");
+    }
+
+    if (!this.worker || !this.sourceAssetId) {
+      throw createMaskRenderAbortError("Mask player has no source");
+    }
+
+    const promise = new Promise<void>((resolve, reject) => {
+      this.pendingStrictFrame = {
+        resolve,
+        reject,
+      };
+      this.worker?.postMessage({
+        type: "render",
+        clipId: this.clipId,
+        time: timeSeconds,
+        strict: true,
+      });
+    });
+
+    await promise;
   }
 
   private cancelRetiredTextureFlush(): void {

@@ -42,7 +42,6 @@ interface AssetMaskNode {
 }
 
 type MaskApplicationMode = "none" | "regular" | "alpha";
-type RegularMaskOwner = "none" | "maskTarget" | "sprite";
 
 function getAssetBackedMaskId(maskClip: MaskTimelineClip): string | null {
   if (maskClip.maskType === "sam2") {
@@ -124,7 +123,6 @@ export class SpriteClipMaskController {
 
   private alphaMaskEffect: AlphaMask | null = null;
   private currentMaskMode: MaskApplicationMode = "none";
-  private currentRegularMaskOwner: RegularMaskOwner = "none";
   private currentInverse = false;
   private lastContentWidth = 0;
   private lastContentHeight = 0;
@@ -306,37 +304,16 @@ export class SpriteClipMaskController {
     }
 
     const singleMask = effectiveMaskCount === 1 ? activeMaskClips[0] : null;
-    const singleVectorMask =
-      effectiveMaskCount === 1 && activeVectorMasks.length === 1
-        ? activeVectorMasks[0]
-        : null;
     const shouldUseAlphaMask = activeAssetMasks.length > 0;
-    // Temporary workaround: let Pixi handle inversion directly for the
-    // common single primitive-mask case instead of round-tripping via RTT.
-    const shouldUseDirectVectorMask =
-      this.renderer !== null &&
-      singleVectorMask !== null &&
-      !this.shouldRasterizeVectorMask(singleVectorMask);
     const hasInvertedMask = activeMaskClips.some(
       (maskClip) => maskClip.maskInverted ?? false,
     );
-    // Use compositing when there are multiple masks (mixed inversion) or for
-    // any asset-backed mask inversion, to avoid relying on AlphaMask.inverse behavior.
-    const usePerMaskInversion =
-      hasInvertedMask && (effectiveMaskCount > 1 || shouldUseAlphaMask);
+    // Temporary workaround: keep all inverted masks on the composited RTT path.
+    // This is more stable than applying Pixi inverse directly to vector masks.
+    const usePerMaskInversion = this.renderer !== null && hasInvertedMask;
     const inverse =
       !usePerMaskInversion && singleMask ? (singleMask.maskInverted ?? false) : false;
     this.sanitizeAssetMaskSpriteVisibility();
-
-    if (shouldUseDirectVectorMask) {
-      const node = this.vectorMaskNodes.get(singleVectorMask.id);
-      if (node) {
-        this.applyRegularMask(node.graphics, inverse, "sprite");
-      } else {
-        this.removeMaskFromTarget();
-      }
-      return;
-    }
 
     if (this.maskSprite && this.renderer) {
       // Renderer path: always composite masks into a RenderTexture and bind
@@ -662,7 +639,7 @@ export class SpriteClipMaskController {
     const previousMode = this.currentMaskMode;
 
     if (previousMode === "regular") {
-      this.clearRegularMask();
+      this.setMaskOnTarget(null, false);
     }
 
     const targetChanged =
@@ -686,95 +663,60 @@ export class SpriteClipMaskController {
       this.alphaMaskEffect.inverse = inverse;
       this.attachAlphaMaskEffect();
       this.currentMaskMode = "alpha";
-      this.currentRegularMaskOwner = "none";
       this.currentInverse = inverse;
     }
   }
 
   // ── Private: fallback mask application (no renderer) ───────────────
 
-  private applyRegularMask(
-    mask: Container | null,
-    inverse: boolean,
-    owner: Exclude<RegularMaskOwner, "none">,
-  ) {
-    if (!mask) {
-      this.removeMaskFromTarget();
-      return;
-    }
-
-    const currentMask =
-      owner === "sprite" ? this.sprite.mask : this.maskTarget.mask;
-
-    if (
-      this.currentMaskMode === "regular" &&
-      this.currentRegularMaskOwner === owner &&
-      this.currentInverse === inverse &&
-      currentMask === mask
-    ) {
-      return;
-    }
-
-    if (this.currentMaskMode === "alpha") {
-      this.detachAlphaMaskEffect();
-    }
-
-    if (this.renderer) {
-      this.maskContainer.visible = true;
-    }
-
-    if (owner === "sprite") {
-      this.setMaskOnTarget(null, false);
-      this.setMaskOnSprite(mask, inverse);
-    } else {
-      this.setMaskOnSprite(null, false);
-      this.setMaskOnTarget(mask, inverse);
-    }
-
-    this.currentMaskMode = "regular";
-    this.currentRegularMaskOwner = owner;
-    this.currentInverse = inverse;
-  }
-
   private applyMaskEffect(
     mask: Container | null,
     inverse: boolean,
     useAlphaMask: boolean,
   ) {
-    if (!mask) {
-      this.removeMaskFromTarget();
-      return;
-    }
-
-    if (!useAlphaMask) {
-      this.applyRegularMask(mask, inverse, "maskTarget");
-      return;
-    }
-
     const previousMode = this.currentMaskMode;
-    const targetChanged = this.alphaMaskEffect?.mask !== mask;
+    const nextMode: MaskApplicationMode =
+      mask === null ? "none" : useAlphaMask ? "alpha" : "regular";
 
     if (
-      previousMode === "alpha" &&
-      !targetChanged &&
+      this.currentMaskMode === nextMode &&
       this.currentInverse === inverse
     ) {
       return;
     }
 
-    if (previousMode === "regular") {
-      this.clearRegularMask();
+    if (previousMode === "alpha") {
+      this.detachAlphaMaskEffect();
     }
 
-    if (!this.alphaMaskEffect || targetChanged) {
-      this.alphaMaskEffect?.destroy();
-      this.alphaMaskEffect = new AlphaMask({ mask });
-    }
-    this.alphaMaskEffect.inverse = inverse;
-    this.attachAlphaMaskEffect();
-    this.currentMaskMode = "alpha";
-    this.currentRegularMaskOwner = "none";
+    this.currentMaskMode = nextMode;
     this.currentInverse = inverse;
+
+    if (!mask) {
+      this.removeMaskFromTarget();
+      return;
+    }
+
+    if (nextMode === "regular") {
+      if (this.renderer) {
+        this.maskContainer.visible = true;
+      }
+      this.setMaskOnTarget(mask, inverse);
+      return;
+    }
+
+    if (nextMode === "alpha") {
+      if (previousMode === "regular") {
+        this.setMaskOnTarget(null, false);
+      }
+
+      if (!this.alphaMaskEffect || this.alphaMaskEffect.mask !== mask) {
+        this.alphaMaskEffect?.destroy();
+        this.alphaMaskEffect = new AlphaMask({ mask });
+      }
+      this.alphaMaskEffect.inverse = inverse;
+      this.attachAlphaMaskEffect();
+    }
   }
 
   // ── Private: scene graph helpers ───────────────────────────────────
@@ -1148,7 +1090,6 @@ export class SpriteClipMaskController {
 
   private removeMaskFromTarget() {
     this.currentMaskMode = "none";
-    this.currentRegularMaskOwner = "none";
     this.currentInverse = false;
     if (this.renderer) {
       this.maskContainer.visible = false;
@@ -1159,7 +1100,6 @@ export class SpriteClipMaskController {
     }
     this.detachAlphaMaskEffect();
     this.setMaskOnTarget(null, false);
-    this.setMaskOnSprite(null, false);
   }
 
   private setMaskOnTarget(mask: Container | null, inverse: boolean) {
@@ -1168,23 +1108,6 @@ export class SpriteClipMaskController {
       return;
     }
     this.maskTarget.mask = mask;
-  }
-
-  private setMaskOnSprite(mask: Container | null, inverse: boolean) {
-    if (typeof this.sprite.setMask === "function") {
-      this.sprite.setMask({ mask, inverse });
-      return;
-    }
-    this.sprite.mask = mask;
-  }
-
-  private clearRegularMask() {
-    if (this.currentRegularMaskOwner === "maskTarget") {
-      this.setMaskOnTarget(null, false);
-    } else if (this.currentRegularMaskOwner === "sprite") {
-      this.setMaskOnSprite(null, false);
-    }
-    this.currentRegularMaskOwner = "none";
   }
 
   private hasUsableTexture(sprite: Sprite): boolean {
