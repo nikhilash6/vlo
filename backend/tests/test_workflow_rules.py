@@ -611,7 +611,7 @@ def test_enrich_rules_with_object_info_respects_disabled_default_ar_processing()
     assert rules["aspect_ratio_processing"]["target_nodes"] == []
 
 
-def test_enrich_rules_with_object_info_auto_discovers_required_validation_for_inputs():
+def test_enrich_rules_with_object_info_auto_discovers_required_validation_for_media_inputs_only():
     workflow = {
         "nodes": [
             {"id": 10, "type": "ImageUploadNode", "title": "Image Upload"},
@@ -665,26 +665,20 @@ def test_enrich_rules_with_object_info_auto_discovers_required_validation_for_in
         set_object_info_cache(None)
 
     assert rules["validation"]["inputs"] == [
-        {"kind": "required", "input": "10"},
-        {"kind": "required", "input": "11"},
-        {"kind": "required", "input": "12"},
+        {"kind": "required", "input": "10", "message": "Image is required."},
+        {"kind": "required", "input": "11", "message": "Video is required."},
     ]
     failures = evaluate_input_validation(rules, set())
     assert failures == [
         {
             "kind": "required",
             "input": "10",
-            "message": "Input '10' is required.",
+            "message": "Image is required.",
         },
         {
             "kind": "required",
             "input": "11",
-            "message": "Input '11' is required.",
-        },
-        {
-            "kind": "required",
-            "input": "12",
-            "message": "Input '12' is required.",
+            "message": "Video is required.",
         },
     ]
 
@@ -726,8 +720,16 @@ def test_enrich_rules_with_object_info_uses_param_specific_required_validation_f
         set_object_info_cache(None)
 
     assert rules["validation"]["inputs"] == [
-        {"kind": "required", "input": "20:start_image"},
-        {"kind": "required", "input": "20:end_image"},
+        {
+            "kind": "required",
+            "input": "20:start_image",
+            "message": "Start Image is required.",
+        },
+        {
+            "kind": "required",
+            "input": "20:end_image",
+            "message": "End Image is required.",
+        },
     ]
 
 
@@ -798,6 +800,29 @@ def test_real_wan_default_workflow_sidecar_waives_default_required_inputs():
     } in validation_inputs
     assert not any(
         rule.get("kind") == "required" and rule.get("input") in {"62", "68"}
+        for rule in validation_inputs
+        if isinstance(rule, dict)
+    )
+
+
+def test_real_vace_inpaint_default_validation_requires_video_not_text():
+    base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
+    workflow_path = base / "vlo_VACE_inpaint.json"
+    workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+
+    set_object_info_cache(None)
+    try:
+        rules_model, warnings = load_rules_model_for_workflow(base, workflow_path.name)
+        assert warnings == []
+        rules_model = enrich_rules_with_object_info(rules_model, workflow)
+        rules = dump_resolved_rules(rules_model)
+    finally:
+        set_object_info_cache(None)
+
+    validation_inputs = rules["validation"]["inputs"]
+    assert {"kind": "required", "input": "98", "message": "Video is required."} in validation_inputs
+    assert not any(
+        rule.get("kind") == "required" and rule.get("input") == "75"
         for rule in validation_inputs
         if isinstance(rule, dict)
     )

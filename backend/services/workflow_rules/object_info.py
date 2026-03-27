@@ -419,6 +419,10 @@ def _apply_default_required_input_validation(
 
         use_param_specific_targets = len(discovered_inputs) > 1
         for discovered_input in discovered_inputs:
+            input_type = discovered_input.get("input_type")
+            if input_type == "text":
+                continue
+
             param = discovered_input.get("param")
             if not isinstance(param, str) or not param.strip():
                 continue
@@ -427,10 +431,16 @@ def _apply_default_required_input_validation(
             if _is_validation_target_covered(target, existing_targets):
                 continue
 
+            label = discovered_input.get("label")
             validation_inputs.append(
                 {
                     "kind": "required",
                     "input": target,
+                    **(
+                        {"message": f"{label} is required."}
+                        if isinstance(label, str) and label.strip()
+                        else {}
+                    ),
                 }
             )
             existing_targets.add(target)
