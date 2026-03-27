@@ -550,6 +550,8 @@ def enrich_rules_with_object_info(
                 discovered_widgets,
             )
         elif isinstance(existing_widgets, dict):
+            merged_widgets = dict(discovered_widgets) if discovered_widgets else {}
+            merged_widgets.update(existing_widgets)
             enrichment_source = dict(discovered_widgets) if discovered_widgets else {}
             unenriched = {
                 name for name, entry in existing_widgets.items()
@@ -559,9 +561,9 @@ def enrich_rules_with_object_info(
                 enrichment_source.update(
                     resolve_widget_param_metadata(info.class_type, object_info, unenriched)
                 )
-            if enrichment_source:
+            if merged_widgets:
                 existing["widgets"] = merge_widget_entries_with_object_info(
-                    existing_widgets,
+                    merged_widgets,
                     enrichment_source,
                 )
         elif discovered_widgets:

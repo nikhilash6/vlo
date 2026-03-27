@@ -851,6 +851,11 @@ def test_real_video_wan_default_workflow_sidecar_requires_video_and_derives_deno
         if isinstance(rule, dict)
     )
 
+    sampler_widgets = rules["nodes"]["57"]["widgets"]
+    assert "cfg" in sampler_widgets
+    assert "noise_seed" in sampler_widgets
+    assert sampler_widgets["start_at_step"]["hidden"] is True
+
 
 def test_real_vace_inpaint_default_validation_requires_video_not_text():
     base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
@@ -1297,6 +1302,106 @@ def test_enrich_rules_with_object_info_defaults_ksampler_advanced_to_cfg_and_noi
     assert list(widgets.keys()) == ["cfg", "noise_seed"]
     assert widgets["cfg"]["value_type"] == "float"
     assert widgets["noise_seed"]["control_after_generate"] is True
+
+
+def test_enrich_rules_with_object_info_appends_default_ksampler_advanced_widgets_to_sidecar_widgets():
+    workflow = {
+        "145": {
+            "class_type": "KSamplerAdvanced",
+            "inputs": {
+                "add_noise": "enable",
+                "noise_seed": 2,
+                "steps": 30,
+                "cfg": 6.5,
+                "sampler_name": "euler",
+                "scheduler": "normal",
+                "start_at_step": 0,
+                "end_at_step": 30,
+                "return_with_leftover_noise": "disable",
+                "model": ["1", 0],
+                "positive": ["2", 0],
+                "negative": ["3", 0],
+                "latent_image": ["4", 0],
+            },
+            "_meta": {"title": "KSampler Advanced"},
+        }
+    }
+    rules = {
+        "version": 1,
+        "nodes": {
+            "145": {
+                "widgets": {
+                    "start_at_step": {
+                        "value_type": "int",
+                        "hidden": True,
+                    },
+                    "end_at_step": {
+                        "value_type": "int",
+                        "hidden": True,
+                    },
+                }
+            }
+        },
+        "output_injections": {},
+        "slots": {},
+        "mask_cropping": {"mode": "crop"},
+        "postprocessing": {
+            "mode": "auto",
+            "panel_preview": "raw_outputs",
+            "on_failure": "fallback_raw",
+        },
+    }
+    object_info = {
+        "KSamplerAdvanced": {
+            "input": {
+                "required": {
+                    "model": ["MODEL"],
+                    "add_noise": [["enable", "disable"], {}],
+                    "noise_seed": ["INT", {"control_after_generate": True}],
+                    "steps": ["INT", {}],
+                    "cfg": ["FLOAT", {}],
+                    "sampler_name": [["euler", "heun"], {}],
+                    "scheduler": [["normal", "karras"], {}],
+                    "positive": ["CONDITIONING"],
+                    "negative": ["CONDITIONING"],
+                    "latent_image": ["LATENT"],
+                    "start_at_step": ["INT", {"min": 0}],
+                    "end_at_step": ["INT", {"min": 0}],
+                    "return_with_leftover_noise": [["enable", "disable"], {}],
+                }
+            },
+            "input_order": {
+                "required": [
+                    "model",
+                    "add_noise",
+                    "noise_seed",
+                    "steps",
+                    "cfg",
+                    "sampler_name",
+                    "scheduler",
+                    "positive",
+                    "negative",
+                    "latent_image",
+                    "start_at_step",
+                    "end_at_step",
+                    "return_with_leftover_noise",
+                ]
+            },
+        }
+    }
+
+    set_object_info_cache(object_info)
+    try:
+        enrich_rules_with_object_info(rules, workflow)
+    finally:
+        set_object_info_cache(None)
+
+    widgets = rules["nodes"]["145"]["widgets"]
+    assert list(widgets.keys()) == ["cfg", "noise_seed", "start_at_step", "end_at_step"]
+    assert widgets["cfg"]["value_type"] == "float"
+    assert widgets["noise_seed"]["control_after_generate"] is True
+    assert widgets["start_at_step"]["hidden"] is True
+    assert widgets["end_at_step"]["hidden"] is True
 
 
 def test_enrich_rules_with_object_info_respects_explicit_widgets_mode_override():
