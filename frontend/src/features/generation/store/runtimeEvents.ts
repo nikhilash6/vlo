@@ -239,6 +239,28 @@ export function attachRuntimeClientHandlers(
         break;
       }
 
+      case "execution_interrupted": {
+        set((state) => {
+          const job = state.jobs.get(event.data.prompt_id);
+          if (!job || job.status === "error" || job.status === "completed") {
+            return {};
+          }
+
+          return markJobError(
+            state,
+            event.data.prompt_id,
+            "Generation interrupted",
+            event.data.node_id,
+            {
+              clearActiveJob: state.activeJobId === event.data.prompt_id,
+              completedAt: Date.now(),
+            },
+          );
+        });
+        resumeQueuedDispatch();
+        break;
+      }
+
       case "error": {
         console.warn("[Generation] Proxy error:", event.data.message);
         void get().refreshRuntimeStatus();

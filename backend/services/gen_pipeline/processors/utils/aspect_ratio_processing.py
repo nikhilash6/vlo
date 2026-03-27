@@ -175,6 +175,10 @@ def apply_aspect_ratio_processing(
     if not bool(config.get("enabled")):
         return None, warnings
 
+    target_nodes = config.get("target_nodes")
+    if not isinstance(target_nodes, list) or len(target_nodes) == 0:
+        return None, warnings
+
     if not isinstance(target_aspect_ratio, str) or not target_aspect_ratio.strip():
         warnings.append(
             pipeline_warning(
@@ -261,55 +265,53 @@ def apply_aspect_ratio_processing(
         )
         return None, warnings
 
-    target_nodes = config.get("target_nodes")
     applied_nodes: list[dict[str, str]] = []
-    if isinstance(target_nodes, list):
-        for node_cfg in target_nodes:
-            if not isinstance(node_cfg, dict):
-                continue
-            node_id = node_cfg.get("node_id")
-            width_param = node_cfg.get("width_param")
-            height_param = node_cfg.get("height_param")
-            if (
-                not isinstance(node_id, str)
-                or not isinstance(width_param, str)
-                or not isinstance(height_param, str)
-                or not node_id.strip()
-                or not width_param.strip()
-                or not height_param.strip()
-            ):
-                continue
+    for node_cfg in target_nodes:
+        if not isinstance(node_cfg, dict):
+            continue
+        node_id = node_cfg.get("node_id")
+        width_param = node_cfg.get("width_param")
+        height_param = node_cfg.get("height_param")
+        if (
+            not isinstance(node_id, str)
+            or not isinstance(width_param, str)
+            or not isinstance(height_param, str)
+            or not node_id.strip()
+            or not width_param.strip()
+            or not height_param.strip()
+        ):
+            continue
 
-            node = workflow.get(node_id)
-            if not isinstance(node, dict):
-                warnings.append(
-                    pipeline_warning(
-                        "aspect_ratio_processing_target_node_missing",
-                        "Configured aspect_ratio_processing target node was not found in workflow",
-                        details={"node_id": node_id},
-                    )
+        node = workflow.get(node_id)
+        if not isinstance(node, dict):
+            warnings.append(
+                pipeline_warning(
+                    "aspect_ratio_processing_target_node_missing",
+                    "Configured aspect_ratio_processing target node was not found in workflow",
+                    details={"node_id": node_id},
                 )
-                continue
-            inputs = node.get("inputs")
-            if not isinstance(inputs, dict):
-                warnings.append(
-                    pipeline_warning(
-                        "aspect_ratio_processing_target_node_inputs_missing",
-                        "Configured target node does not expose an inputs object",
-                        details={"node_id": node_id},
-                    )
-                )
-                continue
-
-            inputs[width_param] = best["width"]
-            inputs[height_param] = best["height"]
-            applied_nodes.append(
-                {
-                    "node_id": node_id,
-                    "width_param": width_param,
-                    "height_param": height_param,
-                }
             )
+            continue
+        inputs = node.get("inputs")
+        if not isinstance(inputs, dict):
+            warnings.append(
+                pipeline_warning(
+                    "aspect_ratio_processing_target_node_inputs_missing",
+                    "Configured target node does not expose an inputs object",
+                    details={"node_id": node_id},
+                )
+            )
+            continue
+
+        inputs[width_param] = best["width"]
+        inputs[height_param] = best["height"]
+        applied_nodes.append(
+            {
+                "node_id": node_id,
+                "width_param": width_param,
+                "height_param": height_param,
+            }
+        )
 
     if not applied_nodes:
         warnings.append(

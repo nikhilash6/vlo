@@ -190,6 +190,14 @@ describe("resolvePresentedInputs", () => {
     expect(getClosestWorkflowResolution(1080, supportedResolutions)).toBe(720);
   });
 
+  it("defaults aspect ratio processing to enabled when omitted", () => {
+    const { rules } = normalizeWorkflowRules({
+      version: 1,
+    });
+
+    expect(rules.aspect_ratio_processing?.enabled).toBe(true);
+  });
+
   it("normalizes optional input presentation and input conditions", () => {
     const { rules } = normalizeWorkflowRules({
       version: 1,

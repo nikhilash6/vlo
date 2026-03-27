@@ -2,16 +2,16 @@
   "$defs": {
     "AspectRatioTargetNode": {
       "properties": {
-        "height_param": {
-          "title": "Height Param",
-          "type": "string"
-        },
         "node_id": {
           "title": "Node Id",
           "type": "string"
         },
         "width_param": {
           "title": "Width Param",
+          "type": "string"
+        },
+        "height_param": {
+          "title": "Height Param",
           "type": "string"
         }
       },
@@ -61,34 +61,10 @@
     },
     "ResolvedWorkflowRuleNode": {
       "properties": {
-        "binary_derived_mask_of": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Binary Derived Mask Of"
-        },
         "ignore": {
           "default": false,
           "title": "Ignore",
           "type": "boolean"
-        },
-        "node_title": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Node Title"
         },
         "present": {
           "anyOf": [
@@ -100,36 +76,6 @@
             }
           ],
           "default": null
-        },
-        "selection": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WorkflowRuleSelectionConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "soft_derived_mask_of": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Soft Derived Mask Of"
-        },
-        "widgets": {
-          "additionalProperties": {
-            "$ref": "#/$defs/WorkflowRuleWidgetEntry"
-          },
-          "title": "Widgets",
-          "type": "object"
         },
         "widgets_mode": {
           "anyOf": [
@@ -146,6 +92,60 @@
           ],
           "default": null,
           "title": "Widgets Mode"
+        },
+        "widgets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/WorkflowRuleWidgetEntry"
+          },
+          "title": "Widgets",
+          "type": "object"
+        },
+        "selection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowRuleSelectionConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "binary_derived_mask_of": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Binary Derived Mask Of"
+        },
+        "soft_derived_mask_of": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soft Derived Mask Of"
+        },
+        "node_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Node Title"
         }
       },
       "title": "ResolvedWorkflowRuleNode",
@@ -153,12 +153,6 @@
     },
     "WorkflowAspectRatioPostprocessConfig": {
       "properties": {
-        "apply_to": {
-          "const": "all_visual_outputs",
-          "default": "all_visual_outputs",
-          "title": "Apply To",
-          "type": "string"
-        },
         "enabled": {
           "default": true,
           "title": "Enabled",
@@ -169,6 +163,12 @@
           "default": "stretch_exact",
           "title": "Mode",
           "type": "string"
+        },
+        "apply_to": {
+          "const": "all_visual_outputs",
+          "default": "all_visual_outputs",
+          "title": "Apply To",
+          "type": "string"
         }
       },
       "title": "WorkflowAspectRatioPostprocessConfig",
@@ -177,12 +177,19 @@
     "WorkflowAspectRatioProcessingConfig": {
       "properties": {
         "enabled": {
-          "default": false,
+          "default": true,
           "title": "Enabled",
           "type": "boolean"
         },
-        "postprocess": {
-          "$ref": "#/$defs/WorkflowAspectRatioPostprocessConfig"
+        "stride": {
+          "default": 16,
+          "title": "Stride",
+          "type": "integer"
+        },
+        "search_steps": {
+          "default": 2,
+          "title": "Search Steps",
+          "type": "integer"
         },
         "resolutions": {
           "items": {
@@ -191,22 +198,15 @@
           "title": "Resolutions",
           "type": "array"
         },
-        "search_steps": {
-          "default": 2,
-          "title": "Search Steps",
-          "type": "integer"
-        },
-        "stride": {
-          "default": 16,
-          "title": "Stride",
-          "type": "integer"
-        },
         "target_nodes": {
           "items": {
             "$ref": "#/$defs/AspectRatioTargetNode"
           },
           "title": "Target Nodes",
           "type": "array"
+        },
+        "postprocess": {
+          "$ref": "#/$defs/WorkflowAspectRatioPostprocessConfig"
         }
       },
       "title": "WorkflowAspectRatioProcessingConfig",
@@ -214,6 +214,11 @@
     },
     "WorkflowAtLeastNInputValidationRule": {
       "properties": {
+        "kind": {
+          "const": "at_least_n",
+          "title": "Kind",
+          "type": "string"
+        },
         "inputs": {
           "items": {
             "type": "string"
@@ -221,10 +226,9 @@
           "title": "Inputs",
           "type": "array"
         },
-        "kind": {
-          "const": "at_least_n",
-          "title": "Kind",
-          "type": "string"
+        "min": {
+          "title": "Min",
+          "type": "integer"
         },
         "message": {
           "anyOf": [
@@ -237,10 +241,6 @@
           ],
           "default": null,
           "title": "Message"
-        },
-        "min": {
-          "title": "Min",
-          "type": "integer"
         }
       },
       "required": [
@@ -252,45 +252,6 @@
     },
     "WorkflowDualSamplerDenoiseRule": {
       "properties": {
-        "base_split_step": {
-          "$ref": "#/$defs/WorkflowParamReference"
-        },
-        "group_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Group Id"
-        },
-        "group_order": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Group Order"
-        },
-        "group_title": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Group Title"
-        },
         "id": {
           "title": "Id",
           "type": "string"
@@ -313,18 +274,57 @@
           "default": null,
           "title": "Label"
         },
+        "group_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group Id"
+        },
+        "group_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group Title"
+        },
+        "group_order": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group Order"
+        },
+        "total_steps": {
+          "$ref": "#/$defs/WorkflowParamReference"
+        },
+        "start_step": {
+          "$ref": "#/$defs/WorkflowParamReference"
+        },
+        "base_split_step": {
+          "$ref": "#/$defs/WorkflowParamReference"
+        },
         "split_step_targets": {
           "items": {
             "$ref": "#/$defs/WorkflowParamReference"
           },
           "title": "Split Step Targets",
           "type": "array"
-        },
-        "start_step": {
-          "$ref": "#/$defs/WorkflowParamReference"
-        },
-        "total_steps": {
-          "$ref": "#/$defs/WorkflowParamReference"
         }
       },
       "required": [
@@ -338,18 +338,18 @@
     },
     "WorkflowInputCondition": {
       "properties": {
+        "kind": {
+          "const": "at_least_one",
+          "default": "at_least_one",
+          "title": "Kind",
+          "type": "string"
+        },
         "inputs": {
           "items": {
             "type": "string"
           },
           "title": "Inputs",
           "type": "array"
-        },
-        "kind": {
-          "const": "at_least_one",
-          "default": "at_least_one",
-          "title": "Kind",
-          "type": "string"
         },
         "message": {
           "anyOf": [
@@ -384,13 +384,13 @@
     },
     "WorkflowOptionalInputValidationRule": {
       "properties": {
-        "input": {
-          "title": "Input",
-          "type": "string"
-        },
         "kind": {
           "const": "optional",
           "title": "Kind",
+          "type": "string"
+        },
+        "input": {
+          "title": "Input",
           "type": "string"
         },
         "message": {
@@ -443,15 +443,6 @@
           "title": "Mode",
           "type": "string"
         },
-        "on_failure": {
-          "default": "fallback_raw",
-          "enum": [
-            "fallback_raw",
-            "show_error"
-          ],
-          "title": "On Failure",
-          "type": "string"
-        },
         "panel_preview": {
           "default": "raw_outputs",
           "enum": [
@@ -459,6 +450,15 @@
             "replace_outputs"
           ],
           "title": "Panel Preview",
+          "type": "string"
+        },
+        "on_failure": {
+          "default": "fallback_raw",
+          "enum": [
+            "fallback_raw",
+            "show_error"
+          ],
+          "title": "On Failure",
           "type": "string"
         },
         "stitch_fps": {
@@ -479,13 +479,13 @@
     },
     "WorkflowRequiredInputValidationRule": {
       "properties": {
-        "input": {
-          "title": "Input",
-          "type": "string"
-        },
         "kind": {
           "const": "required",
           "title": "Kind",
+          "type": "string"
+        },
+        "input": {
+          "title": "Input",
           "type": "string"
         },
         "message": {
@@ -510,18 +510,6 @@
     },
     "WorkflowRuleNodePresent": {
       "properties": {
-        "class_type": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Class Type"
-        },
         "enabled": {
           "anyOf": [
             {
@@ -533,6 +521,18 @@
           ],
           "default": null,
           "title": "Enabled"
+        },
+        "required": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required"
         },
         "input_type": {
           "anyOf": [
@@ -546,18 +546,6 @@
           "default": null,
           "title": "Input Type"
         },
-        "label": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Label"
-        },
         "param": {
           "anyOf": [
             {
@@ -570,17 +558,29 @@
           "default": null,
           "title": "Param"
         },
-        "required": {
+        "label": {
           "anyOf": [
             {
-              "type": "boolean"
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Required"
+          "title": "Label"
+        },
+        "class_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Class Type"
         }
       },
       "title": "WorkflowRuleNodePresent",
@@ -630,6 +630,42 @@
     },
     "WorkflowRuleSlot": {
       "properties": {
+        "input_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Type"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "param": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Param"
+        },
         "experimental": {
           "anyOf": [
             {
@@ -666,18 +702,24 @@
           "default": null,
           "title": "Frame Step"
         },
-        "input_type": {
+        "max_frames": {
           "anyOf": [
             {
-              "type": "string"
+              "type": "integer"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Input Type"
-        },
+          "title": "Max Frames"
+        }
+      },
+      "title": "WorkflowRuleSlot",
+      "type": "object"
+    },
+    "WorkflowRuleWidgetEntry": {
+      "properties": {
         "label": {
           "anyOf": [
             {
@@ -690,50 +732,10 @@
           "default": null,
           "title": "Label"
         },
-        "max_frames": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Max Frames"
-        },
-        "param": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Param"
-        }
-      },
-      "title": "WorkflowRuleSlot",
-      "type": "object"
-    },
-    "WorkflowRuleWidgetEntry": {
-      "properties": {
         "control_after_generate": {
           "default": false,
           "title": "Control After Generate",
           "type": "boolean"
-        },
-        "default": {
-          "anyOf": [
-            {},
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Default"
         },
         "default_randomize": {
           "anyOf": [
@@ -759,6 +761,18 @@
           "default": null,
           "title": "Frontend Only"
         },
+        "hidden": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hidden"
+        },
         "group_id": {
           "anyOf": [
             {
@@ -770,18 +784,6 @@
           ],
           "default": null,
           "title": "Group Id"
-        },
-        "group_order": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Group Order"
         },
         "group_title": {
           "anyOf": [
@@ -795,29 +797,32 @@
           "default": null,
           "title": "Group Title"
         },
-        "hidden": {
+        "group_order": {
           "anyOf": [
             {
-              "type": "boolean"
+              "type": "integer"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Hidden"
+          "title": "Group Order"
         },
-        "label": {
+        "min": {
           "anyOf": [
             {
-              "type": "string"
+              "type": "integer"
+            },
+            {
+              "type": "number"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Label"
+          "title": "Min"
         },
         "max": {
           "anyOf": [
@@ -834,20 +839,35 @@
           "default": null,
           "title": "Max"
         },
-        "min": {
+        "default": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        },
+        "value_type": {
           "anyOf": [
             {
-              "type": "integer"
-            },
-            {
-              "type": "number"
+              "enum": [
+                "int",
+                "float",
+                "string",
+                "boolean",
+                "enum",
+                "unknown"
+              ],
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Min"
+          "title": "Value Type"
         },
         "options": {
           "anyOf": [
@@ -876,26 +896,6 @@
           ],
           "default": null,
           "title": "Options"
-        },
-        "value_type": {
-          "anyOf": [
-            {
-              "enum": [
-                "int",
-                "float",
-                "string",
-                "boolean",
-                "enum",
-                "unknown"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Value Type"
         }
       },
       "title": "WorkflowRuleWidgetEntry",
@@ -934,33 +934,10 @@
     }
   },
   "properties": {
-    "aspect_ratio_processing": {
-      "$ref": "#/$defs/WorkflowAspectRatioProcessingConfig"
-    },
-    "derived_widgets": {
-      "items": {
-        "$ref": "#/$defs/WorkflowDualSamplerDenoiseRule"
-      },
-      "title": "Derived Widgets",
-      "type": "array"
-    },
-    "input_conditions": {
-      "anyOf": [
-        {
-          "items": {
-            "$ref": "#/$defs/WorkflowInputCondition"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Input Conditions"
-    },
-    "mask_cropping": {
-      "$ref": "#/$defs/WorkflowMaskCroppingConfig"
+    "version": {
+      "default": 1,
+      "title": "Version",
+      "type": "integer"
     },
     "name": {
       "anyOf": [
@@ -981,6 +958,31 @@
       "title": "Nodes",
       "type": "object"
     },
+    "validation": {
+      "$ref": "#/$defs/WorkflowValidationConfig"
+    },
+    "input_conditions": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/WorkflowInputCondition"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Input Conditions"
+    },
+    "derived_widgets": {
+      "items": {
+        "$ref": "#/$defs/WorkflowDualSamplerDenoiseRule"
+      },
+      "title": "Derived Widgets",
+      "type": "array"
+    },
     "output_injections": {
       "additionalProperties": {
         "additionalProperties": {
@@ -991,9 +993,6 @@
       "title": "Output Injections",
       "type": "object"
     },
-    "postprocessing": {
-      "$ref": "#/$defs/WorkflowPostprocessingConfig"
-    },
     "slots": {
       "additionalProperties": {
         "$ref": "#/$defs/WorkflowRuleSlot"
@@ -1001,13 +1000,14 @@
       "title": "Slots",
       "type": "object"
     },
-    "validation": {
-      "$ref": "#/$defs/WorkflowValidationConfig"
+    "mask_cropping": {
+      "$ref": "#/$defs/WorkflowMaskCroppingConfig"
     },
-    "version": {
-      "default": 1,
-      "title": "Version",
-      "type": "integer"
+    "postprocessing": {
+      "$ref": "#/$defs/WorkflowPostprocessingConfig"
+    },
+    "aspect_ratio_processing": {
+      "$ref": "#/$defs/WorkflowAspectRatioProcessingConfig"
     }
   },
   "title": "ResolvedWorkflowRules",

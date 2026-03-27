@@ -62,6 +62,18 @@ def test_load_rules_for_workflow_without_sidecar(tmp_path: Path):
         "panel_preview": "raw_outputs",
         "on_failure": "fallback_raw",
     }
+    assert rules["aspect_ratio_processing"] == {
+        "enabled": True,
+        "stride": 16,
+        "search_steps": 2,
+        "resolutions": [],
+        "target_nodes": [],
+        "postprocess": {
+            "enabled": True,
+            "mode": "stretch_exact",
+            "apply_to": "all_visual_outputs",
+        },
+    }
 
 
 def test_load_rules_for_workflow_malformed_sidecar(tmp_path: Path):
@@ -414,6 +426,189 @@ def test_enrich_rules_with_object_info_groups_proxy_widgets_under_parent_templat
     assert height_widget["group_id"] == "267"
     assert height_widget["group_title"] == "Video Generation (LTX-2.3)"
     assert height_widget["group_order"] == 1
+
+
+def test_enrich_rules_with_object_info_auto_discovers_ltx_ar_target_from_subgraph():
+    workflow = {
+        "nodes": [
+            {
+                "id": 267,
+                "type": "template-subgraph-id",
+                "properties": {
+                    "proxyWidgets": [
+                        ["257", "value"],
+                        ["258", "value"],
+                    ]
+                },
+            }
+        ],
+        "definitions": {
+            "subgraphs": [
+                {
+                    "id": "template-subgraph-id",
+                    "name": "Video Generation (LTX-2.3)",
+                    "nodes": [
+                        {
+                            "id": 228,
+                            "type": "EmptyLTXVLatentVideo",
+                            "widgets_values": [768, 512, 97, 1],
+                        },
+                        {
+                            "id": 257,
+                            "type": "PrimitiveInt",
+                            "title": "Width",
+                            "widgets_values": [1280, "fixed"],
+                        },
+                        {
+                            "id": 258,
+                            "type": "PrimitiveInt",
+                            "title": "Height",
+                            "widgets_values": [720, "fixed"],
+                        },
+                    ],
+                }
+            ]
+        },
+    }
+    rules = {
+        "version": 1,
+        "nodes": {},
+        "output_injections": {},
+        "slots": {},
+        "mask_cropping": {"mode": "crop"},
+        "postprocessing": {
+            "mode": "auto",
+            "panel_preview": "raw_outputs",
+            "on_failure": "fallback_raw",
+        },
+        "aspect_ratio_processing": {
+            "enabled": True,
+            "stride": 16,
+            "search_steps": 2,
+            "resolutions": [],
+            "target_nodes": [],
+            "postprocess": {
+                "enabled": True,
+                "mode": "stretch_exact",
+                "apply_to": "all_visual_outputs",
+            },
+        },
+    }
+    object_info = {
+        "EmptyLTXVLatentVideo": {
+            "input": {
+                "required": {
+                    "width": ["INT", {}],
+                    "height": ["INT", {}],
+                    "length": ["INT", {}],
+                }
+            },
+            "input_order": {
+                "required": ["width", "height", "length"],
+            },
+        },
+        "PrimitiveInt": {
+            "input": {
+                "required": {
+                    "value": [
+                        "INT",
+                        {
+                            "control_after_generate": True,
+                        },
+                    ]
+                }
+            },
+            "input_order": {
+                "required": ["value"],
+            },
+        },
+    }
+
+    set_object_info_cache(object_info)
+    try:
+        enrich_rules_with_object_info(rules, workflow)
+    finally:
+        set_object_info_cache(None)
+
+    assert rules["aspect_ratio_processing"]["target_nodes"] == [
+        {
+            "node_id": "267:228",
+            "width_param": "width",
+            "height_param": "height",
+        }
+    ]
+
+
+def test_enrich_rules_with_object_info_respects_disabled_default_ar_processing():
+    workflow = {
+        "nodes": [
+            {
+                "id": 267,
+                "type": "template-subgraph-id",
+            }
+        ],
+        "definitions": {
+            "subgraphs": [
+                {
+                    "id": "template-subgraph-id",
+                    "nodes": [
+                        {
+                            "id": 228,
+                            "type": "EmptyLTXVLatentVideo",
+                            "widgets_values": [768, 512, 97, 1],
+                        },
+                    ],
+                }
+            ]
+        },
+    }
+    rules = {
+        "version": 1,
+        "nodes": {},
+        "output_injections": {},
+        "slots": {},
+        "mask_cropping": {"mode": "crop"},
+        "postprocessing": {
+            "mode": "auto",
+            "panel_preview": "raw_outputs",
+            "on_failure": "fallback_raw",
+        },
+        "aspect_ratio_processing": {
+            "enabled": False,
+            "stride": 16,
+            "search_steps": 2,
+            "resolutions": [],
+            "target_nodes": [],
+            "postprocess": {
+                "enabled": True,
+                "mode": "stretch_exact",
+                "apply_to": "all_visual_outputs",
+            },
+        },
+    }
+    object_info = {
+        "EmptyLTXVLatentVideo": {
+            "input": {
+                "required": {
+                    "width": ["INT", {}],
+                    "height": ["INT", {}],
+                    "length": ["INT", {}],
+                }
+            },
+            "input_order": {
+                "required": ["width", "height", "length"],
+            },
+        }
+    }
+
+    set_object_info_cache(object_info)
+    try:
+        enrich_rules_with_object_info(rules, workflow)
+    finally:
+        set_object_info_cache(None)
+
+    assert rules["aspect_ratio_processing"]["enabled"] is False
+    assert rules["aspect_ratio_processing"]["target_nodes"] == []
 
 
 def test_enrich_rules_with_object_info_defaults_ksampler_to_all_widgets():
@@ -1222,6 +1417,43 @@ def test_apply_aspect_ratio_processing_uses_provided_target_aspect_ratio():
     assert metadata["requested"]["height"] == 720
     assert workflow["49"]["inputs"]["width"] == metadata["strided"]["width"]
     assert workflow["49"]["inputs"]["height"] == metadata["strided"]["height"]
+
+
+def test_apply_aspect_ratio_processing_skips_when_no_target_nodes_are_configured():
+    workflow = {
+        "49": {
+            "class_type": "WanVaceToVideo",
+            "inputs": {
+                "width": 720,
+                "height": 720,
+            },
+        }
+    }
+    rules = {
+        "aspect_ratio_processing": {
+            "enabled": True,
+            "stride": 32,
+            "search_steps": 2,
+            "target_nodes": [],
+            "postprocess": {
+                "enabled": True,
+                "mode": "stretch_exact",
+                "apply_to": "all_visual_outputs",
+            },
+        }
+    }
+
+    metadata, warnings = apply_aspect_ratio_processing(
+        workflow,
+        rules,
+        "16:9",
+        720,
+    )
+
+    assert metadata is None
+    assert warnings == []
+    assert workflow["49"]["inputs"]["width"] == 720
+    assert workflow["49"]["inputs"]["height"] == 720
 
 
 def test_apply_rules_rewrites_output_links():

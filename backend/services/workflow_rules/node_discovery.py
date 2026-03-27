@@ -176,6 +176,14 @@ DEFAULT_NODE_POLICY_RULES: list[NodePolicyRule] = [
         "policy": {"widgets_mode": WIDGETS_MODE_ALL},
     },
     {
+        "constraint": {"class_names": frozenset({"EmptyLTXVLatentVideo"})},
+        "policy": {
+            "ar_target": True,
+            "ar_width_param": "width",
+            "ar_height_param": "height",
+        },
+    },
+    {
         "constraint": {"name_contains": "resize", "has_params": ["width", "height"]},
         "policy": {
             "ar_target": True,

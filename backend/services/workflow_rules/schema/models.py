@@ -175,7 +175,7 @@ class WorkflowAspectRatioPostprocessConfig(WorkflowRuleBaseModel):
 
 
 class WorkflowAspectRatioProcessingConfig(WorkflowRuleBaseModel):
-    enabled: bool = False
+    enabled: bool = True
     stride: int = 16
     search_steps: int = 2
     resolutions: list[int] = Field(default_factory=list)
@@ -322,7 +322,7 @@ class MaskCroppingPipelineStageV2(WorkflowRuleBaseModel):
 
 class AspectRatioPipelineStageV2(WorkflowRuleBaseModel):
     kind: Literal["aspect_ratio"] = "aspect_ratio"
-    enabled: bool = False
+    enabled: bool = True
     stride: int = 16
     search_steps: int = 2
     resolutions: list[int] = Field(default_factory=list)
@@ -520,7 +520,9 @@ def compile_authored_v2_to_resolved(
             (stage for stage in authored.pipeline if isinstance(stage, AspectRatioPipelineStageV2)),
             None,
         )
-        if aspect_stage is not None:
+        if aspect_stage is None:
+            aspect_ratio_processing = WorkflowAspectRatioProcessingConfig(enabled=False)
+        else:
             aspect_ratio_processing = WorkflowAspectRatioProcessingConfig(
                 enabled=aspect_stage.enabled,
                 stride=aspect_stage.stride,

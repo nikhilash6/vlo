@@ -288,7 +288,11 @@ export function GenerationPanel() {
   const hasMaskMappings = derivedMaskMappings.length > 0;
   const aspectRatioProcessingConfig =
     activeWorkflowRules?.aspect_ratio_processing ?? null;
-  const showResolutionSelector = Boolean(aspectRatioProcessingConfig?.enabled);
+  const hasAspectRatioTargets =
+    (aspectRatioProcessingConfig?.target_nodes?.length ?? 0) > 0;
+  const showResolutionSelector = Boolean(
+    aspectRatioProcessingConfig?.enabled && hasAspectRatioTargets,
+  );
   const supportedResolutions =
     getSupportedWorkflowResolutions(activeWorkflowRules);
   const resolutionOptions: number[] =

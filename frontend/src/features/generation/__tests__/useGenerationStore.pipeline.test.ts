@@ -826,6 +826,55 @@ describe("useGenerationStore pipeline phases", () => {
     expect(mockGetRuntimeStatus).toHaveBeenCalledTimes(2);
   });
 
+  it("resumes the queue when ComfyUI emits execution_interrupted", async () => {
+    makeReadyStoreState();
+    useGenerationStore.setState({
+      wsClient: null,
+      connectionStatus: "disconnected",
+    });
+    mockGenerate
+      .mockResolvedValueOnce({
+        prompt_id: "prompt-1",
+        number: 1,
+        node_errors: {},
+      })
+      .mockResolvedValueOnce({
+        prompt_id: "prompt-2",
+        number: 2,
+        node_errors: {},
+      });
+
+    useGenerationStore.getState().connect();
+    await flushMicrotasks();
+    const client = getLatestClient();
+
+    await useGenerationStore.getState().queueGeneration({}, {}, {}, {}, 2);
+    expect(useGenerationStore.getState().activeJobId).toBe("prompt-1");
+    expect(useGenerationStore.getState().generationQueue).toHaveLength(1);
+
+    client.emitEvent({
+      type: "execution_interrupted",
+      data: {
+        prompt_id: "prompt-1",
+        node_id: "node-1",
+        node_type: "KSampler",
+        executed: [],
+      },
+    });
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    const finalState = useGenerationStore.getState();
+    expect(mockGenerate).toHaveBeenCalledTimes(2);
+    expect(finalState.activeJobId).toBe("prompt-2");
+    expect(finalState.generationQueue).toHaveLength(0);
+    expect(finalState.jobs.get("prompt-1")).toMatchObject({
+      status: "error",
+      error: "Generation interrupted",
+      currentNode: "node-1",
+    });
+  });
+
   it("keeps websocket preview frames ordered by explicit frame index", async () => {
     if (!("createObjectURL" in URL)) {
       Object.defineProperty(URL, "createObjectURL", {

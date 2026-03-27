@@ -54,6 +54,16 @@ export interface ComfyUIExecutionErrorEvent {
   };
 }
 
+export interface ComfyUIExecutionInterruptedEvent {
+  type: "execution_interrupted";
+  data: {
+    prompt_id: string;
+    node_id: string;
+    node_type: string;
+    executed: string[];
+  };
+}
+
 export interface ComfyUIProxyErrorEvent {
   type: "error";
   data: { message: string };
@@ -78,6 +88,7 @@ export type ComfyUIEvent =
   | ComfyUIExecutingEvent
   | ComfyUIExecutedEvent
   | ComfyUIExecutionErrorEvent
+  | ComfyUIExecutionInterruptedEvent
   | ComfyUIProxyErrorEvent;
 
 const BINARY_PREVIEW_IMAGE = 1;
@@ -484,6 +495,7 @@ export class ComfyUIWebSocket {
       eventType === "executing" ||
       eventType === "executed" ||
       eventType === "execution_error" ||
+      eventType === "execution_interrupted" ||
       eventType === "error"
     );
   }

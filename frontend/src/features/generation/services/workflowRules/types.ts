@@ -81,7 +81,7 @@ export const DEFAULT_WORKFLOW_MASK_CROPPING: WorkflowMaskCroppingConfig = {
 
 export const DEFAULT_WORKFLOW_ASPECT_RATIO_PROCESSING: WorkflowAspectRatioProcessingConfig =
   {
-    enabled: false,
+    enabled: true,
     stride: 16,
     search_steps: 2,
     resolutions: [],

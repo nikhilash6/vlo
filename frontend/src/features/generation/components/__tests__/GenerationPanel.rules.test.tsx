@@ -177,7 +177,13 @@ describe("GenerationPanel workflow rule hints", () => {
           stride: 16,
           search_steps: 2,
           resolutions: [480, 720],
-          target_nodes: [],
+          target_nodes: [
+            {
+              node_id: "49",
+              width_param: "width",
+              height_param: "height",
+            },
+          ],
           postprocess: {
             enabled: true,
             mode: "stretch_exact",

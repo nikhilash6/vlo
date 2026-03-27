@@ -686,7 +686,7 @@ function normalizeAspectRatioProcessing(
 
   const arpPostprocess = isRecord(rawArp.postprocess) ? rawArp.postprocess : {};
   return {
-    enabled: Boolean(rawArp.enabled),
+    enabled: rawArp.enabled === undefined ? true : rawArp.enabled === true,
     stride:
       typeof rawArp.stride === "number" && rawArp.stride > 0
         ? rawArp.stride
