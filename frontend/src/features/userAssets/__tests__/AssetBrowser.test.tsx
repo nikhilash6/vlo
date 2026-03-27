@@ -1,16 +1,30 @@
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AssetBrowser } from "../AssetBrowser";
 import { useAssetStore } from "../useAssetStore";
 import type { Asset, AssetFamily } from "../../../types/Asset";
-import type { BaseClip } from "../../../types/TimelineTypes";
+import type { BaseClip, TimelineClip } from "../../../types/TimelineTypes";
 import { useInteractionStore } from "../../timeline/hooks/useInteractionStore";
+import { useTimelineStore } from "../../timeline";
+import {
+  revealAssetInBrowser,
+  useAssetBrowserRevealStore,
+} from "../useAssetBrowserRevealStore";
+import { useAssetBrowserSelectionStore } from "../useAssetBrowserSelectionStore";
 
 // Mock the Zustand store hook
 vi.mock("../useAssetStore");
 
 describe("AssetBrowser Component", () => {
   const mockAddLocalAssets = vi.fn();
+  const mockDeleteAsset = vi.fn();
   const externalAssetDragClip: BaseClip = {
     id: "dragged-asset",
     type: "video",
@@ -118,8 +132,43 @@ describe("AssetBrowser Component", () => {
     vi.clearAllMocks();
     mockAddLocalAssets.mockReset();
     mockAddLocalAssets.mockResolvedValue([]);
+    mockDeleteAsset.mockReset();
     useInteractionStore.getState().stopDrag();
+    useAssetBrowserRevealStore.setState({ revealRequest: null });
+    useAssetBrowserSelectionStore.setState({ selectedAssetIds: [] });
+    useTimelineStore.setState({
+      tracks: [
+        {
+          id: "track-1",
+          label: "Track 1",
+          isVisible: true,
+          isLocked: false,
+          isMuted: false,
+        },
+      ],
+      clips: [],
+      selectedClipIds: [],
+      copiedClips: [],
+    });
   });
+
+  function createTimelineClip(id: string, assetId: string): TimelineClip {
+    return {
+      id,
+      assetId,
+      trackId: "track-1",
+      start: 0,
+      type: "video",
+      name: `${id}.mp4`,
+      sourceDuration: 100,
+      transformedDuration: 100,
+      transformedOffset: 0,
+      timelineDuration: 100,
+      croppedSourceDuration: 100,
+      offset: 0,
+      transformations: [],
+    };
+  }
 
   const mockStore = (state: Partial<ReturnType<typeof useAssetStore>> = {}) => {
     const defaultState = {
@@ -139,7 +188,7 @@ describe("AssetBrowser Component", () => {
       scanForNewAssets: vi.fn(),
       _ingestAsset: vi.fn(),
       isScanning: false,
-      deleteAsset: vi.fn(),
+      deleteAsset: mockDeleteAsset,
     };
     const mergedState = { ...defaultState, ...state };
     vi.mocked(useAssetStore).mockImplementation((selector) =>
@@ -492,5 +541,140 @@ describe("AssetBrowser Component", () => {
     expect(screen.getByText("solo.mp4")).toBeInTheDocument();
     expect(screen.queryByText("b-roll.mp4")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Open family" })).toHaveLength(1);
+  });
+
+  it("selects an asset card and highlights all timeline clips that use it", async () => {
+    mockStore({ assets: mockAssets, families: mockFamilies });
+    useTimelineStore.setState({
+      clips: [
+        createTimelineClip("clip-1", "1"),
+        createTimelineClip("clip-2", "1"),
+        createTimelineClip("clip-3", "solo-video"),
+      ],
+      selectedClipIds: [],
+    });
+
+    render(<AssetBrowser />);
+
+    const assetCard = screen
+      .getByText("vacation.mp4")
+      .closest('[data-testid="asset-card"]');
+
+    expect(assetCard).not.toBeNull();
+
+    fireEvent.click(assetCard as HTMLElement);
+
+    await waitFor(() => {
+      expect(useTimelineStore.getState().selectedClipIds).toEqual([
+        "clip-1",
+        "clip-2",
+      ]);
+    });
+
+    expect(assetCard).toHaveAttribute("data-selected", "true");
+  });
+
+  it("supports ctrl+click multiselect and disables asset dragging while multiple assets are selected", async () => {
+    mockStore({ assets: mockAssets, families: mockFamilies });
+    useTimelineStore.setState({
+      clips: [
+        createTimelineClip("clip-1", "1"),
+        createTimelineClip("clip-2", "solo-video"),
+      ],
+      selectedClipIds: [],
+    });
+
+    render(<AssetBrowser />);
+
+    const firstCard = screen
+      .getByText("vacation.mp4")
+      .closest('[data-testid="asset-card"]');
+    const secondCard = screen
+      .getByText("solo.mp4")
+      .closest('[data-testid="asset-card"]');
+
+    expect(firstCard).not.toBeNull();
+    expect(secondCard).not.toBeNull();
+
+    fireEvent.click(firstCard as HTMLElement);
+    fireEvent.click(secondCard as HTMLElement, { ctrlKey: true });
+
+    await waitFor(() => {
+      expect(useTimelineStore.getState().selectedClipIds).toEqual([
+        "clip-1",
+        "clip-2",
+      ]);
+    });
+
+    expect(firstCard).toHaveAttribute("data-selected", "true");
+    expect(secondCard).toHaveAttribute("data-selected", "true");
+    expect(firstCard).toHaveAttribute("data-drag-disabled", "true");
+    expect(secondCard).toHaveAttribute("data-drag-disabled", "true");
+  });
+
+  it("deletes the selected asset with the existing confirmation flow", async () => {
+    mockStore({ assets: mockAssets, families: mockFamilies });
+    useTimelineStore.setState({
+      clips: [createTimelineClip("clip-1", "1")],
+      selectedClipIds: [],
+    });
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<AssetBrowser />);
+
+    const assetCard = screen
+      .getByText("vacation.mp4")
+      .closest('[data-testid="asset-card"]');
+
+    expect(assetCard).not.toBeNull();
+
+    fireEvent.click(assetCard as HTMLElement);
+    fireEvent.keyDown(window, { key: "Delete" });
+
+    await waitFor(() => {
+      expect(mockDeleteAsset).toHaveBeenCalledWith("1");
+    });
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      "Are you sure you want to delete this asset? This will remove it from disk permanently.\n\nThis asset is used by clips on the Timeline.\nClips on the Timeline are derived from the asset and will be deleted.",
+    );
+  });
+
+  it("reveals a requested asset by switching tabs, clearing favourite-only mode, and opening the family scope when needed", async () => {
+    mockStore({ assets: mockAssets, families: mockFamilies });
+
+    render(<AssetBrowser />);
+
+    fireEvent.click(screen.getByLabelText("Images"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show favourite assets" }),
+    );
+
+    act(() => {
+      revealAssetInBrowser("1b");
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Videos")).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+    });
+
+    expect(screen.getByTestId("asset-browser-family-scope")).toBeInTheDocument();
+    expect(screen.getByText("family-1")).toBeInTheDocument();
+    expect(screen.getByText("vacation.mp4")).toBeInTheDocument();
+    expect(screen.getByText("b-roll.mp4")).toBeInTheDocument();
+    expect(screen.queryByText("thumbnail.jpg")).not.toBeInTheDocument();
+
+    const targetCard = screen
+      .getByText("b-roll.mp4")
+      .closest('[data-testid="asset-card"]');
+
+    expect(targetCard).not.toBeNull();
+    expect(targetCard).toHaveAttribute("data-selected", "true");
+    expect(
+      screen.getByRole("button", { name: "Show favourite assets" }),
+    ).toHaveAttribute("aria-pressed", "false");
   });
 });

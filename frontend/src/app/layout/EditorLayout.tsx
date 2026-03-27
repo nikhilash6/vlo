@@ -16,7 +16,11 @@ import {
 } from "../../features/timeline";
 import { useTimelineSelectionStore } from "../../features/timelineSelection";
 import { useTimelineKeyframeClipOverlay } from "../../features/transformations";
-import { AssetBrowser, useAssetStore } from "../../features/userAssets";
+import {
+  AssetBrowser,
+  useAssetStore,
+  useTimelineAssetRevealClipOverlay,
+} from "../../features/userAssets";
 import { Player } from "../../features/player/Player";
 import { useExtractStore } from "../../features/player/useExtractStore";
 import { RightSidebarPanel } from "./RightSidebarPanel";
@@ -97,12 +101,13 @@ export function EditorLayout() {
   );
   const selectionOverlayActive = selectionMode || frameSelectionMode;
   const keyframeClipOverlay = useTimelineKeyframeClipOverlay();
+  const assetRevealClipOverlay = useTimelineAssetRevealClipOverlay();
 
   // Default to compact if not set
   const layoutMode = config.layoutMode || "compact";
   const clipOverlays = useMemo(
-    () => [keyframeClipOverlay],
-    [keyframeClipOverlay],
+    () => [keyframeClipOverlay, assetRevealClipOverlay],
+    [assetRevealClipOverlay, keyframeClipOverlay],
   );
 
   // Use the Asset Drag Hook

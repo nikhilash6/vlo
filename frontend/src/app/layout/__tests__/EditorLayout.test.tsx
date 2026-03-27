@@ -26,6 +26,10 @@ vi.mock("../../../features/project", () => ({
 
 vi.mock("../../../features/userAssets", () => ({
   AssetBrowser: () => <div data-testid="asset-browser">Assets</div>,
+  useTimelineAssetRevealClipOverlay: () => ({
+    id: "asset-reveal-overlay",
+    useItems: () => [],
+  }),
   useAssetStore: Object.assign(
     (selector: (state: unknown) => unknown) =>
       selector({

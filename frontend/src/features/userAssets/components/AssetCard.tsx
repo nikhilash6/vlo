@@ -33,28 +33,42 @@ import {
 } from "../../generation/publicApi";
 import { getTimelineSelectionFromAsset } from "../../timelineSelection";
 import { useAssetStore } from "../useAssetStore";
+import { deleteAssetWithConfirmation } from "../utils/deleteAssetWithConfirmation";
 import { AssetPreviewDialog } from "./AssetPreviewDialog";
 
 interface AssetCardProps {
   asset: Asset;
+  disableDrag?: boolean;
+  isSelected?: boolean;
   onShowFamily?: (familyId: string) => void;
+  onSelect?: (event: React.MouseEvent<HTMLDivElement>) => void;
   layout?: "default" | "square";
 }
 
 // Styled Components for better performance
 const StyledCard = styled(Paper, {
-  shouldForwardProp: (prop) => prop !== "isDragging" && prop !== "layout",
-})<{ isDragging?: boolean; layout: "default" | "square" }>(
-  ({ isDragging, layout }) => ({
+  shouldForwardProp: (prop) =>
+    !["isDragDisabled", "isDragging", "isSelected", "layout"].includes(
+      String(prop),
+    ),
+})<{
+  isDragDisabled?: boolean;
+  isDragging?: boolean;
+  isSelected?: boolean;
+  layout: "default" | "square";
+}>(({ isDragDisabled, isDragging, isSelected, layout }) => ({
   width: "100%",
   backgroundColor: "#252525",
   color: "white",
   overflow: "hidden",
-  cursor: "grab",
-  transition: "transform 0.1s",
+  cursor: isDragDisabled ? "pointer" : "grab",
+  transition: "transform 0.1s, box-shadow 0.1s, outline-color 0.1s",
   "&:hover": { transform: "scale(1.02)" },
   position: "relative",
   opacity: isDragging ? 0.5 : 1,
+  outline: isSelected ? "2px solid #4dabf5" : "2px solid transparent",
+  outlineOffset: "-2px",
+  boxShadow: isSelected ? "0 0 0 1px rgba(77, 171, 245, 0.35)" : "none",
   ...(layout === "square"
     ? {
         aspectRatio: "1 / 1",
@@ -226,14 +240,11 @@ function AssetCardContent({
 
   const handleDelete = useCallback(() => {
     handleCloseMenu();
-    const confirmMessage =
-      timelineClipCount > 0
-        ? "Are you sure you want to delete this asset? This will remove it from disk permanently.\n\nThis asset is used by clips on the Timeline.\nClips on the Timeline are derived from the asset and will be deleted."
-        : "Are you sure you want to delete this asset? This will remove it from disk permanently.";
-
-    if (window.confirm(confirmMessage)) {
-      void deleteAsset(asset.id);
-    }
+    void deleteAssetWithConfirmation({
+      assetId: asset.id,
+      deleteAsset,
+      timelineClipCount,
+    });
   }, [asset.id, deleteAsset, handleCloseMenu, timelineClipCount]);
 
   const handleSendToTimeline = useCallback(() => {
@@ -486,7 +497,10 @@ const MemoizedAssetCardContent = React.memo(AssetCardContent);
 
 function AssetCardComponent({
   asset,
+  disableDrag = false,
+  isSelected = false,
   onShowFamily,
+  onSelect,
   layout = "default",
 }: AssetCardProps) {
   const draggableData = React.useMemo(
@@ -501,6 +515,7 @@ function AssetCardComponent({
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `asset_${asset.id}`,
     data: draggableData,
+    disabled: disableDrag,
   });
 
   return (
@@ -509,8 +524,17 @@ function AssetCardComponent({
       {...listeners}
       {...attributes}
       elevation={2}
+      isDragDisabled={disableDrag}
       isDragging={isDragging}
+      isSelected={isSelected}
       layout={layout}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect?.(event);
+      }}
+      data-asset-id={asset.id}
+      data-drag-disabled={disableDrag ? "true" : "false"}
+      data-selected={isSelected ? "true" : "false"}
       data-testid="asset-card"
     >
       <MemoizedAssetCardContent

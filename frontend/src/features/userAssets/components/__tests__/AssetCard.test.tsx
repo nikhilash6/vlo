@@ -10,16 +10,17 @@ const mocks = vi.hoisted(() => ({
   mockInsertAssetAtTime: vi.fn(),
   mockLoadWorkflowFromAssetMetadata: vi.fn(),
   mockOpenFamily: vi.fn(),
-  timelineClipCount: 0,
-}));
-
-vi.mock("@dnd-kit/core", () => ({
-  useDraggable: () => ({
+  mockUseDraggable: vi.fn(() => ({
     attributes: {},
     listeners: {},
     setNodeRef: vi.fn(),
     isDragging: false,
-  }),
+  })),
+  timelineClipCount: 0,
+}));
+
+vi.mock("@dnd-kit/core", () => ({
+  useDraggable: mocks.mockUseDraggable,
 }));
 
 vi.mock("../../../timeline", () => {
@@ -165,6 +166,7 @@ describe("AssetCard actions", () => {
     mocks.mockLoadWorkflowFromAssetMetadata.mockReset();
     mocks.mockLoadWorkflowFromAssetMetadata.mockResolvedValue(undefined);
     mocks.mockOpenFamily.mockReset();
+    mocks.mockUseDraggable.mockClear();
     mocks.timelineClipCount = 0;
   });
 
@@ -361,5 +363,22 @@ describe("AssetCard actions", () => {
     expect(mocks.mockUpdateAsset).toHaveBeenCalledWith(mockAsset.id, {
       favourite: true,
     });
+  });
+
+  it("disables dragging when multiselect mode turns drag off", () => {
+    mockStores(0);
+
+    render(<AssetCard asset={mockAsset} disableDrag />);
+
+    expect(mocks.mockUseDraggable).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: `asset_${mockAsset.id}`,
+        disabled: true,
+      }),
+    );
+    expect(screen.getByTestId("asset-card")).toHaveAttribute(
+      "data-drag-disabled",
+      "true",
+    );
   });
 });

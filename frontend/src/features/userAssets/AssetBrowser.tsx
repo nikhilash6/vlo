@@ -22,11 +22,15 @@ import SortIcon from "@mui/icons-material/Sort";
 import FavoriteIcon from "@mui/icons-material/Favorite";
 import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 
-import type { AssetType } from "../../types/Asset";
+import type { Asset, AssetType } from "../../types/Asset";
 import { doesAssetBelongToFamily } from "../../shared/utils/assetFamilies";
+import { getTimelineClipCountForAsset, useTimelineStore } from "../timeline";
 import { useInteractionStore } from "../timeline/hooks/useInteractionStore";
 import { useAssetStore } from "./useAssetStore";
 import { AssetCard } from "./components/AssetCard";
+import { useAssetBrowserRevealStore } from "./useAssetBrowserRevealStore";
+import { useAssetBrowserSelectionStore } from "./useAssetBrowserSelectionStore";
+import { deleteAssetWithConfirmation } from "./utils/deleteAssetWithConfirmation";
 import { isAssetVisibleInBrowser } from "./utils/assetVisibility";
 import { getFamilyMembers } from "./utils/familyMembers";
 
@@ -95,6 +99,28 @@ function isRepresentativeAsset(
   return false;
 }
 
+function resolveFamilyScopeForAsset(
+  asset: Asset,
+  assets: ReturnType<typeof useAssetStore.getState>["assets"],
+  families: ReturnType<typeof useAssetStore.getState>["families"],
+): FamilyScope | null {
+  if (!asset.familyId) {
+    return null;
+  }
+
+  const family = families.find((candidate) => candidate.id === asset.familyId);
+  if (!family) {
+    return null;
+  }
+
+  return getFamilyMembers(assets, family, asset.type).length > 1
+    ? {
+        familyId: family.id,
+        assetType: asset.type,
+      }
+    : null;
+}
+
 function AssetBrowserComponent() {
   const [activeTab, setActiveTab] = useState<AssetType>("video");
   const [sortOption, setSortOption] = useState<SortOption>("dateDesc");
@@ -105,10 +131,26 @@ function AssetBrowserComponent() {
 
   const assets = useAssetStore((state) => state.assets);
   const families = useAssetStore((state) => state.families);
-
   const addLocalAssets = useAssetStore((state) => state.addLocalAssets);
+  const deleteAsset = useAssetStore((state) => state.deleteAsset);
   const isUploading = useAssetStore((state) => state.isUploading);
+  const timelineClips = useTimelineStore((state) => state.clips);
+  const revealRequest = useAssetBrowserRevealStore((state) => state.revealRequest);
+  const selectedAssetIds = useAssetBrowserSelectionStore(
+    (state) => state.selectedAssetIds,
+  );
+  const clearSelectedAssets = useAssetBrowserSelectionStore(
+    (state) => state.clearSelection,
+  );
+  const selectAsset = useAssetBrowserSelectionStore((state) => state.selectAsset);
+  const setSelectedAssetIds = useAssetBrowserSelectionStore(
+    (state) => state.setSelectedAssetIds,
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isDeletingSelectedAssetsRef = useRef(false);
+  const [pendingScrollAssetId, setPendingScrollAssetId] = useState<string | null>(
+    null,
+  );
   const dragDepthRef = useRef(0);
   const scrollRegionRef = useRef<HTMLDivElement>(null);
   const isAssetDragActive = useInteractionStore(
@@ -364,6 +406,246 @@ function AssetBrowserComponent() {
   const emptyStateMessage = isFamilyScopeActive
     ? `No ${activeTab} assets in this family.`
     : `No ${activeTab} assets.`;
+  const isMultiSelectActive = selectedAssetIds.length > 1;
+  const visibleAssetIds = useMemo(
+    () => new Set(sortedAssets.map((asset) => asset.id)),
+    [sortedAssets],
+  );
+
+  React.useEffect(() => {
+    if (selectedAssetIds.length === 0) {
+      return;
+    }
+
+    const nextSelectedAssetIds = selectedAssetIds.filter((assetId) =>
+      visibleAssetIds.has(assetId),
+    );
+
+    if (nextSelectedAssetIds.length === selectedAssetIds.length) {
+      return;
+    }
+
+    setSelectedAssetIds(nextSelectedAssetIds);
+
+    if (nextSelectedAssetIds.length === 0) {
+      useTimelineStore.getState().selectClip(null);
+    }
+  }, [selectedAssetIds, setSelectedAssetIds, visibleAssetIds]);
+
+  React.useEffect(() => {
+    if (selectedAssetIds.length === 0) {
+      return;
+    }
+
+    const selectedAssetIdSet = new Set(selectedAssetIds);
+    const nextSelectedClipIds = timelineClips
+      .filter((clip) => selectedAssetIdSet.has(clip.assetId ?? ""))
+      .map((clip) => clip.id);
+    const { selectedClipIds, selectClip } = useTimelineStore.getState();
+
+    if (
+      selectedClipIds.length === nextSelectedClipIds.length &&
+      selectedClipIds.every(
+        (clipId, index) => clipId === nextSelectedClipIds[index],
+      )
+    ) {
+      return;
+    }
+
+    selectClip(null);
+    nextSelectedClipIds.forEach((clipId) => {
+      selectClip(clipId, true);
+    });
+  }, [selectedAssetIds, timelineClips]);
+
+  React.useEffect(() => {
+    if (selectedAssetIds.length === 0) {
+      return;
+    }
+
+    function handleWindowMouseDown(event: MouseEvent) {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      if (
+        target.closest('[data-testid="asset-browser"]') ||
+        target.closest('[role="dialog"]') ||
+        target.closest('[role="menu"]')
+      ) {
+        return;
+      }
+
+      clearSelectedAssets();
+      useTimelineStore.getState().selectClip(null);
+    }
+
+    window.addEventListener("mousedown", handleWindowMouseDown);
+    return () => window.removeEventListener("mousedown", handleWindowMouseDown);
+  }, [clearSelectedAssets, selectedAssetIds]);
+
+  React.useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (
+        selectedAssetIds.length === 0 ||
+        event.defaultPrevented ||
+        isDeletingSelectedAssetsRef.current
+      ) {
+        return;
+      }
+
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        (event.target instanceof HTMLElement && event.target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        (target.closest('[role="dialog"]') || target.closest('[role="menu"]'))
+      ) {
+        return;
+      }
+
+      if (event.key !== "Delete" && event.key !== "Backspace") {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      isDeletingSelectedAssetsRef.current = true;
+
+      const assetIdsToDelete = [...selectedAssetIds];
+
+      void (async () => {
+        let remainingAssetIds: string[] = [];
+
+        try {
+          for (let index = 0; index < assetIdsToDelete.length; index += 1) {
+            const assetId = assetIdsToDelete[index];
+            const assetStillExists = assets.some((asset) => asset.id === assetId);
+
+            if (!assetStillExists) {
+              continue;
+            }
+
+            const wasDeleted = await deleteAssetWithConfirmation({
+              assetId,
+              deleteAsset,
+              timelineClipCount: getTimelineClipCountForAsset(assetId),
+            });
+
+            if (!wasDeleted) {
+              remainingAssetIds = assetIdsToDelete.slice(index);
+              break;
+            }
+          }
+
+          setSelectedAssetIds(remainingAssetIds);
+
+          if (remainingAssetIds.length === 0) {
+            useTimelineStore.getState().selectClip(null);
+          }
+        } finally {
+          isDeletingSelectedAssetsRef.current = false;
+        }
+      })();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [assets, deleteAsset, selectedAssetIds, setSelectedAssetIds]);
+
+  React.useEffect(() => {
+    if (!revealRequest) {
+      return;
+    }
+
+    const assetToReveal = assets.find(
+      (asset) => asset.id === revealRequest.assetId,
+    );
+    if (!assetToReveal || !isAssetVisibleInBrowser(assetToReveal)) {
+      return;
+    }
+
+    setActiveTab(assetToReveal.type);
+    setShowFavouritesOnly(false);
+    setFamilyScope(resolveFamilyScopeForAsset(assetToReveal, assets, families));
+    selectAsset(assetToReveal.id);
+    setPendingScrollAssetId(assetToReveal.id);
+  }, [assets, families, revealRequest, selectAsset]);
+
+  React.useEffect(() => {
+    if (!pendingScrollAssetId || !visibleAssetIds.has(pendingScrollAssetId)) {
+      return;
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      const scrollRegion = scrollRegionRef.current;
+      if (!scrollRegion) {
+        return;
+      }
+
+      const assetCard = [...scrollRegion.querySelectorAll("[data-asset-id]")]
+        .find(
+          (element): element is HTMLElement =>
+            element instanceof HTMLElement &&
+            element.dataset.assetId === pendingScrollAssetId,
+        );
+
+      if (!assetCard) {
+        return;
+      }
+
+      assetCard.scrollIntoView?.({
+        block: "nearest",
+        inline: "nearest",
+      });
+      setPendingScrollAssetId(null);
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [pendingScrollAssetId, visibleAssetIds]);
+
+  const handleAssetSelect = React.useCallback(
+    (assetId: string, event: React.MouseEvent<HTMLDivElement>) => {
+      const isMulti = event.ctrlKey || event.metaKey;
+
+      if (isMulti) {
+        const nextSelectedAssetIds = selectedAssetIds.includes(assetId)
+          ? selectedAssetIds.filter((id) => id !== assetId)
+          : [...selectedAssetIds, assetId];
+
+        setSelectedAssetIds(nextSelectedAssetIds);
+
+        if (nextSelectedAssetIds.length === 0) {
+          useTimelineStore.getState().selectClip(null);
+        }
+        return;
+      }
+
+      selectAsset(assetId);
+    },
+    [selectAsset, selectedAssetIds, setSelectedAssetIds],
+  );
+
+  const handleBrowserBackgroundClick = React.useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const target = event.target;
+
+      if (target instanceof Element && target.closest('[data-testid="asset-card"]')) {
+        return;
+      }
+
+      clearSelectedAssets();
+      useTimelineStore.getState().selectClip(null);
+    },
+    [clearSelectedAssets],
+  );
 
   return (
     <Box
@@ -603,6 +885,7 @@ function AssetBrowserComponent() {
         ref={scrollRegionRef}
         data-testid="asset-browser-scroll-region"
         data-scroll-locked={isAssetDragActive ? "true" : "false"}
+        onClick={handleBrowserBackgroundClick}
         sx={{
           flexGrow: 1,
           overflowY: isAssetDragActive ? "hidden" : "auto",
@@ -625,6 +908,8 @@ function AssetBrowserComponent() {
               <Grid size={{ xs: 6 }} key={asset.id}>
                 <AssetCard
                   asset={asset}
+                  disableDrag={isMultiSelectActive}
+                  isSelected={selectedAssetIds.includes(asset.id)}
                   onShowFamily={
                     !isFamilyScopeActive &&
                     asset.familyId &&
@@ -633,6 +918,7 @@ function AssetBrowserComponent() {
                       ? handleShowFamily
                       : undefined
                   }
+                  onSelect={(event) => handleAssetSelect(asset.id, event)}
                 />
               </Grid>
             ))}

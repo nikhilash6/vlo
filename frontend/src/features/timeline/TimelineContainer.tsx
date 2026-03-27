@@ -38,6 +38,7 @@ import { playbackClock } from "../player/services/PlaybackClock";
 import { type TimelineClip } from "../../types";
 import type { TimelineClipOverlayDefinition } from "./clipOverlayApi";
 import { useTimelineSelectionStore } from "../timelineSelection";
+import { useAssetBrowserSelectionStore } from "../userAssets/useAssetBrowserSelectionStore";
 
 const containerStyles = {
   width: "100%",
@@ -279,6 +280,10 @@ function TimelineContainerComponent({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) {
+        return;
+      }
+
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
@@ -307,6 +312,13 @@ function TimelineContainerComponent({
 
       if (isShortcut && key === "y") {
         if (redo()) e.preventDefault();
+        return;
+      }
+
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        useAssetBrowserSelectionStore.getState().selectedAssetIds.length > 0
+      ) {
         return;
       }
 

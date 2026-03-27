@@ -5,6 +5,7 @@ import { TimelineContainer } from "../TimelineContainer";
 import { useTimelineStore } from "../useTimelineStore";
 import type { TimelineTrack, TimelineClip } from "../../../types/TimelineTypes";
 import type { TimelineViewState } from "../hooks/useTimelineViewStore";
+import { useAssetBrowserSelectionStore } from "../../userAssets/useAssetBrowserSelectionStore";
 
 // --- 1. SETUP GLOBAL MOCKS ---
 globalThis.ResizeObserver = class ResizeObserver {
@@ -125,6 +126,8 @@ describe("TimelineContainer", () => {
       setScrollContainer: vi.fn(),
       scrollContainer: null,
     });
+
+    useAssetBrowserSelectionStore.setState({ selectedAssetIds: [] });
   });
 
   afterEach(() => {
@@ -175,6 +178,21 @@ describe("TimelineContainer", () => {
     fireEvent.keyDown(window, { key: "Delete" });
 
     expect(useTimelineStore.getState().selectedClipIds).toEqual([]);
+  });
+
+  it("ignores Delete when asset browser selection is active", () => {
+    useAssetBrowserSelectionStore.setState({ selectedAssetIds: ["asset-1"] });
+
+    render(
+      <TimelineContainer
+        scrollContainerRef={mockScrollRef}
+        insertGapIndex={null}
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: "Delete" });
+
+    expect(useTimelineStore.getState().selectedClipIds).toEqual(["c1"]);
   });
 
   it("handles copy + paste keyboard shortcuts for a single selected clip", () => {
