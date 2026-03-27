@@ -805,6 +805,53 @@ def test_real_wan_default_workflow_sidecar_waives_default_required_inputs():
     )
 
 
+def test_real_video_wan_default_workflow_sidecar_requires_video_and_derives_denoise():
+    base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
+    workflow_path = base / "video_wan2_2_14B_flfv2v_vlo.json"
+    workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+
+    set_object_info_cache(None)
+    try:
+        rules_model, warnings = load_rules_model_for_workflow(base, workflow_path.name)
+        assert warnings == []
+        rules_model = enrich_rules_with_object_info(rules_model, workflow)
+        rules = dump_resolved_rules(rules_model)
+    finally:
+        set_object_info_cache(None)
+
+    assert rules["name"] == "Wan2.2 FLFV2V"
+    assert rules["derived_widgets"] == [
+        {
+            "id": "dual_sampler_denoise",
+            "kind": "dual_sampler_denoise",
+            "label": "Denoise",
+            "total_steps": {"node_id": "85", "param": "value"},
+            "start_step": {"node_id": "57", "param": "start_at_step"},
+            "base_split_step": {"node_id": "86", "param": "value"},
+            "split_step_targets": [
+                {"node_id": "57", "param": "end_at_step"},
+                {"node_id": "58", "param": "start_at_step"},
+            ],
+        }
+    ]
+
+    validation_inputs = rules["validation"]["inputs"]
+    assert {
+        "kind": "at_least_n",
+        "inputs": ["62", "68"],
+        "min": 1,
+        "message": "Provide at least one frame input.",
+    } in validation_inputs
+    assert {"kind": "required", "input": "77", "message": "Video is required."} in (
+        validation_inputs
+    )
+    assert not any(
+        rule.get("kind") == "required" and rule.get("input") in {"62", "68"}
+        for rule in validation_inputs
+        if isinstance(rule, dict)
+    )
+
+
 def test_real_vace_inpaint_default_validation_requires_video_not_text():
     base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
     workflow_path = base / "vlo_VACE_inpaint.json"
