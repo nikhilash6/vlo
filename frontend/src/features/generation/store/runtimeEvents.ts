@@ -23,6 +23,47 @@ export function attachRuntimeClientHandlers(
   set: GenerationStoreSet,
   get: GenerationStoreGet,
 ): void {
+  async function finalizeCompletedJob(promptId: string): Promise<void> {
+    const state = get();
+    const job = state.jobs.get(promptId);
+    if (!job || job.status === "error" || job.status === "completed") {
+      return;
+    }
+
+    try {
+      const finalOutputs = await getHistoryOutputsWithRetry(promptId);
+      let completedJob: import("../types").GenerationJob | null = null;
+      set((currentState) => {
+        const result = completeGenerationJob(
+          currentState,
+          promptId,
+          finalOutputs.length > 0 ? finalOutputs : undefined,
+        );
+        completedJob = result.completedJob;
+        return result.patch;
+      });
+      resumeQueuedDispatch();
+      if (completedJob) {
+        void runJobPostprocess(completedJob);
+      }
+    } catch (err) {
+      console.error(
+        "[Generation] Failed to fetch history for completed job",
+        err,
+      );
+      let completedJob: import("../types").GenerationJob | null = null;
+      set((currentState) => {
+        const result = completeGenerationJob(currentState, promptId);
+        completedJob = result.completedJob;
+        return result.patch;
+      });
+      resumeQueuedDispatch();
+      if (completedJob) {
+        void runJobPostprocess(completedJob);
+      }
+    }
+  }
+
   async function runJobPostprocess(
     jobSnapshot: import("../types").GenerationJob,
   ): Promise<void> {
@@ -150,47 +191,22 @@ export function attachRuntimeClientHandlers(
         break;
       }
 
+      case "execution_start":
+      case "execution_cached": {
+        break;
+      }
+
+      case "execution_success": {
+        void finalizeCompletedJob(event.data.prompt_id);
+        break;
+      }
+
       case "executing": {
         if (event.data.node === null) {
           const state = get();
           const job = state.jobs.get(event.data.prompt_id);
           if (job && job.status !== "error") {
-            const promptId = event.data.prompt_id;
-
-            void (async () => {
-              try {
-                const finalOutputs = await getHistoryOutputsWithRetry(promptId);
-                let completedJob: import("../types").GenerationJob | null = null;
-                set((currentState) => {
-                  const result = completeGenerationJob(
-                    currentState,
-                    promptId,
-                    finalOutputs.length > 0 ? finalOutputs : undefined,
-                  );
-                  completedJob = result.completedJob;
-                  return result.patch;
-                });
-                resumeQueuedDispatch();
-                if (completedJob) {
-                  void runJobPostprocess(completedJob);
-                }
-              } catch (err) {
-                console.error(
-                  "[Generation] Failed to fetch history for completed job",
-                  err,
-                );
-                let completedJob: import("../types").GenerationJob | null = null;
-                set((currentState) => {
-                  const result = completeGenerationJob(currentState, promptId);
-                  completedJob = result.completedJob;
-                  return result.patch;
-                });
-                resumeQueuedDispatch();
-                if (completedJob) {
-                  void runJobPostprocess(completedJob);
-                }
-              }
-            })();
+            void finalizeCompletedJob(event.data.prompt_id);
           }
         } else {
           const currentNode = event.data.node;

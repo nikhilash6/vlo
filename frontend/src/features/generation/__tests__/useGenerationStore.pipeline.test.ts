@@ -692,6 +692,77 @@ describe("useGenerationStore pipeline phases", () => {
     expect(useGenerationStore.getState().postprocessingJobIds).toEqual([]);
   });
 
+  it("completes cached queued generations when ComfyUI emits execution_success without executing-null", async () => {
+    makeReadyStoreState();
+    useGenerationStore.setState({
+      wsClient: null,
+      connectionStatus: "disconnected",
+    });
+    mockGenerate
+      .mockResolvedValueOnce({
+        prompt_id: "prompt-1",
+        number: 1,
+        node_errors: {},
+      })
+      .mockResolvedValueOnce({
+        prompt_id: "prompt-2",
+        number: 2,
+        node_errors: {},
+      });
+    mockGetHistoryOutputsWithRetry
+      .mockResolvedValueOnce([
+        {
+          filename: "output.png",
+          subfolder: "",
+          type: "output",
+          viewUrl: "/output.png",
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    useGenerationStore.getState().connect();
+    await flushMicrotasks();
+    const client = getLatestClient();
+
+    await useGenerationStore.getState().queueGeneration({}, {}, {}, {}, 2);
+    expect(useGenerationStore.getState().activeJobId).toBe("prompt-1");
+
+    client.emitEvent({
+      type: "executing",
+      data: {
+        node: null,
+        prompt_id: "prompt-1",
+      },
+    });
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    expect(useGenerationStore.getState().activeJobId).toBe("prompt-2");
+
+    client.emitEvent({
+      type: "execution_cached",
+      data: {
+        prompt_id: "prompt-2",
+        nodes: [],
+      },
+    });
+    client.emitEvent({
+      type: "execution_success",
+      data: {
+        prompt_id: "prompt-2",
+        timestamp: Date.now(),
+      },
+    });
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    const finalState = useGenerationStore.getState();
+    expect(finalState.activeJobId).toBeNull();
+    expect(finalState.generationQueue).toHaveLength(0);
+    expect(finalState.jobs.get("prompt-2")?.status).toBe("completed");
+    expect(finalState.jobs.get("prompt-2")?.outputs).toEqual([]);
+  });
+
   it("queues generations when graph snapshots include non-serializable browser values", async () => {
     const isBrowserEnv =
       typeof window !== "undefined" && typeof document !== "undefined";

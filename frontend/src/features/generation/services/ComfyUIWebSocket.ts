@@ -8,6 +8,21 @@ export interface ComfyUIProgressEvent {
   data: { value: number; max: number; prompt_id: string; node: string };
 }
 
+export interface ComfyUIExecutionStartEvent {
+  type: "execution_start";
+  data: { prompt_id: string };
+}
+
+export interface ComfyUIExecutionCachedEvent {
+  type: "execution_cached";
+  data: { prompt_id: string; nodes: string[] };
+}
+
+export interface ComfyUIExecutionSuccessEvent {
+  type: "execution_success";
+  data: { prompt_id: string; timestamp: number };
+}
+
 export interface ComfyUIExecutingEvent {
   type: "executing";
   data: { node: string | null; display_node?: string; prompt_id: string };
@@ -57,6 +72,9 @@ interface ComfyUIVhsLatentPreviewEvent {
 export type ComfyUIEvent =
   | ComfyUIStatusEvent
   | ComfyUIProgressEvent
+  | ComfyUIExecutionStartEvent
+  | ComfyUIExecutionCachedEvent
+  | ComfyUIExecutionSuccessEvent
   | ComfyUIExecutingEvent
   | ComfyUIExecutedEvent
   | ComfyUIExecutionErrorEvent
@@ -460,6 +478,9 @@ export class ComfyUIWebSocket {
     return (
       eventType === "status" ||
       eventType === "progress" ||
+      eventType === "execution_start" ||
+      eventType === "execution_cached" ||
+      eventType === "execution_success" ||
       eventType === "executing" ||
       eventType === "executed" ||
       eventType === "execution_error" ||
