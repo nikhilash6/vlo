@@ -304,6 +304,37 @@ def _apply_length_widget_policy(
     }
 
 
+def _resolve_default_policy_widgets(
+    node_info: _NodeInfo,
+    node_policy: NodePolicy,
+    object_info: dict[str, Any],
+) -> dict[str, dict[str, Any]] | None:
+    preferred_params = node_policy.get("default_widget_params")
+    if not isinstance(preferred_params, list) or not preferred_params:
+        return None
+
+    all_widgets = build_widget_entries_for_class(
+        node_info.class_type,
+        object_info,
+        node_title=node_info.title,
+        widgets_values=node_info.widgets_values,
+        widget_groups=node_info.widget_groups,
+        include_all_widgets=True,
+    )
+    if not isinstance(all_widgets, dict):
+        return None
+
+    selected_widgets: dict[str, dict[str, Any]] = {}
+    for param_name in preferred_params:
+        if not isinstance(param_name, str) or not param_name.strip():
+            continue
+        widget_entry = all_widgets.get(param_name)
+        if isinstance(widget_entry, dict):
+            selected_widgets[param_name] = widget_entry
+
+    return selected_widgets or None
+
+
 def _collect_validation_targets(rule: dict[str, Any]) -> set[str]:
     kind = rule.get("kind")
     if kind in {"required", "optional"}:
@@ -474,7 +505,8 @@ def enrich_rules_with_object_info(
             continue
 
         widgets_mode = existing.get("widgets_mode")
-        if not isinstance(widgets_mode, str):
+        has_explicit_widgets_mode = isinstance(widgets_mode, str)
+        if not has_explicit_widgets_mode:
             widgets_mode = node_policies[node_id].get(
                 "widgets_mode",
                 default_widgets_mode or WIDGETS_MODE_CONTROL_AFTER_GENERATE,
@@ -489,6 +521,14 @@ def enrich_rules_with_object_info(
             widget_groups=info.widget_groups,
             include_all_widgets=include_all_widgets,
         )
+        if not has_explicit_widgets_mode and default_widgets_mode is None:
+            policy_widgets = _resolve_default_policy_widgets(
+                info,
+                node_policies[node_id],
+                object_info,
+            )
+            if policy_widgets:
+                discovered_widgets = policy_widgets
 
         existing_widgets = existing.get("widgets")
         if include_all_widgets and discovered_widgets:

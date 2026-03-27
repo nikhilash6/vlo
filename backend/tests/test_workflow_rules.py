@@ -1067,7 +1067,7 @@ def test_enrich_rules_with_object_info_skips_linked_length_widget_targets():
     assert rules["nodes"]["267:228"].get("widgets", {}) == {}
 
 
-def test_enrich_rules_with_object_info_defaults_ksampler_to_all_widgets():
+def test_enrich_rules_with_object_info_defaults_ksampler_to_cfg_only():
     workflow = {
         "145": {
             "class_type": "KSampler",
@@ -1138,24 +1138,11 @@ def test_enrich_rules_with_object_info_defaults_ksampler_to_all_widgets():
         set_object_info_cache(None)
 
     widgets = rules["nodes"]["145"]["widgets"]
-    assert list(widgets.keys()) == [
-        "seed",
-        "steps",
-        "cfg",
-        "sampler_name",
-        "scheduler",
-        "denoise",
-    ]
-    assert widgets["seed"]["control_after_generate"] is True
-    assert widgets["steps"]["value_type"] == "int"
+    assert list(widgets.keys()) == ["cfg"]
     assert widgets["cfg"]["value_type"] == "float"
-    assert widgets["sampler_name"]["options"] == ["euler", "heun"]
-    assert widgets["scheduler"]["options"] == ["normal", "karras"]
-    assert widgets["denoise"]["min"] == 0
-    assert widgets["denoise"]["max"] == 1
 
 
-def test_enrich_rules_with_object_info_defaults_ksampler_advanced_to_all_widgets():
+def test_enrich_rules_with_object_info_defaults_ksampler_advanced_to_cfg_and_noise_seed():
     workflow = {
         "145": {
             "class_type": "KSamplerAdvanced",
@@ -1235,24 +1222,9 @@ def test_enrich_rules_with_object_info_defaults_ksampler_advanced_to_all_widgets
         set_object_info_cache(None)
 
     widgets = rules["nodes"]["145"]["widgets"]
-    assert list(widgets.keys()) == [
-        "add_noise",
-        "noise_seed",
-        "steps",
-        "cfg",
-        "sampler_name",
-        "scheduler",
-        "start_at_step",
-        "end_at_step",
-        "return_with_leftover_noise",
-    ]
-    assert widgets["add_noise"]["value_type"] == "enum"
+    assert list(widgets.keys()) == ["cfg", "noise_seed"]
+    assert widgets["cfg"]["value_type"] == "float"
     assert widgets["noise_seed"]["control_after_generate"] is True
-    assert widgets["start_at_step"]["min"] == 0
-    assert widgets["return_with_leftover_noise"]["options"] == [
-        "enable",
-        "disable",
-    ]
 
 
 def test_enrich_rules_with_object_info_respects_explicit_widgets_mode_override():
@@ -1304,6 +1276,79 @@ def test_enrich_rules_with_object_info_respects_explicit_widgets_mode_override()
 
     widgets = rules["nodes"]["145"]["widgets"]
     assert list(widgets.keys()) == ["seed"]
+
+
+def test_enrich_rules_with_object_info_respects_explicit_widgets_mode_all_override():
+    workflow = {
+        "145": {
+            "class_type": "KSampler",
+            "inputs": {
+                "seed": 1,
+                "steps": 20,
+                "cfg": 7.5,
+                "sampler_name": "euler",
+                "scheduler": "normal",
+                "denoise": 1,
+            },
+            "_meta": {"title": "KSampler"},
+        }
+    }
+    rules = {
+        "version": 1,
+        "nodes": {
+            "145": {
+                "widgets_mode": "all",
+            }
+        },
+        "output_injections": {},
+        "slots": {},
+        "mask_cropping": {"mode": "crop"},
+        "postprocessing": {
+            "mode": "auto",
+            "panel_preview": "raw_outputs",
+            "on_failure": "fallback_raw",
+        },
+    }
+    object_info = {
+        "KSampler": {
+            "input": {
+                "required": {
+                    "seed": ["INT", {"control_after_generate": True}],
+                    "steps": ["INT", {}],
+                    "cfg": ["FLOAT", {}],
+                    "sampler_name": [["euler", "heun"], {}],
+                    "scheduler": [["normal", "karras"], {}],
+                    "denoise": ["FLOAT", {"default": 1, "min": 0, "max": 1}],
+                }
+            },
+            "input_order": {
+                "required": [
+                    "seed",
+                    "steps",
+                    "cfg",
+                    "sampler_name",
+                    "scheduler",
+                    "denoise",
+                ],
+            },
+        }
+    }
+
+    set_object_info_cache(object_info)
+    try:
+        enrich_rules_with_object_info(rules, workflow)
+    finally:
+        set_object_info_cache(None)
+
+    widgets = rules["nodes"]["145"]["widgets"]
+    assert list(widgets.keys()) == [
+        "seed",
+        "steps",
+        "cfg",
+        "sampler_name",
+        "scheduler",
+        "denoise",
+    ]
 
 
 def test_load_rules_for_workflow_normalizes_aspect_ratio_processing(tmp_path: Path):

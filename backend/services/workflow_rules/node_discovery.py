@@ -158,6 +158,9 @@ class NodePolicy(TypedDict, total=False):
     widgets_mode: str
     """``"all"`` or ``"control_after_generate"``."""
 
+    default_widget_params: list[str]
+    """Specific widget params to expose by default when no explicit mode overrides them."""
+
     ar_target: bool
     """Auto-add to ``aspect_ratio_processing.target_nodes``."""
 
@@ -193,7 +196,7 @@ class NodePolicyRule(TypedDict):
 DEFAULT_NODE_POLICY_RULES: list[NodePolicyRule] = [
     {
         "constraint": {"class_names": frozenset({"KSampler", "KSamplerAdvanced"})},
-        "policy": {"widgets_mode": WIDGETS_MODE_ALL},
+        "policy": {"default_widget_params": ["cfg", "noise_seed"]},
     },
     {
         "constraint": {"class_names": frozenset({"EmptyLTXVLatentVideo"})},
