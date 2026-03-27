@@ -46,6 +46,9 @@ class NodeConstraint(TypedDict, total=False):
     name_contains: str
     """Case-insensitive substring match on ``class_type``."""
 
+    output_contains: str
+    """At least one output type exactly matches this value."""
+
     has_params: list[str]
     """All listed param names must exist in the node's inputs."""
 
@@ -96,7 +99,8 @@ def match_node_class(
             return False
 
     needs_class_info = (
-        "has_params" in constraint
+        "output_contains" in constraint
+        or "has_params" in constraint
         or "has_param_flag" in constraint
         or "has_matching_param" in constraint
     )
@@ -104,6 +108,16 @@ def match_node_class(
         return True
     if not isinstance(class_info, dict):
         return False
+
+    if "output_contains" in constraint:
+        required_output = constraint["output_contains"]
+        outputs = class_info.get("output")
+        if not (
+            isinstance(required_output, str)
+            and isinstance(outputs, list)
+            and any(output == required_output for output in outputs)
+        ):
+            return False
 
     if "has_params" in constraint:
         all_params = {name for name, _, _ in iter_all_params(class_info)}
@@ -153,6 +167,12 @@ class NodePolicy(TypedDict, total=False):
     ar_height_param: str
     """Param name for height (default ``"height"``)."""
 
+    length_widget_param: str
+    """Param name for the temporal-length widget."""
+
+    length_widget_label: str
+    """Display label for the temporal-length widget."""
+
     has_image_input: bool
     """Node has at least one image-upload input."""
 
@@ -181,6 +201,26 @@ DEFAULT_NODE_POLICY_RULES: list[NodePolicyRule] = [
             "ar_target": True,
             "ar_width_param": "width",
             "ar_height_param": "height",
+        },
+    },
+    {
+        "constraint": {
+            "has_params": ["width", "height", "length"],
+            "output_contains": "LATENT",
+        },
+        "policy": {
+            "length_widget_param": "length",
+            "length_widget_label": "Length",
+        },
+    },
+    {
+        "constraint": {
+            "has_params": ["width", "height", "num_frames"],
+            "output_contains": "WANVIDIMAGE_EMBEDS",
+        },
+        "policy": {
+            "length_widget_param": "num_frames",
+            "length_widget_label": "Length",
         },
     },
     {

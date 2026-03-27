@@ -611,6 +611,270 @@ def test_enrich_rules_with_object_info_respects_disabled_default_ar_processing()
     assert rules["aspect_ratio_processing"]["target_nodes"] == []
 
 
+def test_enrich_rules_with_object_info_auto_discovers_length_widget_for_video_nodes():
+    workflow = {
+        "nodes": [
+            {
+                "id": 67,
+                "type": "WanFirstLastFrameToVideo",
+                "title": "WanFirstLastFrameToVideo",
+                "inputs": [
+                    {
+                        "name": "width",
+                        "type": "INT",
+                        "widget": {"name": "width"},
+                        "link": None,
+                    },
+                    {
+                        "name": "height",
+                        "type": "INT",
+                        "widget": {"name": "height"},
+                        "link": None,
+                    },
+                    {
+                        "name": "length",
+                        "type": "INT",
+                        "widget": {"name": "length"},
+                        "link": None,
+                    },
+                ],
+                "widgets_values": [832, 480, 81, 1],
+            }
+        ]
+    }
+    rules = {
+        "version": 1,
+        "nodes": {},
+        "output_injections": {},
+        "slots": {},
+        "mask_cropping": {"mode": "crop"},
+        "postprocessing": {
+            "mode": "auto",
+            "panel_preview": "raw_outputs",
+            "on_failure": "fallback_raw",
+        },
+    }
+    object_info = {
+        "WanFirstLastFrameToVideo": {
+            "input": {
+                "required": {
+                    "width": ["INT", {"default": 832, "min": 16, "max": 16384}],
+                    "height": ["INT", {"default": 480, "min": 16, "max": 16384}],
+                    "length": ["INT", {"default": 81, "min": 1, "max": 16384}],
+                    "batch_size": ["INT", {"default": 1, "min": 1, "max": 4096}],
+                },
+            },
+            "input_order": {
+                "required": ["width", "height", "length", "batch_size"],
+            },
+            "output": ["CONDITIONING", "CONDITIONING", "LATENT"],
+        }
+    }
+
+    set_object_info_cache(object_info)
+    try:
+        enrich_rules_with_object_info(rules, workflow)
+    finally:
+        set_object_info_cache(None)
+
+    assert rules["nodes"]["67"]["widgets"]["length"] == {
+        "label": "Length",
+        "control_after_generate": False,
+        "value_type": "int",
+        "min": 1,
+        "max": 16384,
+        "default": 81,
+    }
+
+
+def test_enrich_rules_with_object_info_auto_discovers_num_frames_as_length_widget():
+    workflow = {
+        "nodes": [
+            {
+                "id": 91,
+                "type": "WanVideoImageToVideoEncode",
+                "title": "WanVideoImageToVideoEncode",
+                "inputs": [
+                    {
+                        "name": "width",
+                        "type": "INT",
+                        "widget": {"name": "width"},
+                        "link": None,
+                    },
+                    {
+                        "name": "height",
+                        "type": "INT",
+                        "widget": {"name": "height"},
+                        "link": None,
+                    },
+                    {
+                        "name": "num_frames",
+                        "type": "INT",
+                        "widget": {"name": "num_frames"},
+                        "link": None,
+                    },
+                ],
+                "widgets_values": [832, 480, 81],
+            }
+        ]
+    }
+    rules = {
+        "version": 1,
+        "nodes": {},
+        "output_injections": {},
+        "slots": {},
+        "mask_cropping": {"mode": "crop"},
+        "postprocessing": {
+            "mode": "auto",
+            "panel_preview": "raw_outputs",
+            "on_failure": "fallback_raw",
+        },
+    }
+    object_info = {
+        "WanVideoImageToVideoEncode": {
+            "input": {
+                "required": {
+                    "width": ["INT", {"default": 832, "min": 64, "max": 8096}],
+                    "height": ["INT", {"default": 480, "min": 64, "max": 8096}],
+                    "num_frames": [
+                        "INT",
+                        {"default": 81, "min": 1, "max": 10000},
+                    ],
+                },
+            },
+            "input_order": {
+                "required": ["width", "height", "num_frames"],
+            },
+            "output": ["WANVIDIMAGE_EMBEDS"],
+        }
+    }
+
+    set_object_info_cache(object_info)
+    try:
+        enrich_rules_with_object_info(rules, workflow)
+    finally:
+        set_object_info_cache(None)
+
+    assert rules["nodes"]["91"]["widgets"]["num_frames"] == {
+        "label": "Length",
+        "control_after_generate": False,
+        "value_type": "int",
+        "min": 1,
+        "max": 10000,
+        "default": 81,
+    }
+
+
+def test_enrich_rules_with_object_info_skips_linked_length_widget_targets():
+    workflow = {
+        "nodes": [
+            {
+                "id": 267,
+                "type": "template-subgraph-id",
+                "properties": {
+                    "proxyWidgets": [
+                        ["225", "value"],
+                    ]
+                },
+            }
+        ],
+        "definitions": {
+            "subgraphs": [
+                {
+                    "id": "template-subgraph-id",
+                    "name": "Video Generation (LTX-2.3)",
+                    "nodes": [
+                        {
+                            "id": 225,
+                            "type": "PrimitiveInt",
+                            "title": "Length",
+                            "inputs": [
+                                {
+                                    "name": "value",
+                                    "type": "INT",
+                                    "widget": {"name": "value"},
+                                    "link": None,
+                                }
+                            ],
+                            "widgets_values": [121, "fixed"],
+                        },
+                        {
+                            "id": 228,
+                            "type": "EmptyLTXVLatentVideo",
+                            "inputs": [
+                                {
+                                    "name": "width",
+                                    "type": "INT",
+                                    "widget": {"name": "width"},
+                                    "link": None,
+                                },
+                                {
+                                    "name": "height",
+                                    "type": "INT",
+                                    "widget": {"name": "height"},
+                                    "link": None,
+                                },
+                                {
+                                    "name": "length",
+                                    "type": "INT",
+                                    "widget": {"name": "length"},
+                                    "link": 508,
+                                },
+                            ],
+                            "widgets_values": [768, 512, 97, 1],
+                        },
+                    ],
+                }
+            ]
+        },
+    }
+    rules = {
+        "version": 1,
+        "nodes": {},
+        "output_injections": {},
+        "slots": {},
+        "mask_cropping": {"mode": "crop"},
+        "postprocessing": {
+            "mode": "auto",
+            "panel_preview": "raw_outputs",
+            "on_failure": "fallback_raw",
+        },
+    }
+    object_info = {
+        "PrimitiveInt": {
+            "input": {
+                "required": {
+                    "value": ["INT", {"control_after_generate": True}],
+                }
+            },
+            "input_order": {"required": ["value"]},
+        },
+        "EmptyLTXVLatentVideo": {
+            "input": {
+                "required": {
+                    "width": ["INT", {"default": 768, "min": 64, "max": 16384}],
+                    "height": ["INT", {"default": 512, "min": 64, "max": 16384}],
+                    "length": ["INT", {"default": 97, "min": 1, "max": 16384}],
+                    "batch_size": ["INT", {"default": 1, "min": 1, "max": 4096}],
+                }
+            },
+            "input_order": {
+                "required": ["width", "height", "length", "batch_size"],
+            },
+            "output": ["LATENT"],
+        },
+    }
+
+    set_object_info_cache(object_info)
+    try:
+        enrich_rules_with_object_info(rules, workflow)
+    finally:
+        set_object_info_cache(None)
+
+    assert rules["nodes"]["267:225"]["widgets"]["value"]["label"] == "Length"
+    assert rules["nodes"]["267:228"].get("widgets", {}) == {}
+
+
 def test_enrich_rules_with_object_info_defaults_ksampler_to_all_widgets():
     workflow = {
         "145": {

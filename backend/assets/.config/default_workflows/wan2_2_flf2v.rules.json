@@ -2,11 +2,6 @@
   "name": "Wan2.2 I2V & FLF2V",
   "version": 1,
   "nodes": {
-    "67": {
-      "widgets": {
-        "length": {}
-      }
-    },
     "62": {
       "present": {
         "required": false

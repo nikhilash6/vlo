@@ -65,7 +65,13 @@ def _load_object_info() -> dict[str, Any]:
 
 
 class _NodeInfo:
-    __slots__ = ("class_type", "title", "widgets_values", "widget_groups")
+    __slots__ = (
+        "class_type",
+        "title",
+        "widgets_values",
+        "widget_groups",
+        "linked_input_params",
+    )
 
     def __init__(
         self,
@@ -73,11 +79,46 @@ class _NodeInfo:
         title: str,
         widgets_values: list[Any] | None,
         widget_groups: dict[str, dict[str, Any]] | None = None,
+        linked_input_params: set[str] | None = None,
     ):
         self.class_type = class_type
         self.title = title
         self.widgets_values = widgets_values
         self.widget_groups = widget_groups
+        self.linked_input_params = linked_input_params or set()
+
+
+def _extract_api_linked_input_params(node_data: dict[str, Any]) -> set[str]:
+    inputs = node_data.get("inputs")
+    if not isinstance(inputs, dict):
+        return set()
+
+    linked: set[str] = set()
+    for param_name, input_value in inputs.items():
+        if (
+            isinstance(param_name, str)
+            and isinstance(input_value, list)
+            and len(input_value) == 2
+        ):
+            linked.add(param_name)
+    return linked
+
+
+def _extract_graph_linked_input_params(node: dict[str, Any]) -> set[str]:
+    raw_inputs = node.get("inputs")
+    if not isinstance(raw_inputs, list):
+        return set()
+
+    linked: set[str] = set()
+    for input_entry in raw_inputs:
+        if not isinstance(input_entry, dict):
+            continue
+        param_name = input_entry.get("name")
+        if not isinstance(param_name, str) or not param_name.strip():
+            continue
+        if input_entry.get("link") is not None:
+            linked.add(param_name)
+    return linked
 
 
 def _extract_proxy_widget_groups(
@@ -141,7 +182,14 @@ def _extract_node_info(workflow_data: dict[str, Any]) -> dict[str, _NodeInfo]:
                         if isinstance(meta, dict)
                         else class_type
                     )
-                    result[str(node_id)] = _NodeInfo(class_type, title, None)
+                    result[str(node_id)] = _NodeInfo(
+                        class_type,
+                        title,
+                        None,
+                        linked_input_params=_extract_api_linked_input_params(
+                            node_data,
+                        ),
+                    )
         if result:
             return result
 
@@ -169,6 +217,7 @@ def _extract_node_info(workflow_data: dict[str, Any]) -> dict[str, _NodeInfo]:
                     title,
                     widgets_values if isinstance(widgets_values, list) else None,
                     widget_groups=widget_groups,
+                    linked_input_params=_extract_graph_linked_input_params(node),
                 )
 
     _collect_from_node_list(workflow_data.get("nodes"))
@@ -218,6 +267,40 @@ def _extract_node_info(workflow_data: dict[str, Any]) -> dict[str, _NodeInfo]:
 # ---------------------------------------------------------------------------
 # Enrichment orchestration
 # ---------------------------------------------------------------------------
+
+
+def _apply_length_widget_policy(
+    node_rule: dict[str, Any],
+    node_info: _NodeInfo,
+    node_policy: NodePolicy,
+    object_info: dict[str, Any],
+) -> None:
+    widget_param = node_policy.get("length_widget_param")
+    if not isinstance(widget_param, str) or not widget_param.strip():
+        return
+    if widget_param in node_info.linked_input_params:
+        return
+
+    current_widgets = node_rule.get("widgets")
+    if not isinstance(current_widgets, dict):
+        current_widgets = {}
+        node_rule["widgets"] = current_widgets
+    if widget_param in current_widgets:
+        return
+
+    metadata = resolve_widget_param_metadata(
+        node_info.class_type,
+        object_info,
+        {widget_param},
+    ).get(widget_param)
+    if not isinstance(metadata, dict):
+        return
+
+    current_widgets[widget_param] = {
+        "label": node_policy.get("length_widget_label", "Length"),
+        "control_after_generate": False,
+        **metadata,
+    }
 
 
 def enrich_rules_with_object_info(
@@ -331,6 +414,13 @@ def enrich_rules_with_object_info(
                 )
         elif discovered_widgets:
             existing["widgets"] = discovered_widgets
+
+        _apply_length_widget_policy(
+            existing,
+            info,
+            node_policies[node_id],
+            object_info,
+        )
 
         if existing.get("widgets"):
             existing["node_title"] = info.title
