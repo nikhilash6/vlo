@@ -763,6 +763,80 @@ describe("useGenerationStore pipeline phases", () => {
     expect(finalState.jobs.get("prompt-2")?.outputs).toEqual([]);
   });
 
+  it("finalizes a prompt only once when both executing-null and execution_success arrive", async () => {
+    const historyDeferred = createDeferred<
+      Array<{
+        filename: string;
+        subfolder: string;
+        type: string;
+        viewUrl: string;
+      }>
+    >();
+    const postprocessDeferred = createDeferred<{
+      postprocessedPreview: null;
+      postprocessError: null;
+      importedAssetIds: string[];
+    }>();
+
+    mockGetHistoryOutputsWithRetry.mockReturnValue(historyDeferred.promise);
+    mockFrontendPostprocess.mockReturnValue(postprocessDeferred.promise);
+
+    useGenerationStore.setState({
+      jobs: new Map([["prompt-dual-finish", makeQueuedJob("prompt-dual-finish")]]),
+      activeJobId: "prompt-dual-finish",
+      pipelineRunToken: 1,
+    });
+
+    useGenerationStore.getState().connect();
+    const client = getLatestClient();
+
+    client.emitEvent({
+      type: "executing",
+      data: {
+        node: null,
+        prompt_id: "prompt-dual-finish",
+      },
+    });
+    client.emitEvent({
+      type: "execution_success",
+      data: {
+        prompt_id: "prompt-dual-finish",
+        timestamp: Date.now(),
+      },
+    });
+    await flushMicrotasks();
+
+    expect(mockGetHistoryOutputsWithRetry).toHaveBeenCalledTimes(1);
+
+    historyDeferred.resolve([
+      {
+        filename: "output.png",
+        subfolder: "",
+        type: "output",
+        viewUrl: "/output.png",
+      },
+    ]);
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    expect(mockFrontendPostprocess).toHaveBeenCalledTimes(1);
+    expect(useGenerationStore.getState().postprocessingJobIds).toEqual([
+      "prompt-dual-finish",
+    ]);
+
+    postprocessDeferred.resolve({
+      postprocessedPreview: null,
+      postprocessError: null,
+      importedAssetIds: ["asset-1"],
+    });
+    await flushMicrotasks();
+
+    expect(
+      useGenerationStore.getState().jobs.get("prompt-dual-finish")
+        ?.importedAssetIds,
+    ).toEqual(["asset-1"]);
+  });
+
   it("queues generations when graph snapshots include non-serializable browser values", async () => {
     const isBrowserEnv =
       typeof window !== "undefined" && typeof document !== "undefined";

@@ -23,12 +23,20 @@ export function attachRuntimeClientHandlers(
   set: GenerationStoreSet,
   get: GenerationStoreGet,
 ): void {
+  const finalizingPromptIds = new Set<string>();
+
   async function finalizeCompletedJob(promptId: string): Promise<void> {
+    if (finalizingPromptIds.has(promptId)) {
+      return;
+    }
+
     const state = get();
     const job = state.jobs.get(promptId);
     if (!job || job.status === "error" || job.status === "completed") {
       return;
     }
+
+    finalizingPromptIds.add(promptId);
 
     try {
       const finalOutputs = await getHistoryOutputsWithRetry(promptId);
@@ -61,6 +69,8 @@ export function attachRuntimeClientHandlers(
       if (completedJob) {
         void runJobPostprocess(completedJob);
       }
+    } finally {
+      finalizingPromptIds.delete(promptId);
     }
   }
 
