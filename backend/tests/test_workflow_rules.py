@@ -611,6 +611,198 @@ def test_enrich_rules_with_object_info_respects_disabled_default_ar_processing()
     assert rules["aspect_ratio_processing"]["target_nodes"] == []
 
 
+def test_enrich_rules_with_object_info_auto_discovers_required_validation_for_inputs():
+    workflow = {
+        "nodes": [
+            {"id": 10, "type": "ImageUploadNode", "title": "Image Upload"},
+            {"id": 11, "type": "VideoUploadNode", "title": "Video Upload"},
+            {"id": 12, "type": "PromptNode", "title": "Prompt"},
+        ]
+    }
+    rules = {
+        "version": 1,
+        "nodes": {},
+        "output_injections": {},
+        "slots": {},
+        "mask_cropping": {"mode": "crop"},
+        "postprocessing": {
+            "mode": "auto",
+            "panel_preview": "raw_outputs",
+            "on_failure": "fallback_raw",
+        },
+    }
+    object_info = {
+        "ImageUploadNode": {
+            "input": {
+                "required": {
+                    "image": [["example.png"], {"image_upload": True}],
+                }
+            },
+            "input_order": {"required": ["image"]},
+        },
+        "VideoUploadNode": {
+            "input": {
+                "required": {
+                    "video": ["STRING", {"video_upload": True}],
+                }
+            },
+            "input_order": {"required": ["video"]},
+        },
+        "PromptNode": {
+            "input": {
+                "required": {
+                    "text": ["STRING", {"dynamicPrompts": True}],
+                }
+            },
+            "input_order": {"required": ["text"]},
+        },
+    }
+
+    set_object_info_cache(object_info)
+    try:
+        enrich_rules_with_object_info(rules, workflow)
+    finally:
+        set_object_info_cache(None)
+
+    assert rules["validation"]["inputs"] == [
+        {"kind": "required", "input": "10"},
+        {"kind": "required", "input": "11"},
+        {"kind": "required", "input": "12"},
+    ]
+    failures = evaluate_input_validation(rules, set())
+    assert failures == [
+        {
+            "kind": "required",
+            "input": "10",
+            "message": "Input '10' is required.",
+        },
+        {
+            "kind": "required",
+            "input": "11",
+            "message": "Input '11' is required.",
+        },
+        {
+            "kind": "required",
+            "input": "12",
+            "message": "Input '12' is required.",
+        },
+    ]
+
+
+def test_enrich_rules_with_object_info_uses_param_specific_required_validation_for_multi_input_nodes():
+    workflow = {
+        "nodes": [
+            {"id": 20, "type": "DualImageInputNode", "title": "Dual Image Input"},
+        ]
+    }
+    rules = {
+        "version": 1,
+        "nodes": {},
+        "output_injections": {},
+        "slots": {},
+        "mask_cropping": {"mode": "crop"},
+        "postprocessing": {
+            "mode": "auto",
+            "panel_preview": "raw_outputs",
+            "on_failure": "fallback_raw",
+        },
+    }
+    object_info = {
+        "DualImageInputNode": {
+            "input": {
+                "required": {
+                    "start_image": [["start.png"], {"image_upload": True}],
+                    "end_image": [["end.png"], {"image_upload": True}],
+                }
+            },
+            "input_order": {"required": ["start_image", "end_image"]},
+        }
+    }
+
+    set_object_info_cache(object_info)
+    try:
+        enrich_rules_with_object_info(rules, workflow)
+    finally:
+        set_object_info_cache(None)
+
+    assert rules["validation"]["inputs"] == [
+        {"kind": "required", "input": "20:start_image"},
+        {"kind": "required", "input": "20:end_image"},
+    ]
+
+
+def test_enrich_rules_with_object_info_skips_default_required_validation_for_optional_sidecar_inputs():
+    workflow = {
+        "nodes": [
+            {"id": 10, "type": "ImageUploadNode", "title": "Image Upload"},
+        ]
+    }
+    rules = {
+        "version": 1,
+        "nodes": {
+            "10": {
+                "present": {
+                    "required": False,
+                }
+            }
+        },
+        "output_injections": {},
+        "slots": {},
+        "mask_cropping": {"mode": "crop"},
+        "postprocessing": {
+            "mode": "auto",
+            "panel_preview": "raw_outputs",
+            "on_failure": "fallback_raw",
+        },
+    }
+    object_info = {
+        "ImageUploadNode": {
+            "input": {
+                "required": {
+                    "image": [["example.png"], {"image_upload": True}],
+                }
+            },
+            "input_order": {"required": ["image"]},
+        }
+    }
+
+    set_object_info_cache(object_info)
+    try:
+        enrich_rules_with_object_info(rules, workflow)
+    finally:
+        set_object_info_cache(None)
+
+    assert rules["validation"]["inputs"] == []
+
+
+def test_real_wan_default_workflow_sidecar_waives_default_required_inputs():
+    base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
+    workflow_path = base / "wan2_2_flf2v.json"
+    workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+
+    set_object_info_cache(None)
+    try:
+        rules_model, warnings = load_rules_model_for_workflow(base, workflow_path.name)
+        assert warnings == []
+        rules_model = enrich_rules_with_object_info(rules_model, workflow)
+        rules = dump_resolved_rules(rules_model)
+    finally:
+        set_object_info_cache(None)
+
+    validation_inputs = rules["validation"]["inputs"]
+    assert {
+        "kind": "at_least_n",
+        "inputs": ["62", "68"],
+        "min": 1,
+        "message": "Provide at least one frame input.",
+    } in validation_inputs
+    assert not any(
+        rule.get("kind") == "required" and rule.get("input") in {"62", "68"}
+        for rule in validation_inputs
+        if isinstance(rule, dict)
+    )
+
+
 def test_enrich_rules_with_object_info_auto_discovers_length_widget_for_video_nodes():
     workflow = {
         "nodes": [

@@ -15,6 +15,7 @@ from services.workflow_rules.node_discovery import (
     NodePolicy,
     WIDGETS_MODE_ALL,
     WIDGETS_MODE_CONTROL_AFTER_GENERATE,
+    has_any_input,
     resolve_node_policy,
 )
 from services.workflow_rules.node_parsing import (
@@ -303,6 +304,107 @@ def _apply_length_widget_policy(
     }
 
 
+def _collect_validation_targets(rule: dict[str, Any]) -> set[str]:
+    kind = rule.get("kind")
+    if kind in {"required", "optional"}:
+        target = rule.get("input")
+        if isinstance(target, str) and target.strip():
+            return {target.strip()}
+        return set()
+
+    if kind == "at_least_n":
+        raw_inputs = rule.get("inputs")
+        if not isinstance(raw_inputs, list):
+            return set()
+        return {
+            str(target).strip()
+            for target in raw_inputs
+            if isinstance(target, str) and target.strip()
+        }
+
+    return set()
+
+
+def _is_validation_target_covered(
+    target: str,
+    existing_targets: set[str],
+) -> bool:
+    if target in existing_targets:
+        return True
+
+    node_id, _, _ = target.partition(":")
+    return bool(node_id and node_id != target and node_id in existing_targets)
+
+
+def _apply_default_required_input_validation(
+    rules: WorkflowRules,
+    node_infos: dict[str, _NodeInfo],
+    node_policies: dict[str, NodePolicy],
+    object_info: dict[str, Any],
+) -> None:
+    validation = rules.get("validation")
+    if not isinstance(validation, dict):
+        validation = {}
+        rules["validation"] = validation
+
+    validation_inputs = validation.get("inputs")
+    if not isinstance(validation_inputs, list):
+        validation_inputs = []
+        validation["inputs"] = validation_inputs
+
+    input_node_map = _build_input_node_map_core(object_info)
+    existing_targets: set[str] = set()
+    for rule in validation_inputs:
+        if isinstance(rule, dict):
+            existing_targets.update(_collect_validation_targets(rule))
+
+    nodes = rules.get("nodes")
+    if not isinstance(nodes, dict):
+        return
+
+    for node_id, info in node_infos.items():
+        node_policy = node_policies.get(node_id, {})
+        if not has_any_input(node_policy):
+            continue
+
+        node_rule = nodes.get(node_id)
+        if not isinstance(node_rule, dict):
+            continue
+        if node_rule.get("ignore"):
+            continue
+        if node_rule.get("binary_derived_mask_of") or node_rule.get("soft_derived_mask_of"):
+            continue
+
+        present = node_rule.get("present")
+        if isinstance(present, dict):
+            if present.get("enabled") is False:
+                continue
+            if present.get("required") is False:
+                continue
+
+        discovered_inputs = input_node_map.get(info.class_type)
+        if not isinstance(discovered_inputs, list) or not discovered_inputs:
+            continue
+
+        use_param_specific_targets = len(discovered_inputs) > 1
+        for discovered_input in discovered_inputs:
+            param = discovered_input.get("param")
+            if not isinstance(param, str) or not param.strip():
+                continue
+
+            target = f"{node_id}:{param}" if use_param_specific_targets else node_id
+            if _is_validation_target_covered(target, existing_targets):
+                continue
+
+            validation_inputs.append(
+                {
+                    "kind": "required",
+                    "input": target,
+                }
+            )
+            existing_targets.add(target)
+
+
 def enrich_rules_with_object_info(
     rules: WorkflowRules | ResolvedWorkflowRules,
     workflow_data: dict[str, Any],
@@ -436,6 +538,13 @@ def enrich_rules_with_object_info(
 
     log.info(
         "[enrich] Total nodes with auto-discovered widgets: %d", discovered_count
+    )
+
+    _apply_default_required_input_validation(
+        rules_dict,
+        node_infos,
+        node_policies,
+        object_info,
     )
 
     _apply_ar_target_policies(rules_dict, node_infos, node_policies)
