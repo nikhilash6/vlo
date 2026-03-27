@@ -158,13 +158,14 @@ describe("SpriteClipMaskController mask composition", () => {
     warnSpy.mockRestore();
   });
 
-  it("uses AlphaMask.inverse for a single inverted mask", async () => {
+  it("applies a single inverted vector mask directly to the clip sprite", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const renderSpy = vi.fn();
     const renderer = {
       render: renderSpy,
     } as unknown as Renderer;
     const sprite = new Sprite();
+    const setMaskSpy = vi.spyOn(sprite, "setMask");
     const root = new Container();
     const controller = new SpriteClipMaskController(sprite, renderer, root);
 
@@ -186,10 +187,13 @@ describe("SpriteClipMaskController mask composition", () => {
       (effect) => effect instanceof AlphaMask,
     ) ?? null) as AlphaMask | null;
 
-    expect(alphaMaskEffect).not.toBeNull();
-    expect(alphaMaskEffect?.inverse).toBe(true);
-    // Single-mask path renders only the full mask texture (no per-mask erase pass).
-    expect(renderSpy).toHaveBeenCalledTimes(1);
+    expect(alphaMaskEffect).toBeNull();
+    expect(setMaskSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inverse: true,
+      }),
+    );
+    expect(renderSpy).not.toHaveBeenCalled();
 
     controller.dispose();
     warnSpy.mockRestore();
