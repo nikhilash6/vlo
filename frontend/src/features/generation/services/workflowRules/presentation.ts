@@ -24,12 +24,21 @@ function hasPresentOverrides(
 }
 
 type ConditioningRole = "positive" | "negative";
+type BoundaryMediaRole = "start" | "end";
 
 function toConditioningRole(value: string | undefined): ConditioningRole | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase();
   if (normalized.includes("positive")) return "positive";
   if (normalized.includes("negative")) return "negative";
+  return null;
+}
+
+function toBoundaryMediaRole(value: string | undefined): BoundaryMediaRole | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (/\b(start|first)\b/.test(normalized)) return "start";
+  if (/\b(end|last)\b/.test(normalized)) return "end";
   return null;
 }
 
@@ -142,6 +151,45 @@ function sortConditioningInputs(
   const nextInputs = [...inputs];
 
   indexedConditioningInputs.forEach((entry, orderIndex) => {
+    nextInputs[entry.index] = sorted[orderIndex].input;
+  });
+
+  return nextInputs;
+}
+
+function sortBoundaryMediaInputs(inputs: WorkflowInput[]): WorkflowInput[] {
+  const indexedBoundaryInputs = inputs
+    .map((input, index) => ({
+      index,
+      input,
+      role:
+        input.inputType === "image" || input.inputType === "video"
+          ? toBoundaryMediaRole(input.label)
+          : null,
+    }))
+    .filter(
+      (
+        entry,
+      ): entry is {
+        index: number;
+        input: WorkflowInput;
+        role: BoundaryMediaRole;
+      } => entry.role !== null,
+    );
+
+  if (indexedBoundaryInputs.length < 2) return inputs;
+
+  const hasStart = indexedBoundaryInputs.some((entry) => entry.role === "start");
+  const hasEnd = indexedBoundaryInputs.some((entry) => entry.role === "end");
+  if (!hasStart || !hasEnd) return inputs;
+
+  const sorted = [...indexedBoundaryInputs].sort((left, right) => {
+    if (left.role === right.role) return left.index - right.index;
+    return left.role === "start" ? -1 : 1;
+  });
+  const nextInputs = [...inputs];
+
+  indexedBoundaryInputs.forEach((entry, orderIndex) => {
     nextInputs[entry.index] = sorted[orderIndex].input;
   });
 
@@ -310,7 +358,9 @@ export function resolvePresentedInputsFromRules(
     });
   }
 
-  const sortedInputs = sortConditioningInputs(resolved, conditioningRoles);
+  const sortedInputs = sortBoundaryMediaInputs(
+    sortConditioningInputs(resolved, conditioningRoles),
+  );
 
   return {
     inputs: sortedInputs,

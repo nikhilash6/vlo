@@ -448,6 +448,57 @@ describe("resolvePresentedInputs", () => {
     ]);
   });
 
+  it("places start media inputs above end media inputs while preserving other positions", () => {
+    const result = resolvePresentedInputs(
+      [
+        {
+          nodeId: "77",
+          classType: "VHS_LoadVideo",
+          inputType: "video",
+          param: "video",
+          label: "Video",
+          currentValue: "clip.mp4",
+          origin: "inferred",
+        },
+        {
+          nodeId: "62",
+          classType: "LoadImage",
+          inputType: "image",
+          param: "image",
+          label: "End Image",
+          currentValue: "end.png",
+          origin: "inferred",
+        },
+        {
+          nodeId: "68",
+          classType: "LoadImage",
+          inputType: "image",
+          param: "image",
+          label: "Start Image",
+          currentValue: "start.png",
+          origin: "inferred",
+        },
+      ],
+      {
+        version: 1,
+        nodes: {},
+        output_injections: {},
+        slots: {},
+      },
+    );
+
+    expect(result.inputs.map((input) => input.nodeId)).toEqual([
+      "77",
+      "68",
+      "62",
+    ]);
+    expect(result.inputs.map((input) => input.label)).toEqual([
+      "Video",
+      "Start Image",
+      "End Image",
+    ]);
+  });
+
   it("hides ignored nodes", () => {
     const result = resolvePresentedInputs(makeInferredInputs(), {
       version: 1,
@@ -838,6 +889,7 @@ describe("resolvePresentedInputs", () => {
     expect(widgets).toHaveLength(1);
     expect(widgets[0]?.kind).toBe("derived");
     expect(widgets[0]?.nodeId).toBe("derived:denoise");
+    expect(widgets[0]?.config.groupTitle).toBe("Denoise");
     expect(widgets[0]?.config.control).toBe("slider");
     expect(widgets[0]?.config.min).toBe(0.1);
     expect(widgets[0]?.config.step).toBe(0.1);

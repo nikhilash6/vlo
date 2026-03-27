@@ -15,7 +15,6 @@ import {
 import { useGenerationStore } from "../useGenerationStore";
 import { useProjectStore } from "../../project";
 import type {
-  GenerationMediaInputValue,
   WorkflowSelectionConfig,
   WorkflowWidgetInput,
 } from "../types";
@@ -41,29 +40,10 @@ import {
   resolveWorkflowInputKeys,
 } from "../utils/workflowInputs";
 import { resolveExistingAssetForExternalDrop } from "../utils/externalDropAsset";
-
-function hasInputValue(
-  inputType: "image" | "video",
-  value: GenerationMediaInputValue | null | undefined,
-): boolean {
-  if (!value) return false;
-
-  if (inputType === "image") {
-    if (value.kind === "asset") {
-      return value.asset.type === "image" && Boolean(value.asset.file);
-    }
-    return value.kind === "frame";
-  }
-
-  if (value.kind === "asset") {
-    return value.asset.type === "video" && Boolean(value.asset.file);
-  }
-  return (
-    value.kind === "timelineSelection" &&
-    value.preparedVideoFile !== null &&
-    !value.isExtracting
-  );
-}
+import {
+  hasProvidedMediaInputValue,
+  resolveAssetFileForGeneration,
+} from "../utils/mediaInputAssets";
 
 function applySelectionConfigDefaults(
   selection: ReturnType<typeof createTimelineSelection>,
@@ -445,10 +425,11 @@ export function useGenerationPanel() {
         if (!value) continue;
 
         if (input.inputType === "image") {
-          if (value.kind === "asset" && value.asset.file) {
+          if (value.kind === "asset" && value.asset.type === "image") {
+            const file = await resolveAssetFileForGeneration(value.asset);
             slotValues[inputId] = {
               type: "image",
-              file: value.asset.file,
+              file,
             };
           } else if (value.kind === "frame") {
             slotValues[inputId] = {
@@ -459,10 +440,11 @@ export function useGenerationPanel() {
           continue;
         }
 
-        if (value.kind === "asset" && value.asset.file) {
+        if (value.kind === "asset" && value.asset.type === "video") {
+          const file = await resolveAssetFileForGeneration(value.asset);
           slotValues[inputId] = {
             type: "video",
-            file: value.asset.file,
+            file,
           };
           continue;
         }
@@ -932,7 +914,7 @@ export function useGenerationPanel() {
       }
 
       if (
-        hasInputValue(
+        hasProvidedMediaInputValue(
           input.inputType as "image" | "video",
           getWorkflowInputValue(mediaInputs, input, workflowInputById),
         )

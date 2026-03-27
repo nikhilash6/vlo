@@ -110,7 +110,8 @@ function resolveDualSamplerDenoiseWidget(
       control: "slider",
       valueType: "float",
       groupId: toOptionalString(rule.group_id),
-      groupTitle: toOptionalString(rule.group_title),
+      groupTitle:
+        toOptionalString(rule.group_title) ?? rule.label ?? "Denoise",
       groupOrder: toOptionalNumber(rule.group_order),
     },
   };
