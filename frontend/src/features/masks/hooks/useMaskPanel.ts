@@ -318,11 +318,6 @@ export function useMaskPanel(): UseMaskPanelResult {
   }, []);
 
   useEffect(() => {
-    if (!addMenuAnchorEl) return;
-    void ensureSam2Available();
-  }, [addMenuAnchorEl, ensureSam2Available]);
-
-  useEffect(() => {
     if (!isMaskTabActive || !isSam2Selected) return;
     void ensureSam2Available();
   }, [ensureSam2Available, isMaskTabActive, isSam2Selected]);

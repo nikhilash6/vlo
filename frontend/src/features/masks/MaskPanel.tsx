@@ -140,8 +140,6 @@ export const MaskPanel = memo(function MaskPanel() {
 
   if (!selectedClipId) return null;
 
-  const showDownloadOverlay = !isSam2Available && !isSam2Checking;
-
   const selectedMaskIndex = selectedMask
     ? masks.findIndex((mask) => mask.id === selectedMask.id)
     : -1;
@@ -151,7 +149,7 @@ export const MaskPanel = memo(function MaskPanel() {
     (selectedMask?.type === "mask" ? selectedMask.maskMode : undefined) ??
     "apply";
   const isSam2Mask = selectedMaskIsSam2;
-  const isSam2MenuItemDisabled = isSam2Checking || !isSam2Available;
+  const showSam2DownloadOverlay = isSam2Mask && !isSam2Available;
 
   return (
     <Box
@@ -224,11 +222,7 @@ export const MaskPanel = memo(function MaskPanel() {
           onClose={() => setAddMenuAnchorEl(null)}
         >
           {MASK_TYPES.map((shape) => (
-            <MenuItem
-              key={shape}
-              disabled={shape === "sam2" ? isSam2MenuItemDisabled : false}
-              onClick={() => requestDraw(shape)}
-            >
+            <MenuItem key={shape} onClick={() => requestDraw(shape)}>
               {shape[0].toUpperCase() + shape.slice(1)}
             </MenuItem>
           ))}
@@ -243,63 +237,63 @@ export const MaskPanel = memo(function MaskPanel() {
         )}
       </Box>
 
-      {showDownloadOverlay && (
-        <Sam2ModelDownloadOverlay onModelsInstalled={handleModelsInstalled} />
-      )}
-
       {selectedMask ? (
         isSam2Mask ? (
-          <>
-            <Sam2MaskPanel
-              maskMode={selectedMaskMode}
-              maskInverted={maskInverted}
-              maskLabel={selectedMaskLabel}
-              sam2PointMode={sam2PointMode}
-              points={sam2Points}
-              currentFramePointsCount={sam2CurrentFramePointsCount}
-              isSam2Available={isSam2Available}
-              isSam2Checking={isSam2Checking}
-              sam2AvailabilityError={sam2AvailabilityError}
-              onClearPoints={clearSam2Points}
-              onClearCurrentFramePoints={clearSam2CurrentFramePoints}
-              onGenerateFramePreview={generateSam2FramePreview}
-              isFrameGenerating={isSam2FrameGenerating}
-              framePreviewError={sam2FramePreviewError}
-              onGenerateMask={generateSam2Mask}
-              isGenerating={isSam2Generating}
-              generateError={sam2GenerateError}
-              isDirty={isSam2Dirty}
-              hasMaskAsset={hasSam2MaskAsset}
-              onSetMaskMode={setMaskMode}
-              onSetMaskInverted={setMaskInverted}
-              onSetSam2PointMode={setSam2PointMode}
-            />
-            <DefaultTransformationSections
-              definitions={maskOperationDefinitions}
-              activeTransforms={activeTransforms}
-              activeContextId={activeContextId}
-              activeSectionId={activeSectionId}
-              timelineClip={activeTimelineClip}
-              onCommit={handleCommit}
-              onSetDefaultGroupsEnabled={handleSetDefaultGroupsEnabled}
-              onUpdateTransform={updateActiveTransform}
-              onSetTransforms={setActiveTransforms}
-              onActivateSection={activateSection}
-            />
-            <Box sx={{ px: 2, pb: 2 }}>
-              <Divider sx={{ borderColor: "#2a2d33", mb: 2 }} />
-              <Button
-                data-testid="mask-delete-button"
-                variant="outlined"
-                color="error"
-                startIcon={<DeleteOutline fontSize="small" />}
-                onClick={deleteSelectedMask}
-                sx={{ textTransform: "none", width: "100%" }}
-              >
-                Delete Mask
-              </Button>
-            </Box>
-          </>
+          showSam2DownloadOverlay ? (
+            <Sam2ModelDownloadOverlay onModelsInstalled={handleModelsInstalled} />
+          ) : (
+            <>
+              <Sam2MaskPanel
+                maskMode={selectedMaskMode}
+                maskInverted={maskInverted}
+                maskLabel={selectedMaskLabel}
+                sam2PointMode={sam2PointMode}
+                points={sam2Points}
+                currentFramePointsCount={sam2CurrentFramePointsCount}
+                isSam2Available={isSam2Available}
+                isSam2Checking={isSam2Checking}
+                sam2AvailabilityError={sam2AvailabilityError}
+                onClearPoints={clearSam2Points}
+                onClearCurrentFramePoints={clearSam2CurrentFramePoints}
+                onGenerateFramePreview={generateSam2FramePreview}
+                isFrameGenerating={isSam2FrameGenerating}
+                framePreviewError={sam2FramePreviewError}
+                onGenerateMask={generateSam2Mask}
+                isGenerating={isSam2Generating}
+                generateError={sam2GenerateError}
+                isDirty={isSam2Dirty}
+                hasMaskAsset={hasSam2MaskAsset}
+                onSetMaskMode={setMaskMode}
+                onSetMaskInverted={setMaskInverted}
+                onSetSam2PointMode={setSam2PointMode}
+              />
+              <DefaultTransformationSections
+                definitions={maskOperationDefinitions}
+                activeTransforms={activeTransforms}
+                activeContextId={activeContextId}
+                activeSectionId={activeSectionId}
+                timelineClip={activeTimelineClip}
+                onCommit={handleCommit}
+                onSetDefaultGroupsEnabled={handleSetDefaultGroupsEnabled}
+                onUpdateTransform={updateActiveTransform}
+                onSetTransforms={setActiveTransforms}
+                onActivateSection={activateSection}
+              />
+              <Box sx={{ px: 2, pb: 2 }}>
+                <Divider sx={{ borderColor: "#2a2d33", mb: 2 }} />
+                <Button
+                  data-testid="mask-delete-button"
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteOutline fontSize="small" />}
+                  onClick={deleteSelectedMask}
+                  sx={{ textTransform: "none", width: "100%" }}
+                >
+                  Delete Mask
+                </Button>
+              </Box>
+            </>
+          )
         ) : (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Box sx={{ px: 2 }}>

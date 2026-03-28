@@ -183,15 +183,54 @@ describe("MaskPanel", () => {
     );
   });
 
-  it("shows the SAM2 download overlay while SAM2 is unavailable", () => {
+  it("keeps SAM2 selectable from the add menu even when unavailable", () => {
     vi.mocked(useMaskPanel).mockReturnValue({
       ...baseHookValue,
+      addMenuAnchorEl: document.createElement("button"),
+      isSam2Available: false,
+    });
+
+    render(<MaskPanel />);
+
+    const sam2MenuItem = screen.getByText("Sam2");
+    expect(sam2MenuItem).not.toHaveAttribute("aria-disabled", "true");
+
+    fireEvent.click(sam2MenuItem);
+    expect(mockRequestDraw).toHaveBeenCalledWith("sam2");
+  });
+
+  it("shows the SAM2 download overlay only for an unavailable SAM2 mask", () => {
+    const sam2Mask = createMaskClip("clip_1", "mask_sam2", "sam2");
+    vi.mocked(useMaskPanel).mockReturnValue({
+      ...baseHookValue,
+      masks: [sam2Mask],
+      selectedMaskId: "mask_sam2",
+      selectedMask: sam2Mask,
       isSam2Available: false,
     });
 
     render(<MaskPanel />);
 
     expect(screen.getByTestId("sam2-download-overlay")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("sam2-mask-panel"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not show the SAM2 download overlay for non-SAM2 masks", () => {
+    vi.mocked(useMaskPanel).mockReturnValue({
+      ...baseHookValue,
+      masks: [createMaskClip("clip_1", "mask_1", "triangle")],
+      selectedMaskId: "mask_1",
+      selectedMask: createMaskClip("clip_1", "mask_1", "triangle"),
+      isSam2Available: false,
+    });
+
+    render(<MaskPanel />);
+
+    expect(
+      screen.queryByTestId("sam2-download-overlay"),
+    ).not.toBeInTheDocument();
   });
 
   it("opens shape menu and dispatches selected shape", () => {

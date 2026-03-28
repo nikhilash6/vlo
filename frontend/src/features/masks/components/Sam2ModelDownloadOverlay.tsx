@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Box,
   Button,
+  CircularProgress,
   LinearProgress,
   Typography,
 } from "@mui/material";
@@ -39,6 +40,21 @@ const cardSx = {
   bgcolor: "#2a2d33",
 };
 
+const FALLBACK_SAM2_MODELS: DownloadableModel[] = [
+  {
+    key: "sam2.1_hiera_small",
+    label: "SAM2.1 Small",
+    description: "Faster, ~185 MB",
+    installed: false,
+  },
+  {
+    key: "sam2.1_hiera_large",
+    label: "SAM2.1 Large",
+    description: "Higher quality, ~900 MB",
+    installed: false,
+  },
+];
+
 export function Sam2ModelDownloadOverlay({ onModelsInstalled }: Sam2ModelDownloadOverlayProps) {
   const [models, setModels] = useState<DownloadableModel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,14 +66,16 @@ export function Sam2ModelDownloadOverlay({ onModelsInstalled }: Sam2ModelDownloa
     setLoading(true);
     try {
       const response = await getAvailableModels();
-      setModels(response.sam2);
+      const nextModels =
+        response.sam2.length > 0 ? response.sam2 : FALLBACK_SAM2_MODELS;
+      setModels(nextModels);
 
       const hasInstalledModel = response.sam2.some((m) => m.installed);
       if (hasInstalledModel) {
         onModelsInstalled();
       }
     } catch {
-      // Silently fail — overlay still shows generic message
+      setModels(FALLBACK_SAM2_MODELS);
     } finally {
       setLoading(false);
     }
@@ -121,8 +139,6 @@ export function Sam2ModelDownloadOverlay({ onModelsInstalled }: Sam2ModelDownloa
     }
   }, [activeDownload]);
 
-  if (loading) return null;
-
   return (
     <Box
       sx={{
@@ -149,82 +165,116 @@ export function Sam2ModelDownloadOverlay({ onModelsInstalled }: Sam2ModelDownloa
         </Typography>
       )}
 
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, width: "100%" }}>
-        {models.map((model) => {
-          const isDownloading = activeDownload?.modelKey === model.key;
-          const progress = isDownloading ? activeDownload.progress : null;
-          const isComplete = progress?.status === "complete";
-          const pct =
-            progress?.progress.overallBytesTotal && progress.progress.overallBytesTotal > 0
-              ? Math.round((progress.progress.overallBytes / progress.progress.overallBytesTotal) * 100)
-              : null;
+      {loading ? (
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 1,
+            width: "100%",
+            py: 1,
+          }}
+        >
+          <CircularProgress size={20} />
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
+            Loading available SAM2 models...
+          </Typography>
+        </Box>
+      ) : (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, width: "100%" }}>
+          {models.map((model) => {
+            const isDownloading = activeDownload?.modelKey === model.key;
+            const progress = isDownloading ? activeDownload.progress : null;
+            const isComplete = progress?.status === "complete";
+            const pct =
+              progress?.progress.overallBytesTotal &&
+              progress.progress.overallBytesTotal > 0
+                ? Math.round(
+                    (progress.progress.overallBytes / progress.progress.overallBytesTotal) * 100,
+                  )
+                : null;
 
-          return (
-            <Box key={model.key} sx={cardSx}>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.5 }}>
-                <Typography variant="caption" sx={{ fontWeight: 600, color: "text.primary" }}>
-                  {model.label}
-                </Typography>
-                {model.installed && (
-                  <Check sx={{ fontSize: 16, color: "success.main" }} />
-                )}
-              </Box>
-              <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 1 }}>
-                {model.description}
-              </Typography>
-
-              {model.installed ? (
-                <Typography variant="caption" sx={{ color: "success.main" }}>
-                  Installed
-                </Typography>
-              ) : isDownloading ? (
-                <Box>
-                  <LinearProgress
-                    variant={pct !== null ? "determinate" : "indeterminate"}
-                    value={pct ?? undefined}
-                    sx={{ mb: 0.5, borderRadius: 1 }}
-                  />
-                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                      {progress?.progress.overallBytes != null
-                        ? formatBytes(progress.progress.overallBytes)
-                        : "Starting..."}
-                      {progress?.progress.overallBytesTotal != null
-                        ? ` / ${formatBytes(progress.progress.overallBytesTotal)}`
-                        : ""}
-                      {pct !== null ? ` (${pct}%)` : ""}
-                    </Typography>
-                    <Button
-                      size="small"
-                      color="error"
-                      onClick={() => void handleCancel()}
-                      sx={{ minWidth: 0, p: 0.5, textTransform: "none" }}
-                    >
-                      <Close sx={{ fontSize: 14 }} />
-                    </Button>
-                  </Box>
-                  {isComplete && (
-                    <Typography variant="caption" sx={{ color: "success.main", mt: 0.5 }}>
-                      Download complete
-                    </Typography>
+            return (
+              <Box key={model.key} sx={cardSx}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    mb: 0.5,
+                  }}
+                >
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: "text.primary" }}>
+                    {model.label}
+                  </Typography>
+                  {model.installed && (
+                    <Check sx={{ fontSize: 16, color: "success.main" }} />
                   )}
                 </Box>
-              ) : (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<CloudDownload sx={{ fontSize: 14 }} />}
-                  onClick={() => void handleDownload(model.key)}
-                  disabled={activeDownload !== null}
-                  sx={{ textTransform: "none", width: "100%" }}
-                >
-                  Download
-                </Button>
-              )}
-            </Box>
-          );
-        })}
-      </Box>
+                <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 1 }}>
+                  {model.description}
+                </Typography>
+
+                {model.installed ? (
+                  <Typography variant="caption" sx={{ color: "success.main" }}>
+                    Installed
+                  </Typography>
+                ) : isDownloading ? (
+                  <Box>
+                    <LinearProgress
+                      variant={pct !== null ? "determinate" : "indeterminate"}
+                      value={pct ?? undefined}
+                      sx={{ mb: 0.5, borderRadius: 1 }}
+                    />
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                        {progress?.progress.overallBytes != null
+                          ? formatBytes(progress.progress.overallBytes)
+                          : "Starting..."}
+                        {progress?.progress.overallBytesTotal != null
+                          ? ` / ${formatBytes(progress.progress.overallBytesTotal)}`
+                          : ""}
+                        {pct !== null ? ` (${pct}%)` : ""}
+                      </Typography>
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={() => void handleCancel()}
+                        sx={{ minWidth: 0, p: 0.5, textTransform: "none" }}
+                      >
+                        <Close sx={{ fontSize: 14 }} />
+                      </Button>
+                    </Box>
+                    {isComplete && (
+                      <Typography variant="caption" sx={{ color: "success.main", mt: 0.5 }}>
+                        Download complete
+                      </Typography>
+                    )}
+                  </Box>
+                ) : (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<CloudDownload sx={{ fontSize: 14 }} />}
+                    onClick={() => void handleDownload(model.key)}
+                    disabled={activeDownload !== null}
+                    sx={{ textTransform: "none", width: "100%" }}
+                  >
+                    Download
+                  </Button>
+                )}
+              </Box>
+            );
+          })}
+        </Box>
+      )}
     </Box>
   );
 }

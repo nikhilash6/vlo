@@ -1,4 +1,4 @@
-import { render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Sam2ModelDownloadOverlay } from "../Sam2ModelDownloadOverlay";
 import { getAvailableModels, subscribeToProgress } from "../../../../services/downloadApi";
@@ -43,6 +43,37 @@ describe("Sam2ModelDownloadOverlay", () => {
     });
   });
 
+  it("shows a download action for both SAM2 registry models when nothing is installed", async () => {
+    vi.mocked(getAvailableModels).mockResolvedValue({
+      sam2: [
+        {
+          key: "sam2.1_hiera_small",
+          label: "SAM2.1 Small",
+          description: "Faster, ~185 MB",
+          installed: false,
+        },
+        {
+          key: "sam2.1_hiera_large",
+          label: "SAM2.1 Large",
+          description: "Higher quality, ~900 MB",
+          installed: false,
+        },
+      ],
+    });
+
+    render(<Sam2ModelDownloadOverlay onModelsInstalled={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(getAvailableModels).toHaveBeenCalledTimes(1);
+    });
+
+    expect(screen.getByText("SAM2.1 Small")).toBeInTheDocument();
+    expect(screen.getByText("Faster, ~185 MB")).toBeInTheDocument();
+    expect(screen.getByText("SAM2.1 Large")).toBeInTheDocument();
+    expect(screen.getByText("Higher quality, ~900 MB")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /download/i })).toHaveLength(2);
+  });
+
   it("does not notify the parent when no SAM2 models are installed", async () => {
     vi.mocked(getAvailableModels)
       .mockResolvedValue({
@@ -69,5 +100,23 @@ describe("Sam2ModelDownloadOverlay", () => {
       expect(getAvailableModels).toHaveBeenCalledTimes(1);
     });
     expect(onModelsInstalled).not.toHaveBeenCalled();
+  });
+
+  it("falls back to built-in SAM2 choices when the model request fails", async () => {
+    vi.mocked(getAvailableModels).mockRejectedValue(
+      new Error("Failed to fetch available models (500)"),
+    );
+
+    render(<Sam2ModelDownloadOverlay onModelsInstalled={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("SAM2.1 Small")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("SAM2.1 Large")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /download/i })).toHaveLength(2);
+    expect(
+      screen.queryByText(/showing built-in download options/i),
+    ).not.toBeInTheDocument();
   });
 });
