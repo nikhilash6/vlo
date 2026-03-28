@@ -148,6 +148,30 @@ describe("GenerationPanel workflow rule hints", () => {
     ).toBeInTheDocument();
   }, 10000);
 
+  it("hides stale workflow inputs while a new workflow is loading", () => {
+    (useGenerationPanel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeHookState({
+        isWorkflowLoading: true,
+        workflowInputs: [
+          {
+            nodeId: "6",
+            classType: "LoadImage",
+            inputType: "image",
+            param: "image",
+            label: "Reference Image",
+            currentValue: null,
+            origin: "rule",
+          },
+        ],
+      }),
+    );
+
+    render(<GenerationPanel />);
+
+    expect(screen.getByText("Loading inputs...")).toBeInTheDocument();
+    expect(screen.queryByText("Reference Image")).not.toBeInTheDocument();
+  });
+
   it("shows mask processing mode and hides dilation slider in full mode", () => {
     useGenerationStore.setState({
       derivedMaskMappings: [

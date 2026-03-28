@@ -8,7 +8,6 @@ import {
 import { injectWorkflowAndRead } from "../services/workflowSyncController";
 import { mergeRuleWarnings } from "../services/warnings";
 import { buildMediaInputActions } from "./mediaInputActions";
-import { pruneMediaInputs } from "./mediaInputState";
 import {
   extractReplayPanelState,
   parseReplayWorkflowInputs,
@@ -38,6 +37,7 @@ import {
   upsertTempWorkflowOption,
   upsertWorkflowOption,
 } from "./workflowCatalog";
+import { carryOverMediaInputs } from "../utils/workflowInputCarryover";
 interface WorkflowStoreStateOptions {
   getNextWorkflowLoadRequestId: () => number;
   isCurrentWorkflowLoadRequestId: (requestId: number) => boolean;
@@ -172,7 +172,11 @@ export function buildWorkflowStoreState(
         derivedMaskMappings: presented.derivedMaskMappings,
         workflowRuleWarnings,
         workflowLoadError: null,
-        mediaInputs: pruneMediaInputs(currentState.mediaInputs, presented.inputs),
+        mediaInputs: carryOverMediaInputs(
+          currentState.workflowInputs,
+          currentState.mediaInputs,
+          presented.inputs,
+        ),
         isWorkflowLoading: false,
         workflowLoadState: "ready",
         isWorkflowReady: true,
@@ -217,7 +221,11 @@ export function buildWorkflowStoreState(
           derivedMaskMappings: presented.derivedMaskMappings,
           workflowRuleWarnings,
           workflowLoadError: null,
-          mediaInputs: pruneMediaInputs(currentState.mediaInputs, presented.inputs),
+          mediaInputs: carryOverMediaInputs(
+            currentState.workflowInputs,
+            currentState.mediaInputs,
+            presented.inputs,
+          ),
           selectedWorkflowId: persistedWorkflowId,
           availableWorkflows: nextAvailable,
           tempWorkflow: null,
@@ -250,7 +258,11 @@ export function buildWorkflowStoreState(
         derivedMaskMappings: presented.derivedMaskMappings,
         workflowRuleWarnings,
         workflowLoadError: null,
-        mediaInputs: pruneMediaInputs(currentState.mediaInputs, presented.inputs),
+        mediaInputs: carryOverMediaInputs(
+          currentState.workflowInputs,
+          currentState.mediaInputs,
+          presented.inputs,
+        ),
         selectedWorkflowId: TEMP_WORKFLOW_ID,
         availableWorkflows: nextAvailable,
         tempWorkflow: nextTempWorkflow,
@@ -340,8 +352,12 @@ export function buildWorkflowStoreState(
         workflowLoadState: "loading",
         workflowLoadError: null,
         isWorkflowReady: false,
+        syncedWorkflow: null,
+        syncedGraphData: null,
         workflowWarning: null,
         workflowRuleWarnings: [],
+        hasInferredInputs: false,
+        derivedMaskMappings: [],
         pendingReplayPanelState: null,
       });
 
@@ -424,7 +440,11 @@ export function buildWorkflowStoreState(
             hasInferredInputs: presented.hasInferredInputs,
             derivedMaskMappings: presented.derivedMaskMappings,
             workflowRuleWarnings: mergedWarnings,
-            mediaInputs: pruneMediaInputs(state.mediaInputs, presented.inputs),
+            mediaInputs: carryOverMediaInputs(
+              state.workflowInputs,
+              state.mediaInputs,
+              presented.inputs,
+            ),
           }));
         } else {
           set({
@@ -511,8 +531,12 @@ export function buildWorkflowStoreState(
         workflowLoadState: "loading",
         workflowLoadError: null,
         isWorkflowReady: false,
+        syncedWorkflow: null,
+        syncedGraphData: null,
         workflowWarning: null,
         workflowRuleWarnings: [],
+        hasInferredInputs: false,
+        derivedMaskMappings: [],
         pendingReplayPanelState: null,
       });
 

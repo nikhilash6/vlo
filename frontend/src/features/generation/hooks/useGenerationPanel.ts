@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import type { SelectChangeEvent, ChipProps } from "@mui/material";
 import type { Asset } from "../../../types/Asset";
-import { assetMatchesType } from "../../../shared/utils/assetTypeDetection";
 import { useExtractStore } from "../../player/useExtractStore";
 import { usePlayerStore } from "../../player/usePlayerStore";
 import { playbackClock } from "../../player/services/PlaybackClock";
@@ -17,6 +16,7 @@ import { useGenerationStore } from "../useGenerationStore";
 import { useProjectStore } from "../../project";
 import type {
   WorkflowSelectionConfig,
+  WorkflowInput,
   WorkflowWidgetInput,
 } from "../types";
 import type { SlotValue } from "../utils/pipeline";
@@ -45,6 +45,8 @@ import {
   hasProvidedMediaInputValue,
   resolveAssetFileForGeneration,
 } from "../utils/mediaInputAssets";
+import { carryOverTextValues } from "../utils/workflowInputCarryover";
+import { assetMatchesType } from "../../../shared/utils/assetTypeDetection";
 
 function applySelectionConfigDefaults(
   selection: ReturnType<typeof createTimelineSelection>,
@@ -112,6 +114,7 @@ export function useGenerationPanel() {
 
   // Slot values keyed by workflow input ID
   const [textValues, setTextValues] = useState<Record<string, string>>({});
+  const previousTextWorkflowInputsRef = useRef<WorkflowInput[]>([]);
 
   // Widget state
   const [widgetValues, setWidgetValues] = useState<
@@ -231,31 +234,24 @@ export function useGenerationPanel() {
 
   useEffect(() => {
     setTextValues((prev) => {
-      const next: Record<string, string> = {};
-      let changed = false;
-      for (const input of workflowInputs) {
-        if (input.inputType !== "text") continue;
-        const inputId = getWorkflowInputId(input);
-        const existing = getWorkflowInputValue(prev, input, workflowInputById);
-        if (typeof existing === "string") {
-          next[inputId] = existing;
-          continue;
-        }
-        const initialValue =
-          typeof input.currentValue === "string" ? input.currentValue : "";
-        next[inputId] = initialValue;
+      if (workflowInputs.length === 0 && isWorkflowLoading) {
+        return prev;
       }
 
-      const prevKeys = Object.keys(prev);
-      const nextKeys = Object.keys(next);
-      if (prevKeys.length !== nextKeys.length) {
-        changed = true;
-      } else {
-        changed = prevKeys.some((key) => prev[key] !== next[key]);
-      }
+      const next = carryOverTextValues(
+        previousTextWorkflowInputsRef.current,
+        prev,
+        workflowInputs,
+      );
+      const changed =
+        Object.keys(prev).length !== Object.keys(next).length ||
+        Object.entries(next).some(([key, value]) => prev[key] !== value);
       return changed ? next : prev;
     });
-  }, [workflowInputById, workflowInputs]);
+    if (workflowInputs.length > 0) {
+      previousTextWorkflowInputsRef.current = workflowInputs;
+    }
+  }, [isWorkflowLoading, workflowInputs]);
 
   // Initialize widget values and randomize toggles when widget inputs change
   useEffect(() => {
@@ -426,7 +422,10 @@ export function useGenerationPanel() {
         if (!value) continue;
 
         if (input.inputType === "image") {
-          if (value.kind === "asset" && assetMatchesType(value.asset, "image")) {
+          if (value.kind === "asset") {
+            if (!assetMatchesType(value.asset, "image")) {
+              continue;
+            }
             const file = await resolveAssetFileForGeneration(value.asset);
             slotValues[inputId] = {
               type: "image",
@@ -441,7 +440,10 @@ export function useGenerationPanel() {
           continue;
         }
 
-        if (value.kind === "asset" && assetMatchesType(value.asset, "video")) {
+        if (value.kind === "asset") {
+          if (!assetMatchesType(value.asset, "video")) {
+            continue;
+          }
           const file = await resolveAssetFileForGeneration(value.asset);
           slotValues[inputId] = {
             type: "video",

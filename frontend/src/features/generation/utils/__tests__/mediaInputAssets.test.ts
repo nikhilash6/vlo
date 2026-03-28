@@ -51,6 +51,22 @@ describe("mediaInputAssets", () => {
     ).toBe(true);
   });
 
+  it("does not treat ambiguous asset metadata as a valid filled input", () => {
+    expect(
+      hasProvidedMediaInputValue("image", {
+        kind: "asset",
+        asset: {
+          id: "asset-ambiguous",
+          hash: "hash-ambiguous",
+          name: "source",
+          type: "video",
+          src: "blob:runtime-source",
+          createdAt: Date.now(),
+        },
+      }),
+    ).toBe(false);
+  });
+
   it("hydrates generation asset files from the asset store before falling back to fetch", async () => {
     const hydratedFile = new File(["video"], "hydrated.mp4", {
       type: "video/mp4",

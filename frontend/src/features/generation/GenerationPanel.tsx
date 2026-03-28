@@ -783,25 +783,27 @@ export function GenerationPanel() {
         </Box>
       )}
 
-      <GenerationInputs
-        inputs={workflowInputs}
-        textValues={textValues}
-        onTextValueCommit={handleTextValueCommit}
-        mediaInputs={mediaInputs}
-        onInputDrop={handleInputDrop}
-        onExternalInputDrop={handleExternalInputDrop}
-        onInputClear={handleInputClear}
-        onClickSelect={handleClickSelect}
-        widgetInputs={widgetInputs}
-        widgetValues={widgetValues}
-        randomizeToggles={randomizeToggles}
-        onWidgetChange={handleWidgetChange}
-        onToggleRandomize={handleToggleRandomize}
-        showExactAspectRatioControl={showResolutionSelector}
-        exactAspectRatio={exactAspectRatio}
-        onExactAspectRatioChange={setExactAspectRatio}
-        exactAspectRatioTooltip={EXACT_ASPECT_RATIO_TOOLTIP}
-      />
+      {!isWorkflowLoading && !workflowLoadError ? (
+        <GenerationInputs
+          inputs={workflowInputs}
+          textValues={textValues}
+          onTextValueCommit={handleTextValueCommit}
+          mediaInputs={mediaInputs}
+          onInputDrop={handleInputDrop}
+          onExternalInputDrop={handleExternalInputDrop}
+          onInputClear={handleInputClear}
+          onClickSelect={handleClickSelect}
+          widgetInputs={widgetInputs}
+          widgetValues={widgetValues}
+          randomizeToggles={randomizeToggles}
+          onWidgetChange={handleWidgetChange}
+          onToggleRandomize={handleToggleRandomize}
+          showExactAspectRatioControl={showResolutionSelector}
+          exactAspectRatio={exactAspectRatio}
+          onExactAspectRatioChange={setExactAspectRatio}
+          exactAspectRatioTooltip={EXACT_ASPECT_RATIO_TOOLTIP}
+        />
+      ) : null}
 
       {/* Mask processing */}
       {hasMaskMappings && (

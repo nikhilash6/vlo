@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TEMP_WORKFLOW_ID, useGenerationStore } from "../useGenerationStore";
 import type { WorkflowInput } from "../types";
 import * as comfyApi from "../services/comfyuiApi";
+import * as workflowSyncController from "../services/workflowSyncController";
 import { createDefaultWorkflowRules } from "../services/workflowRules";
 
 function makeInputs(): WorkflowInput[] {
@@ -196,6 +197,37 @@ describe("useGenerationStore workflow editor sync", () => {
     });
   });
 
+  it("does not leave the previous workflow marked ready when a new sync fails", async () => {
+    vi.spyOn(comfyApi, "getWorkflowContent").mockResolvedValue({
+      source: "backend",
+    });
+    vi.spyOn(comfyApi, "getWorkflowRules").mockResolvedValue({
+      workflow_id: "wf.json",
+      rules: createDefaultWorkflowRules(),
+      warnings: [],
+    });
+    vi.spyOn(workflowSyncController, "injectWorkflowAndRead").mockResolvedValue({
+      ok: false,
+      deferred: false,
+      workflowResult: null,
+      reason: "sync failed",
+    });
+
+    useGenerationStore.setState({
+      syncedWorkflow: { old: true },
+      syncedGraphData: { old: true },
+      workflowInputs: makeInputs(),
+      editorRef: {} as HTMLIFrameElement,
+    });
+
+    await useGenerationStore.getState().loadWorkflow("wf.json");
+
+    const state = useGenerationStore.getState();
+    expect(state.syncedWorkflow).toBeNull();
+    expect(state.isWorkflowReady).toBe(false);
+    expect(state.workflowLoadState).toBe("error");
+  });
+
   it("refreshes the selector from backend workflows only", async () => {
     vi.spyOn(comfyApi, "listWorkflows").mockResolvedValue([
       { id: "wf.json", name: "Workflow" },
@@ -259,5 +291,66 @@ describe("useGenerationStore workflow editor sync", () => {
       "3",
       "4",
     ]);
+  });
+
+  it("carries a single media input across a workflow switch after sync", () => {
+    useGenerationStore.setState({
+      workflowInputs: [
+        {
+          nodeId: "10",
+          classType: "LoadImage",
+          inputType: "image",
+          param: "image",
+          label: "Image",
+          currentValue: null,
+          origin: "rule",
+        },
+      ],
+      mediaInputs: {
+        "10:image": {
+          kind: "asset",
+          asset: {
+            id: "asset-1",
+            hash: "hash-1",
+            name: "frame.png",
+            type: "video",
+            src: "assets/frame.png",
+            createdAt: Date.now(),
+          },
+        },
+      },
+      activeRulesWarnings: [],
+      activeWorkflowRules: null,
+    });
+
+    useGenerationStore.getState().syncWorkflow(
+      { "20": { class_type: "LoadImage", inputs: { image: "frame.png" } } },
+      { nodes: [{ id: 20 }] },
+      [
+        {
+          nodeId: "20",
+          classType: "LoadImage",
+          inputType: "image",
+          param: "image",
+          label: "Reference Image",
+          currentValue: null,
+          origin: "rule",
+        },
+      ],
+    );
+
+    expect(useGenerationStore.getState().mediaInputs).toEqual({
+      "20:image": {
+        kind: "asset",
+        asset: {
+          id: "asset-1",
+          hash: "hash-1",
+          name: "frame.png",
+          type: "video",
+          src: "assets/frame.png",
+          createdAt: expect.any(Number),
+        },
+      },
+    });
   });
 });
