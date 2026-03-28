@@ -29,7 +29,11 @@ import type {
   GenerationWorkflowState,
   TempWorkflow,
 } from "./types";
-import { EMPTY_WORKFLOW_RULES, applyPresentationRules } from "./workflowState";
+import {
+  EMPTY_WORKFLOW_RULES,
+  applyPresentationRules,
+  areWorkflowRulesCompatibleWithWorkflow,
+} from "./workflowState";
 import {
   formatWorkflowName,
   removeWorkflowOption,
@@ -186,20 +190,32 @@ export function buildWorkflowStoreState(
     registerWorkflowFromEditor: async (workflow, graphData, inputs, filename) => {
       const state = get();
       const { availableWorkflows, selectedWorkflowId } = state;
+      const hasCompatibleRules = areWorkflowRulesCompatibleWithWorkflow(
+        workflow,
+        state.activeWorkflowRules,
+      );
+      const resolvedRules = hasCompatibleRules
+        ? state.activeWorkflowRules
+        : EMPTY_WORKFLOW_RULES;
+      const resolvedRulesSourceId = hasCompatibleRules
+        ? state.rulesWorkflowSourceId
+        : null;
+      const resolvedRulesWarnings = hasCompatibleRules
+        ? state.activeRulesWarnings
+        : [];
       const presented = applyPresentationRules(
         inputs,
-        state.activeWorkflowRules,
+        resolvedRules,
         workflow,
       );
       const workflowRuleWarnings = mergeRuleWarnings(
-        state.activeRulesWarnings,
+        resolvedRulesWarnings,
         presented.presentationWarnings,
       );
 
-      const persistedWorkflowId = resolveWorkflowPersistenceId(
-        selectedWorkflowId,
-        filename,
-      );
+      const persistedWorkflowId = hasCompatibleRules
+        ? resolveWorkflowPersistenceId(selectedWorkflowId, filename)
+        : null;
 
       if (persistedWorkflowId) {
         const existingWorkflow = availableWorkflows.find(
@@ -221,6 +237,9 @@ export function buildWorkflowStoreState(
           derivedMaskMappings: presented.derivedMaskMappings,
           workflowRuleWarnings,
           workflowLoadError: null,
+          activeWorkflowRules: resolvedRules,
+          rulesWorkflowSourceId: resolvedRulesSourceId,
+          activeRulesWarnings: resolvedRulesWarnings,
           mediaInputs: carryOverMediaInputs(
             currentState.workflowInputs,
             currentState.mediaInputs,
@@ -241,9 +260,9 @@ export function buildWorkflowStoreState(
         graphData,
         inputs,
         name: state.tempWorkflow?.name,
-        rules: state.activeWorkflowRules,
-        rulesSourceId: state.rulesWorkflowSourceId,
-        rulesWarnings: state.activeRulesWarnings,
+        rules: resolvedRules,
+        rulesSourceId: resolvedRulesSourceId,
+        rulesWarnings: resolvedRulesWarnings,
       };
       const nextAvailable = upsertTempWorkflowOption(
         availableWorkflows,
@@ -258,6 +277,9 @@ export function buildWorkflowStoreState(
         derivedMaskMappings: presented.derivedMaskMappings,
         workflowRuleWarnings,
         workflowLoadError: null,
+        activeWorkflowRules: resolvedRules,
+        rulesWorkflowSourceId: resolvedRulesSourceId,
+        activeRulesWarnings: resolvedRulesWarnings,
         mediaInputs: carryOverMediaInputs(
           currentState.workflowInputs,
           currentState.mediaInputs,

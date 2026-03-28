@@ -179,6 +179,51 @@ describe("useGenerationStore workflow editor sync", () => {
     expect(state.syncedGraphData).toEqual({ nodes: [{ id: 4 }] });
   });
 
+  it("drops incompatible persisted rules when a different workflow is loaded into the editor tab", async () => {
+    useGenerationStore.setState({
+      selectedWorkflowId: "video_ltx2_3_i2v.json",
+      availableWorkflows: [
+        { id: "video_ltx2_3_i2v.json", name: "LTX I2V" },
+      ],
+      activeRulesWarnings: [],
+      activeWorkflowRules: createDefaultWorkflowRules({
+        nodes: {
+          "267": {
+            widgets: {
+              cfg: {
+                label: "CFG",
+              },
+            },
+          },
+        },
+      }),
+      rulesWorkflowSourceId: "video_ltx2_3_i2v.json",
+    });
+
+    await useGenerationStore.getState().registerWorkflowFromEditor(
+      { "2004": { class_type: "LoadImage", inputs: { image: "input.png" } } },
+      { nodes: [{ id: 2004, type: "LoadImage" }] },
+      [
+        {
+          nodeId: "2004",
+          classType: "LoadImage",
+          inputType: "image",
+          param: "image",
+          label: "Image",
+          currentValue: null,
+          origin: "inferred",
+        },
+      ],
+      "video_ltx2_3_i2v.json",
+    );
+
+    const state = useGenerationStore.getState();
+    expect(state.selectedWorkflowId).toBe(TEMP_WORKFLOW_ID);
+    expect(state.rulesWorkflowSourceId).toBeNull();
+    expect(state.activeWorkflowRules?.nodes).toEqual({});
+    expect(state.tempWorkflow?.rulesSourceId).toBeNull();
+  });
+
   it("loads workflow content from backend assets", async () => {
     vi.spyOn(comfyApi, "getWorkflowContent").mockResolvedValue({
       source: "backend",
