@@ -140,6 +140,9 @@ function AssetBrowserComponent() {
     (state) => state.config.assetBrowserDisplay,
   );
   const revealRequest = useAssetBrowserRevealStore((state) => state.revealRequest);
+  const clearRevealRequest = useAssetBrowserRevealStore(
+    (state) => state.clearRevealRequest,
+  );
   const selectedAssetIds = useAssetBrowserSelectionStore(
     (state) => state.selectedAssetIds,
   );
@@ -574,7 +577,12 @@ function AssetBrowserComponent() {
     const assetToReveal = assets.find(
       (asset) => asset.id === revealRequest.assetId,
     );
-    if (!assetToReveal || !isAssetVisibleInBrowser(assetToReveal)) {
+    if (!assetToReveal) {
+      return;
+    }
+
+    if (!isAssetVisibleInBrowser(assetToReveal)) {
+      clearRevealRequest();
       return;
     }
 
@@ -583,7 +591,8 @@ function AssetBrowserComponent() {
     setFamilyScope(resolveFamilyScopeForAsset(assetToReveal, assets, families));
     selectAsset(assetToReveal.id);
     setPendingScrollAssetId(assetToReveal.id);
-  }, [assets, families, revealRequest, selectAsset]);
+    clearRevealRequest();
+  }, [assets, clearRevealRequest, families, revealRequest, selectAsset]);
 
   React.useEffect(() => {
     if (!pendingScrollAssetId || !visibleAssetIds.has(pendingScrollAssetId)) {

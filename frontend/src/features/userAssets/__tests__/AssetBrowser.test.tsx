@@ -715,4 +715,50 @@ describe("AssetBrowser Component", () => {
       screen.getByRole("button", { name: "Show favourite assets" }),
     ).toHaveAttribute("aria-pressed", "false");
   });
+
+  it("does not reopen a previously revealed family when unrelated assets are ingested later", async () => {
+    mockStore({ assets: mockAssets, families: mockFamilies });
+
+    const { rerender } = render(<AssetBrowser />);
+
+    act(() => {
+      revealAssetInBrowser("1b");
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("asset-browser-family-scope")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to all assets" }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("asset-browser-family-scope"),
+      ).not.toBeInTheDocument();
+    });
+
+    mockStore({
+      assets: [
+        ...mockAssets,
+        {
+          id: "new-video",
+          type: "video",
+          name: "new-upload.mp4",
+          src: "new-upload.mp4",
+          hash: "new-video",
+          createdAt: 3,
+        },
+      ],
+      families: mockFamilies,
+    });
+
+    rerender(<AssetBrowser />);
+
+    expect(
+      screen.queryByTestId("asset-browser-family-scope"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("vacation.mp4")).toBeInTheDocument();
+    expect(screen.getByText("solo.mp4")).toBeInTheDocument();
+    expect(screen.queryByText("b-roll.mp4")).not.toBeInTheDocument();
+  });
 });

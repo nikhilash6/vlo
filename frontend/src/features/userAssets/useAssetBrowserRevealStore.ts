@@ -8,6 +8,7 @@ interface AssetBrowserRevealRequest {
 interface AssetBrowserRevealState {
   revealRequest: AssetBrowserRevealRequest | null;
   revealAssetInBrowser: (assetId: string) => void;
+  clearRevealRequest: () => void;
 }
 
 let nextRevealRequestId = 1;
@@ -24,6 +25,9 @@ export const useAssetBrowserRevealStore = create<AssetBrowserRevealState>(
       });
 
       nextRevealRequestId += 1;
+    },
+    clearRevealRequest: () => {
+      set({ revealRequest: null });
     },
   }),
 );
