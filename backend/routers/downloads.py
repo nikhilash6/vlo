@@ -14,7 +14,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from services import download_service
-from services.model_registry import get_available_sam2_models, get_sam2_download_specs
+from services.model_registry import (
+    get_available_sam2_models,
+    get_available_workflow_models,
+    get_sam2_download_specs,
+    get_workflow_download_specs,
+    is_comfyui_model_downloads_enabled,
+)
 
 router = APIRouter(prefix="/downloads", tags=["downloads"])
 
@@ -22,12 +28,24 @@ router = APIRouter(prefix="/downloads", tags=["downloads"])
 class StartDownloadRequest(BaseModel):
     modelType: str
     modelKey: str
+    workflowId: str | None = None
 
 
 @router.get("/models")
-def list_available_models():
+def list_available_models(workflowId: str | None = None):
+    workflow_models: list[dict] = []
+    if workflowId and is_comfyui_model_downloads_enabled():
+        try:
+            workflow_models = get_available_workflow_models(workflowId)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
     return {
         "sam2": get_available_sam2_models(),
+        "comfyui": {
+            "modelDownloadsEnabled": is_comfyui_model_downloads_enabled(),
+            "workflowModels": workflow_models,
+        },
     }
 
 
@@ -41,6 +59,24 @@ async def start_download(request: StartDownloadRequest):
 
         label = request.modelKey
         for model in get_available_sam2_models():
+            if model["key"] == request.modelKey:
+                label = model["label"]
+                break
+    elif request.modelType == "comfyui-workflow":
+        if not request.workflowId:
+            raise HTTPException(
+                status_code=400,
+                detail="workflowId is required for ComfyUI workflow downloads",
+            )
+
+        try:
+            specs = get_workflow_download_specs(request.workflowId, request.modelKey)
+            workflow_models = get_available_workflow_models(request.workflowId)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        label = request.modelKey
+        for model in workflow_models:
             if model["key"] == request.modelKey:
                 label = model["label"]
                 break

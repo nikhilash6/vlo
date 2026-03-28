@@ -15,6 +15,7 @@ export interface RuntimeStatus {
     status: ComfyUiRuntimeStatus;
     url: string;
     error: string | null;
+    modelDownloadsEnabled?: boolean;
   };
   sam2: {
     status: Sam2RuntimeStatus;

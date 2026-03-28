@@ -4,6 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../hooks/useGenerationPanel", () => ({
   useGenerationPanel: vi.fn(),
 }));
+vi.mock("../WorkflowDependencyResolver", () => ({
+  WorkflowDependencyResolver: () => (
+    <div data-testid="workflow-dependency-resolver" />
+  ),
+}));
 
 import { useGenerationPanel } from "../../hooks/useGenerationPanel";
 import { GenerationPanel } from "../../GenerationPanel";
@@ -52,6 +57,7 @@ function makeHookState(overrides: Record<string, unknown> = {}) {
     connectionChipLabel: "Connected",
     connectionChipColor: "success",
     connectionSummary: null,
+    comfyuiModelDownloadsEnabled: false,
     handleRetryWorkflow: vi.fn(),
     handleGenerate: vi.fn(),
     handleInterruptCurrent: vi.fn(),
@@ -170,6 +176,46 @@ describe("GenerationPanel workflow rule hints", () => {
 
     expect(screen.getByText("Loading inputs...")).toBeInTheDocument();
     expect(screen.queryByText("Reference Image")).not.toBeInTheDocument();
+  });
+
+  it("shows the inline workflow resolver when local ComfyUI downloads are enabled", () => {
+    (useGenerationPanel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeHookState({
+        workflowWarning: {
+          missingNodeTypes: [],
+          missingModels: ["model.safetensors"],
+        },
+        comfyuiModelDownloadsEnabled: true,
+      }),
+    );
+
+    render(<GenerationPanel />);
+
+    expect(
+      screen.getByTestId("workflow-dependency-resolver"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Workflow warnings detected"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the warning dialog when local ComfyUI downloads are disabled", () => {
+    (useGenerationPanel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeHookState({
+        workflowWarning: {
+          missingNodeTypes: ["CustomNode"],
+          missingModels: ["model.safetensors"],
+        },
+        comfyuiModelDownloadsEnabled: false,
+      }),
+    );
+
+    render(<GenerationPanel />);
+
+    expect(screen.getByText("Workflow warnings detected")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("workflow-dependency-resolver"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows mask processing mode and hides dilation slider in full mode", () => {

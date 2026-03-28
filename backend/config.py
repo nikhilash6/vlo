@@ -16,6 +16,10 @@ PROJECTS_ROOT.mkdir(exist_ok=True)
 
 # ComfyUI configuration
 COMFYUI_URL = os.environ.get("COMFYUI_URL", "http://127.0.0.1:8188")
+_comfyui_install_dir = os.environ.get("COMFYUI_INSTALL_DIR", "").strip()
+COMFYUI_INSTALL_DIR = (
+    Path(_comfyui_install_dir).expanduser() if _comfyui_install_dir else None
+)
 
 SAM2_DEVICE = os.environ.get("SAM2_DEVICE", "auto").strip() or "auto"
 

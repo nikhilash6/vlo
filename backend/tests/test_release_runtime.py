@@ -75,6 +75,7 @@ def test_app_status_reports_connected_comfyui_and_available_sam2(
             "status": "connected",
             "url": "http://127.0.0.1:8188",
             "error": None,
+            "modelDownloadsEnabled": main.COMFYUI_INSTALL_DIR is not None,
         },
         "sam2": {
             "status": "available",
@@ -103,6 +104,9 @@ def test_app_status_reports_disconnected_comfyui_and_unavailable_sam2(
     assert status["backend"]["status"] == "ok"
     assert status["comfyui"]["status"] == "disconnected"
     assert "ComfyUI offline" in (status["comfyui"]["error"] or "")
+    assert status["comfyui"]["modelDownloadsEnabled"] == (
+        main.COMFYUI_INSTALL_DIR is not None
+    )
     assert status["sam2"] == {
         "status": "unavailable",
         "error": "No SAM2 models discovered",

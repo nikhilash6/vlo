@@ -2,7 +2,12 @@ import httpx
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from config import PROJECTS_ROOT, CORS_ALLOW_ORIGINS, CORS_ALLOW_ORIGIN_REGEX
+from config import (
+    PROJECTS_ROOT,
+    COMFYUI_INSTALL_DIR,
+    CORS_ALLOW_ORIGINS,
+    CORS_ALLOW_ORIGIN_REGEX,
+)
 from services.legacy_core import project_service, asset_service
 from models import ProjectCreateRequest, ProjectResponse, AssetResponse, ProjectUpdateRequest
 from fastapi.responses import FileResponse
@@ -176,6 +181,7 @@ async def get_app_status():
             "status": comfyui_status,
             "url": comfyui_url,
             "error": comfyui_error,
+            "modelDownloadsEnabled": COMFYUI_INSTALL_DIR is not None,
         },
         "sam2": {
             "status": sam2_status,

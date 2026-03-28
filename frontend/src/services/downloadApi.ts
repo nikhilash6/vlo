@@ -68,10 +68,16 @@ export interface DownloadableModel {
   label: string;
   description: string;
   installed: boolean;
+  directory?: string;
+  filename?: string;
 }
 
 export interface AvailableModelsResponse {
   sam2: DownloadableModel[];
+  comfyui?: {
+    modelDownloadsEnabled: boolean;
+    workflowModels: DownloadableModel[];
+  };
 }
 
 export interface StartDownloadResponse {
@@ -95,22 +101,42 @@ export interface DownloadProgressEvent {
   error: string | null;
 }
 
-export async function getAvailableModels(): Promise<AvailableModelsResponse> {
-  const response = await fetch(`${DOWNLOADS_API}/models`);
+export async function getAvailableModels(options: {
+  workflowId?: string;
+} = {}): Promise<AvailableModelsResponse> {
+  const params = new URLSearchParams();
+  if (options.workflowId) {
+    params.set("workflowId", options.workflowId);
+  }
+
+  const url =
+    params.size > 0
+      ? `${DOWNLOADS_API}/models?${params.toString()}`
+      : `${DOWNLOADS_API}/models`;
+  const response = await fetch(url);
   return parseJsonResponse<AvailableModelsResponse>(
     response,
-    "Unable to load SAM2 model list",
+    options.workflowId
+      ? "Unable to load model download options"
+      : "Unable to load SAM2 model list",
   );
 }
 
 export async function startModelDownload(
   modelType: string,
   modelKey: string,
+  options: {
+    workflowId?: string;
+  } = {},
 ): Promise<StartDownloadResponse> {
   const response = await fetch(`${DOWNLOADS_API}/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ modelType, modelKey }),
+    body: JSON.stringify({
+      modelType,
+      modelKey,
+      workflowId: options.workflowId,
+    }),
   });
   return parseJsonResponse<StartDownloadResponse>(
     response,

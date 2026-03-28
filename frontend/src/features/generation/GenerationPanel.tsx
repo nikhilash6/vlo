@@ -54,6 +54,7 @@ import {
 import { getOutputMediaKindFromFilename } from "./constants/mediaKinds";
 import { getObjectInfo, saveWorkflowContent } from "./services/comfyuiApi";
 import { isAspectRatioWidget } from "./utils/aspectRatioWidgets";
+import { WorkflowDependencyResolver } from "./components/WorkflowDependencyResolver";
 
 const EXACT_ASPECT_RATIO_TOOLTIP =
   "If selected, this will make the output aspect ratio exactly match the input ratio, even if it doesn't match the project-supported aspect ratios. If unselected, it will crop the image to the best supported fit before dispatch.";
@@ -251,6 +252,7 @@ export function GenerationPanel() {
     connectionChipLabel,
     connectionChipColor,
     connectionSummary,
+    comfyuiModelDownloadsEnabled,
 
     // Handlers
     handleGenerate,
@@ -464,7 +466,10 @@ export function GenerationPanel() {
   const visibleMissingModels = missingModels.slice(0, 6);
   const hiddenNodeCount = Math.max(0, missingNodeTypes.length - 6);
   const hiddenModelCount = Math.max(0, missingModels.length - 6);
-  const showWorkflowWarningDialog = Boolean(workflowWarning) && !editorOpen;
+  const showWorkflowWarningDialog =
+    Boolean(workflowWarning) &&
+    !editorOpen &&
+    !comfyuiModelDownloadsEnabled;
   const displayPostprocessConfig = displayJob?.postprocessConfig ?? null;
   const replaceOutputsWithPostprocess =
     displayPostprocessConfig?.panel_preview === "replace_outputs";
@@ -637,6 +642,17 @@ export function GenerationPanel() {
           </Select>
         </FormControl>
       </Box>
+
+      {workflowWarning && comfyuiModelDownloadsEnabled ? (
+        <Box sx={{ px: 2, pb: 2 }}>
+          <WorkflowDependencyResolver
+            workflowId={selectedWorkflowId}
+            warning={workflowWarning}
+            onOpenEditor={() => setEditorOpen(true)}
+            onRefreshWarning={handleRetryWorkflow}
+          />
+        </Box>
+      ) : null}
 
       {/* Dynamic Workflow Inputs */}
       {showResolutionSelector && !isWorkflowLoading && (

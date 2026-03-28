@@ -978,6 +978,8 @@ export function useGenerationPanel() {
           ? "Release mode: frontend served by FastAPI."
           : "Development mode: frontend build not present on backend."
         : null);
+  const comfyuiModelDownloadsEnabled =
+    runtimeStatus?.comfyui.modelDownloadsEnabled === true;
 
   // Resolve imported assets that have a TimelineSelection (eligible for "send to timeline")
   const allAssets = useAssetStore((s) => s.assets);
@@ -1059,6 +1061,7 @@ export function useGenerationPanel() {
     connectionChipLabel,
     connectionChipColor,
     connectionSummary,
+    comfyuiModelDownloadsEnabled,
 
     // Send to timeline
     importedAssets,

@@ -70,3 +70,96 @@ def test_start_download_reuses_active_job_for_same_destinations(monkeypatch, tmp
 
     assert duplicate_job is first_job
     assert duplicate_job.job_id == first_job.job_id
+
+
+def test_list_available_models_includes_workflow_models(monkeypatch):
+    monkeypatch.setattr(
+        "routers.downloads.get_available_sam2_models",
+        lambda: [{"key": "sam2.1_hiera_small", "label": "SAM2.1 Small"}],
+    )
+    monkeypatch.setattr(
+        "routers.downloads.is_comfyui_model_downloads_enabled",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "routers.downloads.get_available_workflow_models",
+        lambda workflow_id: [
+            {
+                "key": "checkpoints:model.safetensors",
+                "label": "model.safetensors",
+                "description": "Save to ComfyUI/models/checkpoints",
+                "installed": False,
+                "directory": "checkpoints",
+                "filename": "model.safetensors",
+            }
+        ]
+        if workflow_id == "wf.json"
+        else [],
+    )
+
+    response = downloads.list_available_models("wf.json")
+
+    assert response == {
+        "sam2": [{"key": "sam2.1_hiera_small", "label": "SAM2.1 Small"}],
+        "comfyui": {
+            "modelDownloadsEnabled": True,
+            "workflowModels": [
+                {
+                    "key": "checkpoints:model.safetensors",
+                    "label": "model.safetensors",
+                    "description": "Save to ComfyUI/models/checkpoints",
+                    "installed": False,
+                    "directory": "checkpoints",
+                    "filename": "model.safetensors",
+                }
+            ],
+        },
+    }
+
+
+def test_start_download_route_supports_workflow_models(monkeypatch, tmp_path):
+    spec = DownloadFileSpec(
+        url="https://example.com/model.safetensors",
+        dest_path=str(tmp_path / "ComfyUI" / "models" / "checkpoints" / "model.safetensors"),
+        filename="model.safetensors",
+    )
+
+    monkeypatch.setattr(download_service, "_active_jobs", {})
+    monkeypatch.setattr(download_service, "_active_destinations", {})
+    monkeypatch.setattr(download_service, "_job_destinations", {})
+    monkeypatch.setattr(
+        "routers.downloads.get_workflow_download_specs",
+        lambda workflow_id, model_key: [spec]
+        if workflow_id == "wf.json" and model_key == "checkpoints:model.safetensors"
+        else [],
+    )
+    monkeypatch.setattr(
+        "routers.downloads.get_available_workflow_models",
+        lambda workflow_id: [
+            {"key": "checkpoints:model.safetensors", "label": "model.safetensors"}
+        ]
+        if workflow_id == "wf.json"
+        else [],
+    )
+
+    def fake_start_download(label: str, files: list[DownloadFileSpec]) -> DownloadJob:
+        asyncio.get_running_loop()
+        return DownloadJob(job_id="job-2", label=label, files=files)
+
+    monkeypatch.setattr("routers.downloads.download_service.start_download", fake_start_download)
+
+    response = asyncio.run(
+        downloads.start_download(
+            downloads.StartDownloadRequest(
+                modelType="comfyui-workflow",
+                modelKey="checkpoints:model.safetensors",
+                workflowId="wf.json",
+            )
+        )
+    )
+
+    assert response == {
+        "jobId": "job-2",
+        "label": "model.safetensors",
+        "status": "pending",
+    }
