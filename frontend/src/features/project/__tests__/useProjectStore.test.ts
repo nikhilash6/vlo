@@ -37,6 +37,7 @@ describe("useProjectStore", () => {
     aspectRatio: "16:9" as const,
     fps: 30,
     layoutMode: "compact" as const,
+    assetBrowserDisplay: "grouped" as const,
   };
 
   const mockHandle = {
@@ -264,6 +265,7 @@ describe("useProjectStore", () => {
             aspectRatio: "9:16",
             fps: 24,
             layoutMode: "full-height",
+            assetBrowserDisplay: "ungrouped",
           },
         }),
     });
@@ -274,6 +276,7 @@ describe("useProjectStore", () => {
       aspectRatio: "9:16",
       fps: 24,
       layoutMode: "full-height",
+      assetBrowserDisplay: "ungrouped",
     });
   });
 
@@ -295,6 +298,7 @@ describe("useProjectStore", () => {
       fps: 24,
       aspectRatio: "9:16",
       layoutMode: "full-height",
+      assetBrowserDisplay: "ungrouped",
     });
 
     const writtenData = JSON.parse(persisted);
@@ -306,6 +310,7 @@ describe("useProjectStore", () => {
       aspectRatio: "9:16",
       fps: 24,
       layoutMode: "full-height",
+      assetBrowserDisplay: "ungrouped",
     });
   });
 

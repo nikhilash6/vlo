@@ -13,7 +13,10 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 import ViewStreamIcon from "@mui/icons-material/ViewStream";
 import CheckIcon from "@mui/icons-material/Check";
-import type { AspectRatio } from "../../features/project";
+import type {
+  AspectRatio,
+  AssetBrowserDisplay,
+} from "../../features/project";
 import { useProjectStore } from "../../features/project/useProjectStore";
 
 const FPS_OPTIONS = [16, 24, 25, 30, 60];
@@ -55,9 +58,14 @@ export function ProjectSettingsMenu() {
     void updateConfig({ aspectRatio });
     handleClose();
   };
+  const handleAssetBrowserDisplayChange = (display: AssetBrowserDisplay) => {
+    void updateConfig({ assetBrowserDisplay: display });
+    handleClose();
+  };
   const currentLayout = config.layoutMode || "compact";
   const currentFps = config.fps || 30;
   const currentAspectRatio = config.aspectRatio || "16:9";
+  const currentAssetBrowserDisplay = config.assetBrowserDisplay || "grouped";
 
   return (
     <>
@@ -152,6 +160,25 @@ export function ProjectSettingsMenu() {
             )}
           </MenuItem>
         ))}
+
+        <Divider sx={{ borderColor: "#333" }} />
+        <Box sx={{ px: 2, py: 1 }}>
+          <Typography variant="caption" color="gray">
+            ASSET BROWSER
+          </Typography>
+        </Box>
+        <MenuItem onClick={() => handleAssetBrowserDisplayChange("grouped")}>
+          <ListItemText>Grouped assets</ListItemText>
+          {currentAssetBrowserDisplay === "grouped" && (
+            <CheckIcon fontSize="small" color="primary" sx={{ ml: 1 }} />
+          )}
+        </MenuItem>
+        <MenuItem onClick={() => handleAssetBrowserDisplayChange("ungrouped")}>
+          <ListItemText>Ungrouped assets</ListItemText>
+          {currentAssetBrowserDisplay === "ungrouped" && (
+            <CheckIcon fontSize="small" color="primary" sx={{ ml: 1 }} />
+          )}
+        </MenuItem>
       </Menu>
     </>
   );

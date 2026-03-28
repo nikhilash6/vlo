@@ -16,17 +16,20 @@ import type {
 } from "./types/ProjectDocument";
 
 export type AspectRatio = "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
+export type AssetBrowserDisplay = "grouped" | "ungrouped";
 
 export interface ProjectConfig {
   aspectRatio: AspectRatio;
   fps: number;
   layoutMode?: "full-height" | "compact";
+  assetBrowserDisplay: AssetBrowserDisplay;
 }
 
 const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   aspectRatio: "16:9",
   fps: 30,
   layoutMode: "compact",
+  assetBrowserDisplay: "grouped",
 };
 
 const VALID_ASPECT_RATIOS = new Set<AspectRatio>(PROJECT_ASPECT_RATIOS);
@@ -34,6 +37,10 @@ const VALID_ASPECT_RATIOS = new Set<AspectRatio>(PROJECT_ASPECT_RATIOS);
 const VALID_LAYOUT_MODES = new Set<NonNullable<ProjectConfig["layoutMode"]>>([
   "full-height",
   "compact",
+]);
+const VALID_ASSET_BROWSER_DISPLAY_MODES = new Set<AssetBrowserDisplay>([
+  "grouped",
+  "ungrouped",
 ]);
 
 const isTimelineSnapshot = (value: unknown): value is TimelineSnapshot => {
@@ -59,11 +66,17 @@ const getProjectConfigFromDocument = (
     typeof value?.fps === "number" && Number.isFinite(value.fps) && value.fps > 0
       ? value.fps
       : DEFAULT_PROJECT_CONFIG.fps;
+  const assetBrowserDisplay = VALID_ASSET_BROWSER_DISPLAY_MODES.has(
+    value?.assetBrowserDisplay as AssetBrowserDisplay,
+  )
+    ? (value?.assetBrowserDisplay as AssetBrowserDisplay)
+    : DEFAULT_PROJECT_CONFIG.assetBrowserDisplay;
 
   return {
     aspectRatio,
     fps,
     layoutMode,
+    assetBrowserDisplay,
   };
 };
 
@@ -73,7 +86,8 @@ const hasProjectConfigChanged = (
 ): boolean =>
   current.aspectRatio !== next.aspectRatio ||
   current.fps !== next.fps ||
-  current.layoutMode !== next.layoutMode;
+  current.layoutMode !== next.layoutMode ||
+  current.assetBrowserDisplay !== next.assetBrowserDisplay;
 
 export interface ProjectState {
   project: Project | null;

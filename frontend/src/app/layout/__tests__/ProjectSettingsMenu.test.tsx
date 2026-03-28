@@ -10,6 +10,7 @@ describe("ProjectSettingsMenu", () => {
         aspectRatio: "16:9",
         fps: 30,
         layoutMode: "compact",
+        assetBrowserDisplay: "grouped",
       },
     });
   });
@@ -21,5 +22,15 @@ describe("ProjectSettingsMenu", () => {
 
     expect(screen.queryByText("RESOLUTION")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Resolution")).not.toBeInTheDocument();
+  });
+
+  it("offers grouped and ungrouped asset browser display options", () => {
+    render(<ProjectSettingsMenu />);
+
+    fireEvent.click(screen.getByRole("button"));
+
+    expect(screen.getByText("ASSET BROWSER")).toBeInTheDocument();
+    expect(screen.getByText("Grouped assets")).toBeInTheDocument();
+    expect(screen.getByText("Ungrouped assets")).toBeInTheDocument();
   });
 });

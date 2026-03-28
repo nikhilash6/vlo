@@ -26,6 +26,7 @@ import type { Asset, AssetType } from "../../types/Asset";
 import { doesAssetBelongToFamily } from "../../shared/utils/assetFamilies";
 import { getTimelineClipCountForAsset, useTimelineStore } from "../timeline";
 import { useInteractionStore } from "../timeline/hooks/useInteractionStore";
+import { useProjectStore } from "../project/useProjectStore";
 import { useAssetStore } from "./useAssetStore";
 import { AssetCard } from "./components/AssetCard";
 import { useAssetBrowserRevealStore } from "./useAssetBrowserRevealStore";
@@ -135,6 +136,9 @@ function AssetBrowserComponent() {
   const deleteAsset = useAssetStore((state) => state.deleteAsset);
   const isUploading = useAssetStore((state) => state.isUploading);
   const timelineClips = useTimelineStore((state) => state.clips);
+  const assetBrowserDisplay = useProjectStore(
+    (state) => state.config.assetBrowserDisplay,
+  );
   const revealRequest = useAssetBrowserRevealStore((state) => state.revealRequest);
   const selectedAssetIds = useAssetBrowserSelectionStore(
     (state) => state.selectedAssetIds,
@@ -360,13 +364,14 @@ function AssetBrowserComponent() {
           (asset) =>
             asset.type === activeTab &&
             isAssetVisibleInBrowser(asset) &&
-            isRepresentativeAsset(
-              asset.id,
-              asset.type,
-              asset.familyId,
-              families,
-              assets,
-            ),
+            (assetBrowserDisplay === "ungrouped" ||
+              isRepresentativeAsset(
+                asset.id,
+                asset.type,
+                asset.familyId,
+                families,
+                assets,
+              )),
         );
 
     const filtered = baseAssets.filter(
@@ -388,6 +393,7 @@ function AssetBrowserComponent() {
     assets,
     families,
     activeTab,
+    assetBrowserDisplay,
     familyScope,
     scopedFamilyAssets,
     sortOption,
@@ -911,6 +917,7 @@ function AssetBrowserComponent() {
                   disableDrag={isMultiSelectActive}
                   isSelected={selectedAssetIds.includes(asset.id)}
                   onShowFamily={
+                    assetBrowserDisplay !== "ungrouped" &&
                     !isFamilyScopeActive &&
                     asset.familyId &&
                     (familyMembersByType.get(`${asset.familyId}:${asset.type}`) ?? 0) >

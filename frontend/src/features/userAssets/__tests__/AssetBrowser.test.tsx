@@ -13,6 +13,7 @@ import type { Asset, AssetFamily } from "../../../types/Asset";
 import type { BaseClip, TimelineClip } from "../../../types/TimelineTypes";
 import { useInteractionStore } from "../../timeline/hooks/useInteractionStore";
 import { useTimelineStore } from "../../timeline";
+import { useProjectStore } from "../../project";
 import {
   revealAssetInBrowser,
   useAssetBrowserRevealStore,
@@ -136,6 +137,13 @@ describe("AssetBrowser Component", () => {
     useInteractionStore.getState().stopDrag();
     useAssetBrowserRevealStore.setState({ revealRequest: null });
     useAssetBrowserSelectionStore.setState({ selectedAssetIds: [] });
+    useProjectStore.setState((state) => ({
+      ...state,
+      config: {
+        ...state.config,
+        assetBrowserDisplay: "grouped",
+      },
+    }));
     useTimelineStore.setState({
       tracks: [
         {
@@ -543,6 +551,29 @@ describe("AssetBrowser Component", () => {
     expect(screen.getAllByRole("button", { name: "Open family" })).toHaveLength(1);
   });
 
+  it("shows individual family members and hides family buttons when asset browser display is ungrouped", () => {
+    useProjectStore.setState((state) => ({
+      ...state,
+      config: {
+        ...state.config,
+        assetBrowserDisplay: "ungrouped",
+      },
+    }));
+    mockStore({
+      assets: mockAssets,
+      families: mockFamilies,
+    });
+
+    render(<AssetBrowser />);
+
+    expect(screen.getByText("vacation.mp4")).toBeInTheDocument();
+    expect(screen.getByText("b-roll.mp4")).toBeInTheDocument();
+    expect(screen.getByText("solo.mp4")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open family" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("selects an asset card and highlights all timeline clips that use it", async () => {
     mockStore({ assets: mockAssets, families: mockFamilies });
     useTimelineStore.setState({
@@ -641,6 +672,13 @@ describe("AssetBrowser Component", () => {
   });
 
   it("reveals a requested asset by switching tabs, clearing favourite-only mode, and opening the family scope when needed", async () => {
+    useProjectStore.setState((state) => ({
+      ...state,
+      config: {
+        ...state.config,
+        assetBrowserDisplay: "ungrouped",
+      },
+    }));
     mockStore({ assets: mockAssets, families: mockFamilies });
 
     render(<AssetBrowser />);
