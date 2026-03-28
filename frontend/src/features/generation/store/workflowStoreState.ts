@@ -42,6 +42,7 @@ import {
   upsertWorkflowOption,
 } from "./workflowCatalog";
 import { carryOverMediaInputs } from "../utils/workflowInputCarryover";
+import { pruneMediaInputs } from "./mediaInputState";
 interface WorkflowStoreStateOptions {
   getNextWorkflowLoadRequestId: () => number;
   isCurrentWorkflowLoadRequestId: (requestId: number) => boolean;
@@ -564,7 +565,7 @@ export function buildWorkflowStoreState(
         );
       }
 
-      set({
+      set((state) => ({
         isWorkflowLoading: true,
         workflowLoadState: "loading",
         workflowLoadError: null,
@@ -576,7 +577,10 @@ export function buildWorkflowStoreState(
         hasInferredInputs: false,
         derivedMaskMappings: [],
         pendingReplayPanelState: null,
-      });
+        // Regeneration should restore exactly the saved media inputs rather
+        // than heuristically carrying over whatever the panel currently holds.
+        mediaInputs: pruneMediaInputs(state.mediaInputs, []),
+      }));
 
       try {
         const state = get();

@@ -156,6 +156,149 @@ describe("useGenerationStore metadata replay", () => {
     });
   });
 
+  it("clears stale media slots before restoring regenerate metadata", async () => {
+    const sourceAsset: Asset = {
+      id: "source-asset",
+      hash: "hash-source",
+      name: "source.png",
+      type: "image",
+      src: "source.png",
+      createdAt: Date.now(),
+    };
+    const staleStartAsset: Asset = {
+      id: "stale-start",
+      hash: "hash-stale-start",
+      name: "stale-start.png",
+      type: "image",
+      src: "stale-start.png",
+      createdAt: Date.now(),
+    };
+    const staleEndAsset: Asset = {
+      id: "stale-end",
+      hash: "hash-stale-end",
+      name: "stale-end.png",
+      type: "image",
+      src: "stale-end.png",
+      createdAt: Date.now(),
+    };
+    const generatedAsset: Asset = {
+      id: "generated-asset",
+      hash: "hash-generated",
+      name: "generated.png",
+      type: "image",
+      src: "generated.png",
+      createdAt: Date.now(),
+      creationMetadata: {
+        source: "generated",
+        workflowName: "Original Workflow",
+        workflowSourceId: "wan2_2_flf2v.json",
+        inputs: [
+          {
+            nodeId: "62",
+            kind: "draggedAsset",
+            parentAssetId: sourceAsset.id,
+          },
+        ],
+        replayState: {
+          version: 1,
+          workflowSourceId: "wan2_2_flf2v.json",
+          workflowInputs: [
+            {
+              nodeId: "62",
+              classType: "LoadImage",
+              inputType: "image",
+              param: "image",
+              label: "Start Frame",
+              origin: "rule",
+            },
+            {
+              nodeId: "68",
+              classType: "LoadImage",
+              inputType: "image",
+              param: "image",
+              label: "End Frame",
+              origin: "rule",
+            },
+          ],
+        },
+        comfyuiPrompt: {
+          "62": {
+            class_type: "LoadImage",
+            inputs: { image: "source.png" },
+          },
+          "68": {
+            class_type: "LoadImage",
+            inputs: { image: "unused.png" },
+          },
+        },
+        comfyuiWorkflow: {
+          nodes: [
+            { id: 62, type: "LoadImage", widgets_values: ["source.png"] },
+            { id: 68, type: "LoadImage", widgets_values: ["unused.png"] },
+          ],
+        },
+      },
+    };
+
+    useAssetStore.setState({
+      assets: [sourceAsset, staleStartAsset, staleEndAsset, generatedAsset],
+    });
+    useGenerationStore.setState({
+      workflowInputs: [
+        {
+          nodeId: "62",
+          classType: "LoadImage",
+          inputType: "image",
+          param: "image",
+          label: "Start Frame",
+          currentValue: null,
+          origin: "rule",
+        },
+        {
+          nodeId: "68",
+          classType: "LoadImage",
+          inputType: "image",
+          param: "image",
+          label: "End Frame",
+          currentValue: null,
+          origin: "rule",
+        },
+      ],
+      mediaInputs: {
+        "62:image": {
+          kind: "asset",
+          asset: staleStartAsset,
+        },
+        "68:image": {
+          kind: "asset",
+          asset: staleEndAsset,
+        },
+      },
+    });
+
+    vi.spyOn(comfyApi, "listWorkflows").mockResolvedValue([
+      { id: "wan2_2_flf2v.json", name: "Wan2.2 I2V & FLF2V" },
+    ]);
+    vi.spyOn(comfyApi, "getWorkflowRules").mockResolvedValue({
+      workflow_id: "wan2_2_flf2v.json",
+      has_sidecar: true,
+      rules: createDefaultWorkflowRules(),
+      warnings: [],
+    });
+
+    await useGenerationStore
+      .getState()
+      .loadWorkflowFromAssetMetadata(generatedAsset);
+
+    const state = useGenerationStore.getState();
+    expect(Object.keys(state.mediaInputs)).toEqual(["62:image"]);
+    expect(state.mediaInputs["62:image"]).toMatchObject({
+      kind: "asset",
+      asset: { id: sourceAsset.id },
+    });
+    expect(state.mediaInputs["68:image"]).toBeUndefined();
+  });
+
   it("prefers the saved visual workflow snapshot and replay state when restoring a generated workflow", async () => {
     const sourceAsset: Asset = {
       id: "source-asset",
