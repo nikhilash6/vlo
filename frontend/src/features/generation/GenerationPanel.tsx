@@ -466,6 +466,8 @@ export function GenerationPanel() {
   const visibleMissingModels = missingModels.slice(0, 6);
   const hiddenNodeCount = Math.max(0, missingNodeTypes.length - 6);
   const hiddenModelCount = Math.max(0, missingModels.length - 6);
+  const showInlineWorkflowResolver =
+    Boolean(workflowWarning) && comfyuiModelDownloadsEnabled;
   const showWorkflowWarningDialog =
     Boolean(workflowWarning) &&
     !editorOpen &&
@@ -643,17 +645,15 @@ export function GenerationPanel() {
         </FormControl>
       </Box>
 
-      {workflowWarning && comfyuiModelDownloadsEnabled ? (
-        <Box sx={{ px: 2, pb: 2 }}>
-          <WorkflowDependencyResolver
-            workflowId={selectedWorkflowId}
-            warning={workflowWarning}
-            onOpenEditor={() => setEditorOpen(true)}
-            onRefreshWarning={handleRetryWorkflow}
-          />
-        </Box>
-      ) : null}
-
+      {showInlineWorkflowResolver ? (
+        <WorkflowDependencyResolver
+          workflowId={selectedWorkflowId}
+          warning={workflowWarning}
+          onOpenEditor={() => setEditorOpen(true)}
+          onRefreshWarning={handleRetryWorkflow}
+        />
+      ) : (
+        <>
       {/* Dynamic Workflow Inputs */}
       {showResolutionSelector && !isWorkflowLoading && (
         <Box sx={{ px: 2, pb: 2 }}>
@@ -1180,6 +1180,8 @@ export function GenerationPanel() {
               : displayJob?.postprocessError}
           </Typography>
         </Box>
+      )}
+        </>
       )}
 
       <Dialog

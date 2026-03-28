@@ -195,6 +195,9 @@ describe("GenerationPanel workflow rule hints", () => {
       screen.getByTestId("workflow-dependency-resolver"),
     ).toBeInTheDocument();
     expect(
+      screen.queryByTestId("generation-generate-button"),
+    ).not.toBeInTheDocument();
+    expect(
       screen.queryByText("Workflow warnings detected"),
     ).not.toBeInTheDocument();
   });

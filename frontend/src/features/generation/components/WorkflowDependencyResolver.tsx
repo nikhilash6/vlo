@@ -76,7 +76,15 @@ function renderWarningList(label: string, values: string[]) {
       <Typography variant="caption" sx={{ color: "warning.light", display: "block", mb: 0.25 }}>
         {label} ({values.length})
       </Typography>
-      <Typography variant="caption" sx={{ color: "text.secondary", lineHeight: 1.5 }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: "text.secondary",
+          lineHeight: 1.5,
+          overflowWrap: "anywhere",
+          wordBreak: "break-word",
+        }}
+      >
         {visibleValues.join(", ")}
         {hiddenCount > 0 ? `, and ${hiddenCount} more` : ""}
       </Typography>
@@ -150,6 +158,8 @@ export function WorkflowDependencyResolver({
       loadingLabel="Loading workflow download options..."
       error={error}
       activeDownload={activeDownload}
+      variant="plain"
+      fillHeight
       beforeModels={
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
           <Button

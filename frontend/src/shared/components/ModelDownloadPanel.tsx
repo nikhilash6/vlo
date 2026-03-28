@@ -23,6 +23,8 @@ interface ModelDownloadPanelProps {
   emptyState?: ReactNode;
   onDownload: (modelKey: string) => void;
   onCancel: () => void;
+  variant?: "card" | "plain";
+  fillHeight?: boolean;
 }
 
 const cardSx = {
@@ -52,6 +54,8 @@ export function ModelDownloadPanel({
   emptyState,
   onDownload,
   onCancel,
+  variant = "card",
+  fillHeight = false,
 }: ModelDownloadPanelProps) {
   return (
     <Box
@@ -59,20 +63,30 @@ export function ModelDownloadPanel({
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
+        width: "100%",
+        flex: fillHeight ? 1 : undefined,
         px: 2,
-        py: 3,
+        py: variant === "card" ? 3 : 2,
         gap: 2,
         textAlign: "center",
-        borderRadius: 1,
-        border: "1px solid #3a3d44",
-        bgcolor: "#1f2126",
+        borderRadius: variant === "card" ? 1 : 0,
+        border: variant === "card" ? "1px solid #3a3d44" : "none",
+        bgcolor: variant === "card" ? "#1f2126" : "transparent",
       }}
     >
       {icon ?? null}
       <Typography variant="subtitle2" sx={{ color: "text.primary" }}>
         {title}
       </Typography>
-      <Typography variant="caption" sx={{ color: "text.secondary", lineHeight: 1.5 }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: "text.secondary",
+          lineHeight: 1.5,
+          overflowWrap: "anywhere",
+          wordBreak: "break-word",
+        }}
+      >
         {description}
       </Typography>
 
@@ -123,7 +137,18 @@ export function ModelDownloadPanel({
                     mb: 0.5,
                   }}
                 >
-                  <Typography variant="caption" sx={{ fontWeight: 600, color: "text.primary" }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      flex: 1,
+                      minWidth: 0,
+                      textAlign: "left",
+                      fontWeight: 600,
+                      color: "text.primary",
+                      overflowWrap: "anywhere",
+                      wordBreak: "break-word",
+                    }}
+                  >
                     {model.label}
                   </Typography>
                   {model.installed ? (
@@ -132,7 +157,13 @@ export function ModelDownloadPanel({
                 </Box>
                 <Typography
                   variant="caption"
-                  sx={{ color: "text.secondary", display: "block", mb: 1 }}
+                  sx={{
+                    color: "text.secondary",
+                    display: "block",
+                    mb: 1,
+                    overflowWrap: "anywhere",
+                    wordBreak: "break-word",
+                  }}
                 >
                   {model.description}
                 </Typography>
