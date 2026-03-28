@@ -31,9 +31,12 @@ import { useAssetStore } from "./useAssetStore";
 import { AssetCard } from "./components/AssetCard";
 import { useAssetBrowserRevealStore } from "./useAssetBrowserRevealStore";
 import { useAssetBrowserSelectionStore } from "./useAssetBrowserSelectionStore";
-import { deleteAssetWithConfirmation } from "./utils/deleteAssetWithConfirmation";
+import {
+  deleteAssetBatchWithConfirmation,
+  deleteAssetWithConfirmation,
+} from "./utils/deleteAssetWithConfirmation";
 import { isAssetVisibleInBrowser } from "./utils/assetVisibility";
-import { getFamilyMembers } from "./utils/familyMembers";
+import { getAssetsForFamilyId, getFamilyMembers } from "./utils/familyMembers";
 
 type SortOption = "dateDesc" | "dateAsc" | "nameAsc";
 const ASSET_TYPE_PRIORITY: AssetType[] = ["video", "image", "audio"];
@@ -409,6 +412,25 @@ function AssetBrowserComponent() {
       assetType: activeTab,
     });
   };
+
+  const handleDeleteAll = React.useCallback(
+    (familyId: string) => {
+      const familyAssetIds = getAssetsForFamilyId(assets, familyId).map(
+        (asset) => asset.id,
+      );
+      const timelineClipCount = familyAssetIds.reduce(
+        (count, assetId) => count + getTimelineClipCountForAsset(assetId),
+        0,
+      );
+
+      void deleteAssetBatchWithConfirmation({
+        assetIds: familyAssetIds,
+        deleteAsset,
+        timelineClipCount,
+      });
+    },
+    [assets, deleteAsset],
+  );
 
   const handleClearFamilyScope = () => setFamilyScope(null);
   const isFamilyScopeActive = Boolean(familyScope && selectedFamily);
@@ -925,6 +947,13 @@ function AssetBrowserComponent() {
                   asset={asset}
                   disableDrag={isMultiSelectActive}
                   isSelected={selectedAssetIds.includes(asset.id)}
+                  onDeleteAll={
+                    !isFamilyScopeActive &&
+                    asset.familyId &&
+                    getAssetsForFamilyId(assets, asset.familyId).length > 1
+                      ? handleDeleteAll
+                      : undefined
+                  }
                   onShowFamily={
                     assetBrowserDisplay !== "ungrouped" &&
                     !isFamilyScopeActive &&

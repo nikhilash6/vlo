@@ -551,6 +551,65 @@ describe("AssetBrowser Component", () => {
     expect(screen.getAllByRole("button", { name: "Open family" })).toHaveLength(1);
   });
 
+  it("shows delete all from the main browser and deletes the full batch after confirmation", async () => {
+    mockStore({
+      assets: mockAssets,
+      families: mockFamilies,
+    });
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<AssetBrowser />);
+
+    const representativeCard = screen
+      .getByText("vacation.mp4")
+      .closest('[data-testid="asset-card"]');
+
+    expect(representativeCard).not.toBeNull();
+
+    fireEvent.click(
+      within(representativeCard as HTMLElement).getByRole("button", {
+        name: "Asset actions",
+      }),
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete all" }));
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      "Are you sure you want to delete this entire asset batch? This will remove all assets in this batch from disk permanently.",
+    );
+
+    await waitFor(() => {
+      expect(mockDeleteAsset).toHaveBeenCalledWith("1");
+      expect(mockDeleteAsset).toHaveBeenCalledWith("1b");
+    });
+  });
+
+  it("hides delete all when viewing a family scope", async () => {
+    mockStore({
+      assets: mockAssets,
+      families: mockFamilies,
+    });
+
+    render(<AssetBrowser />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open family" }));
+
+    const familyCard = screen
+      .getByText("vacation.mp4")
+      .closest('[data-testid="asset-card"]');
+
+    expect(familyCard).not.toBeNull();
+
+    fireEvent.click(
+      within(familyCard as HTMLElement).getByRole("button", {
+        name: "Asset actions",
+      }),
+    );
+
+    expect(
+      screen.queryByRole("menuitem", { name: "Delete all" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows individual family members and hides family buttons when asset browser display is ungrouped", () => {
     useProjectStore.setState((state) => ({
       ...state,

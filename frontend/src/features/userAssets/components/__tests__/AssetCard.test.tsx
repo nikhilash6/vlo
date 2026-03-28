@@ -269,10 +269,12 @@ describe("AssetCard actions", () => {
 
   it("keeps the menu actions and adds a folder action for family cards", () => {
     mockStores(0);
+    const deleteAllSpy = vi.fn();
 
     render(
       <AssetCard
         asset={generatedFamilyAsset}
+        onDeleteAll={deleteAllSpy}
         onShowFamily={mocks.mockOpenFamily}
       />,
     );
@@ -291,10 +293,18 @@ describe("AssetCard actions", () => {
     expect(
       screen.getByRole("menuitem", { name: "Regenerate" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Delete all" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(familyButton);
 
     expect(mocks.mockOpenFamily).toHaveBeenCalledWith("family-1");
+
+    fireEvent.click(menuButton);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete all" }));
+
+    expect(deleteAllSpy).toHaveBeenCalledWith("family-1");
   });
 
   it("opens a video preview modal from the play button and closes with the x button", async () => {

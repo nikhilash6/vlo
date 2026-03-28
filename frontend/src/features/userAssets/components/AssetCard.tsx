@@ -40,6 +40,7 @@ interface AssetCardProps {
   asset: Asset;
   disableDrag?: boolean;
   isSelected?: boolean;
+  onDeleteAll?: (familyId: string) => void;
   onShowFamily?: (familyId: string) => void;
   onSelect?: (event: React.MouseEvent<HTMLDivElement>) => void;
   layout?: "default" | "square";
@@ -203,6 +204,7 @@ function canRegenerateFromMetadata(asset: Asset): boolean {
 
 function AssetCardContent({
   asset,
+  onDeleteAll,
   onShowFamily,
   layout = "default",
 }: AssetCardProps) {
@@ -218,6 +220,7 @@ function AssetCardContent({
   const timelineClipCount = useTimelineClipCountForAsset(asset.id);
   const timelineSelection = getTimelineSelectionFromAsset(asset);
   const canRegenerate = canRegenerateFromMetadata(asset);
+  const canDeleteAll = Boolean(asset.familyId && onDeleteAll);
   const canShowFamily = Boolean(asset.familyId && onShowFamily);
   const isMenuOpen = Boolean(menuAnchorEl);
 
@@ -289,6 +292,13 @@ function AssetCardContent({
     },
     [asset.favourite, asset.id, updateAsset],
   );
+
+  const handleDeleteAll = useCallback(() => {
+    handleCloseMenu();
+    if (asset.familyId && onDeleteAll) {
+      onDeleteAll(asset.familyId);
+    }
+  }, [asset.familyId, handleCloseMenu, onDeleteAll]);
 
   const handlePlayToggle = useCallback(
     (event: React.MouseEvent) => {
@@ -445,6 +455,14 @@ function AssetCardContent({
                 <ListItemText>Send to Timeline</ListItemText>
               </MenuItem>
             ) : null}
+            {canDeleteAll ? (
+              <MenuItem onClick={handleDeleteAll}>
+                <ListItemIcon>
+                  <DeleteIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Delete all</ListItemText>
+              </MenuItem>
+            ) : null}
             <MenuItem onClick={handleDelete}>
               <ListItemIcon>
                 <DeleteIcon fontSize="small" />
@@ -499,6 +517,7 @@ function AssetCardComponent({
   asset,
   disableDrag = false,
   isSelected = false,
+  onDeleteAll,
   onShowFamily,
   onSelect,
   layout = "default",
@@ -539,6 +558,7 @@ function AssetCardComponent({
     >
       <MemoizedAssetCardContent
         asset={asset}
+        onDeleteAll={onDeleteAll}
         onShowFamily={onShowFamily}
         layout={layout}
       />
