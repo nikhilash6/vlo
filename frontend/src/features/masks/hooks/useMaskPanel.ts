@@ -136,6 +136,7 @@ export interface UseMaskPanelResult {
   isSam2Available: boolean;
   isSam2Checking: boolean;
   sam2AvailabilityError: string | null;
+  ensureSam2Available: () => Promise<boolean>;
   clearSam2Points: () => void;
   clearSam2CurrentFramePoints: () => void;
   generateSam2FramePreview: () => Promise<void>;
@@ -1107,6 +1108,7 @@ export function useMaskPanel(): UseMaskPanelResult {
     isSam2Available: sam2AvailabilityStatus === "available",
     isSam2Checking: sam2AvailabilityStatus === "checking",
     sam2AvailabilityError,
+    ensureSam2Available,
     clearSam2Points,
     clearSam2CurrentFramePoints,
     generateSam2FramePreview,

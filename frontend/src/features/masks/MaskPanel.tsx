@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import {
   Box,
   Button,
@@ -22,6 +22,7 @@ import {
 } from "../transformations";
 import { parseMaskClipId } from "../timeline";
 import { Sam2MaskPanel } from "./components/Sam2MaskPanel";
+import { Sam2ModelDownloadOverlay } from "./components/Sam2ModelDownloadOverlay";
 
 const connectedButtonSx = {
   textTransform: "none",
@@ -69,6 +70,7 @@ export const MaskPanel = memo(function MaskPanel() {
     isSam2Available,
     isSam2Checking,
     sam2AvailabilityError,
+    ensureSam2Available,
     sam2CurrentFramePointsCount,
     clearSam2Points,
     clearSam2CurrentFramePoints,
@@ -132,7 +134,13 @@ export const MaskPanel = memo(function MaskPanel() {
     selectedMask ? sectionOrder : [],
   );
 
+  const handleModelsInstalled = useCallback(() => {
+    void ensureSam2Available();
+  }, [ensureSam2Available]);
+
   if (!selectedClipId) return null;
+
+  const showDownloadOverlay = !isSam2Available && !isSam2Checking;
 
   const selectedMaskIndex = selectedMask
     ? masks.findIndex((mask) => mask.id === selectedMask.id)
@@ -234,6 +242,10 @@ export const MaskPanel = memo(function MaskPanel() {
           </Typography>
         )}
       </Box>
+
+      {showDownloadOverlay && (
+        <Sam2ModelDownloadOverlay onModelsInstalled={handleModelsInstalled} />
+      )}
 
       {selectedMask ? (
         isSam2Mask ? (

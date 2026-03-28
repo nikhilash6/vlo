@@ -13,6 +13,7 @@ from routers.comfyui import (
     close_http_client,
 )
 from routers.sam2 import router as sam2_router
+from routers.downloads import router as downloads_router
 from pathlib import Path
 from typing import List
 
@@ -28,6 +29,7 @@ app = FastAPI()
 app.include_router(comfyui_router)
 app.include_router(comfyui_compat_router)
 app.include_router(sam2_router)
+app.include_router(downloads_router)
 
 
 @app.on_event("shutdown")
