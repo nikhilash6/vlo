@@ -12,6 +12,7 @@ import {
 import { Casino, InfoOutlined } from "@mui/icons-material";
 import { PanelSection, AssetDropSlot, CommittedTextInput } from "../../panelUI";
 import type { Asset } from "../../../types/Asset";
+import { resolveAssetType } from "../../../shared/utils/assetTypeDetection";
 import type {
   GenerationMediaInputValue,
   WorkflowInput,
@@ -51,12 +52,13 @@ function toSlotValue(
   if (!value) return null;
 
   if (value.kind === "asset") {
+    const assetType = resolveAssetType(value.asset) ?? value.asset.type;
     return {
-      type: value.asset.type,
+      type: assetType,
       name: value.asset.name,
       thumbnail:
         value.asset.thumbnail ||
-        (value.asset.type === "image" ? value.asset.src : undefined),
+        (assetType === "image" ? value.asset.src : undefined),
     };
   }
 

@@ -35,6 +35,22 @@ describe("mediaInputAssets", () => {
     ).toBe(true);
   });
 
+  it("treats dragged image assets as provided even when stored asset.type is stale", () => {
+    expect(
+      hasProvidedMediaInputValue("image", {
+        kind: "asset",
+        asset: {
+          id: "asset-legacy-image",
+          hash: "hash-image",
+          name: "frame.png",
+          type: "video",
+          src: "assets/frame.png",
+          createdAt: Date.now(),
+        },
+      }),
+    ).toBe(true);
+  });
+
   it("hydrates generation asset files from the asset store before falling back to fetch", async () => {
     const hydratedFile = new File(["video"], "hydrated.mp4", {
       type: "video/mp4",

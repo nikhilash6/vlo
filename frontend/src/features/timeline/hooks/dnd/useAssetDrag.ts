@@ -9,6 +9,7 @@ import { useInteractionStore } from "../useInteractionStore";
 import { useClipMove } from "./useClipMove";
 import type { BaseClip } from "../../../../types/TimelineTypes";
 import type { Asset, AssetType } from "../../../../types/Asset";
+import { assetMatchesType } from "../../../../shared/utils/assetTypeDetection";
 
 export const useAssetDrag = () => {
   // We need a ref to the scroll container for coordinate calculations (drops)
@@ -75,7 +76,12 @@ export const useAssetDrag = () => {
       const overData = event.over?.data.current;
       if (overData?.type === "asset-slot" && overData.onDrop) {
         const asset = event.active.data.current?.asset as Asset | undefined;
-        if (asset && (overData.accept as AssetType[]).includes(asset.type)) {
+        if (
+          asset &&
+          (overData.accept as AssetType[]).some((acceptedType) =>
+            assetMatchesType(asset, acceptedType),
+          )
+        ) {
           overData.onDrop(asset);
         }
         return;

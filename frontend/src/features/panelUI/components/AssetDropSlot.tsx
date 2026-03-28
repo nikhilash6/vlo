@@ -5,6 +5,7 @@ import { useDroppable, useDndContext } from "@dnd-kit/core";
 import MusicNoteIcon from "@mui/icons-material/MusicNote";
 import CloseIcon from "@mui/icons-material/Close";
 import type { Asset, AssetType } from "../../../types/Asset";
+import { assetMatchesType } from "../../../shared/utils/assetTypeDetection";
 import type { AssetDropSlotProps } from "./assetDropSlotTypes";
 import {
   getExternalFileDragHighlight,
@@ -95,9 +96,9 @@ function AssetDropSlotComponent({
   const { active } = useDndContext();
   let highlight: "compatible" | "incompatible" | "external" | null = null;
   if (isOver && active?.data.current?.type === "asset") {
-    const draggedType = (active.data.current.asset as Asset | undefined)?.type;
+    const draggedAsset = active.data.current.asset as Asset | undefined;
     highlight =
-      draggedType && accept.includes(draggedType)
+      draggedAsset && accept.some((acceptedType) => assetMatchesType(draggedAsset, acceptedType))
         ? "compatible"
         : "incompatible";
   }

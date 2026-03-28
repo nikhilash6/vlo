@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import type { SelectChangeEvent, ChipProps } from "@mui/material";
 import type { Asset } from "../../../types/Asset";
+import { assetMatchesType } from "../../../shared/utils/assetTypeDetection";
 import { useExtractStore } from "../../player/useExtractStore";
 import { usePlayerStore } from "../../player/usePlayerStore";
 import { playbackClock } from "../../player/services/PlaybackClock";
@@ -425,7 +426,7 @@ export function useGenerationPanel() {
         if (!value) continue;
 
         if (input.inputType === "image") {
-          if (value.kind === "asset" && value.asset.type === "image") {
+          if (value.kind === "asset" && assetMatchesType(value.asset, "image")) {
             const file = await resolveAssetFileForGeneration(value.asset);
             slotValues[inputId] = {
               type: "image",
@@ -440,7 +441,7 @@ export function useGenerationPanel() {
           continue;
         }
 
-        if (value.kind === "asset" && value.asset.type === "video") {
+        if (value.kind === "asset" && assetMatchesType(value.asset, "video")) {
           const file = await resolveAssetFileForGeneration(value.asset);
           slotValues[inputId] = {
             type: "video",

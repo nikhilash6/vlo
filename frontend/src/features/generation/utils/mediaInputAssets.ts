@@ -1,4 +1,5 @@
 import type { Asset } from "../../../types/Asset";
+import { assetMatchesType } from "../../../shared/utils/assetTypeDetection";
 import type { GenerationMediaInputValue } from "../types";
 import { ensureAssetFileLoaded } from "../../userAssets";
 
@@ -19,7 +20,7 @@ export function hasProvidedMediaInputValue(
   if (!value) return false;
 
   if (value.kind === "asset") {
-    return value.asset.type === inputType;
+    return assetMatchesType(value.asset, inputType);
   }
 
   if (inputType === "image") {

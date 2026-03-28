@@ -1,4 +1,5 @@
 import type { GenerationMediaInputValue, WorkflowInput } from "../types";
+import { assetMatchesType } from "../../../shared/utils/assetTypeDetection";
 import { buildWorkflowInputLookup } from "../utils/workflowInputs";
 
 export function revokePreviewUrl(
@@ -21,13 +22,13 @@ function isCompatibleMediaInput(
   if (inputType === "image") {
     return (
       value.kind === "frame" ||
-      (value.kind === "asset" && value.asset.type === "image")
+      (value.kind === "asset" && assetMatchesType(value.asset, "image"))
     );
   }
 
   return (
     value.kind === "timelineSelection" ||
-    (value.kind === "asset" && value.asset.type === "video")
+    (value.kind === "asset" && assetMatchesType(value.asset, "video"))
   );
 }
 
