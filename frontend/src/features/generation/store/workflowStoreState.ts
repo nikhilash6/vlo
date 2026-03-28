@@ -191,8 +191,9 @@ export function buildWorkflowStoreState(
     registerWorkflowFromEditor: async (workflow, graphData, inputs, filename) => {
       const state = get();
       const { availableWorkflows, selectedWorkflowId, tempWorkflow } = state;
+      const compatibilityWorkflow = graphData ?? workflow;
       const hasCompatibleRules = areWorkflowRulesCompatibleWithWorkflow(
-        workflow,
+        compatibilityWorkflow,
         state.activeWorkflowRules,
       );
       let resolvedRules = hasCompatibleRules

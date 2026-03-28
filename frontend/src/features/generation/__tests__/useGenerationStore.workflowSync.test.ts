@@ -258,6 +258,113 @@ describe("useGenerationStore workflow editor sync", () => {
     ).toBe(true);
   });
 
+  it("keeps source rules when a bypassed editor node is omitted from the api workflow", async () => {
+    vi.spyOn(comfyApi, "resolveWorkflowRules").mockResolvedValue({
+      workflow_id: "wan2_2_flf2v.json",
+      rules: createDefaultWorkflowRules({
+        nodes: {
+          "72": {
+            widgets: {
+              strength_model: {
+                label: "Strength",
+                value_type: "float",
+              },
+            },
+          },
+        },
+        aspect_ratio_processing: {
+          enabled: true,
+          resolutions: [480, 720],
+          target_nodes: [
+            {
+              node_id: "67",
+              width_param: "width",
+              height_param: "height",
+            },
+          ],
+        },
+      }),
+      warnings: [],
+    });
+
+    useGenerationStore.setState({
+      selectedWorkflowId: "wan2_2_flf2v.json",
+      availableWorkflows: [
+        { id: "wan2_2_flf2v.json", name: "Wan2.2 I2V & FLF2V" },
+      ],
+      activeRulesWarnings: [],
+      activeWorkflowRules: createDefaultWorkflowRules({
+        nodes: {
+          "72": {
+            widgets: {
+              strength_model: {
+                label: "Strength",
+              },
+            },
+          },
+        },
+        aspect_ratio_processing: {
+          enabled: true,
+          resolutions: [480, 720],
+          target_nodes: [
+            {
+              node_id: "67",
+              width_param: "width",
+              height_param: "height",
+            },
+          ],
+        },
+      }),
+      rulesWorkflowSourceId: "wan2_2_flf2v.json",
+    });
+
+    await useGenerationStore.getState().registerWorkflowFromEditor(
+      {
+        "62": { class_type: "LoadImage", inputs: { image: "start.png" } },
+        "67": { class_type: "WanFirstLastFrameToVideo", inputs: {} },
+        "68": { class_type: "LoadImage", inputs: { image: "end.png" } },
+      },
+      {
+        nodes: [
+          { id: 62, type: "LoadImage" },
+          { id: 67, type: "WanFirstLastFrameToVideo" },
+          { id: 68, type: "LoadImage" },
+          { id: 72, type: "LoraLoader", mode: 4 },
+        ],
+      },
+      makeInputs(),
+      "__temp__.json",
+    );
+
+    const state = useGenerationStore.getState();
+    expect(comfyApi.resolveWorkflowRules).toHaveBeenCalledWith({
+      workflow: {
+        "62": { class_type: "LoadImage", inputs: { image: "start.png" } },
+        "67": { class_type: "WanFirstLastFrameToVideo", inputs: {} },
+        "68": { class_type: "LoadImage", inputs: { image: "end.png" } },
+      },
+      graphData: {
+        nodes: [
+          { id: 62, type: "LoadImage" },
+          { id: 67, type: "WanFirstLastFrameToVideo" },
+          { id: 68, type: "LoadImage" },
+          { id: 72, type: "LoraLoader", mode: 4 },
+        ],
+      },
+      workflowId: "wan2_2_flf2v.json",
+    });
+    expect(state.selectedWorkflowId).toBe("wan2_2_flf2v.json");
+    expect(state.rulesWorkflowSourceId).toBe("wan2_2_flf2v.json");
+    expect(state.activeWorkflowRules?.aspect_ratio_processing?.enabled).toBe(true);
+    expect(state.activeWorkflowRules?.aspect_ratio_processing?.target_nodes).toEqual([
+      {
+        node_id: "67",
+        width_param: "width",
+        height_param: "height",
+      },
+    ]);
+  });
+
   it("drops incompatible persisted rules when a different workflow is loaded into the editor tab", async () => {
     useGenerationStore.setState({
       selectedWorkflowId: "video_ltx2_3_i2v.json",
