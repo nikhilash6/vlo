@@ -37,6 +37,7 @@ export default defineConfig(({ mode }) => {
   // Backend now owns all ComfyUI UI/API/WS passthrough routes.
   const proxiedBackendPaths = [
     "/app",
+    "/downloads",
     "/sam2",
     "/comfyui-frame",
     "/comfy",
