@@ -426,3 +426,31 @@ export async function getWorkflowRules(
   }
   return payload;
 }
+
+export async function resolveWorkflowRules(options: {
+  workflow: Record<string, unknown>;
+  graphData?: Record<string, unknown> | null;
+  workflowId?: string | null;
+}): Promise<WorkflowRulesResponse> {
+  const resp = await fetch(`${COMFY_API}/workflow/rules/resolve`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      workflow: options.workflow,
+      ...(options.graphData ? { graph_data: options.graphData } : {}),
+      ...(options.workflowId ? { workflow_id: options.workflowId } : {}),
+    }),
+  });
+  if (!resp.ok) {
+    await throwRequestError("Workflow rules resolve", resp);
+  }
+  const payload = (await resp.json()) as WorkflowRulesResponse;
+  payload.rules = createDefaultWorkflowRules(payload.rules ?? {});
+  payload.has_sidecar = payload.has_sidecar === true;
+  if (!Array.isArray(payload.warnings)) {
+    payload.warnings = [];
+  }
+  return payload;
+}

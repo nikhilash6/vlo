@@ -73,6 +73,11 @@ describe("useGenerationStore workflow editor sync", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     resetGenerationStore();
+    vi.spyOn(comfyApi, "resolveWorkflowRules").mockResolvedValue({
+      workflow_id: "",
+      rules: createDefaultWorkflowRules(),
+      warnings: [],
+    });
   });
 
   it("keeps a stable workflow id when syncing editor changes", async () => {
@@ -177,6 +182,80 @@ describe("useGenerationStore workflow editor sync", () => {
       { id: TEMP_WORKFLOW_ID, name: "Edited Workflow" },
     ]);
     expect(state.syncedGraphData).toEqual({ nodes: [{ id: 4 }] });
+  });
+
+  it("refreshes live widget rules from the current editor workflow graph", async () => {
+    vi.spyOn(comfyApi, "resolveWorkflowRules").mockResolvedValue({
+      workflow_id: "wf.json",
+      rules: createDefaultWorkflowRules({
+        nodes: {
+          "4814": {
+            widgets: {
+              noise_seed: {
+                label: "noise_seed",
+                control_after_generate: true,
+                default_randomize: true,
+                value_type: "int",
+                min: 0,
+                max: 99,
+              },
+            },
+          },
+        },
+      }),
+      warnings: [],
+    });
+
+    useGenerationStore.setState({
+      selectedWorkflowId: TEMP_WORKFLOW_ID,
+      availableWorkflows: [{ id: TEMP_WORKFLOW_ID, name: "Edited Workflow" }],
+      activeRulesWarnings: [],
+      activeWorkflowRules: createDefaultWorkflowRules(),
+      rulesWorkflowSourceId: "wf.json",
+      tempWorkflow: {
+        workflow: { "1": { class_type: "LoadImage", inputs: {} } },
+        graphData: { nodes: [{ id: 1 }] },
+        inputs: makeInputs(),
+        rules: createDefaultWorkflowRules(),
+        rulesSourceId: "wf.json",
+        rulesWarnings: [],
+      },
+    });
+
+    await useGenerationStore.getState().registerWorkflowFromEditor(
+      { "4814": { class_type: "RandomNoise", inputs: { noise_seed: 42 } } },
+      {
+        nodes: [
+          {
+            id: 4814,
+            type: "RandomNoise",
+            widgets_values: [42, "randomize"],
+          },
+        ],
+      },
+      [],
+      "__temp__.json",
+    );
+
+    expect(comfyApi.resolveWorkflowRules).toHaveBeenCalledWith({
+      workflow: {
+        "4814": { class_type: "RandomNoise", inputs: { noise_seed: 42 } },
+      },
+      graphData: {
+        nodes: [
+          {
+            id: 4814,
+            type: "RandomNoise",
+            widgets_values: [42, "randomize"],
+          },
+        ],
+      },
+      workflowId: "wf.json",
+    });
+    expect(
+      useGenerationStore.getState().activeWorkflowRules?.nodes["4814"]?.widgets
+        ?.noise_seed?.default_randomize,
+    ).toBe(true);
   });
 
   it("drops incompatible persisted rules when a different workflow is loaded into the editor tab", async () => {

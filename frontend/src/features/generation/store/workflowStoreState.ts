@@ -189,20 +189,36 @@ export function buildWorkflowStoreState(
 
     registerWorkflowFromEditor: async (workflow, graphData, inputs, filename) => {
       const state = get();
-      const { availableWorkflows, selectedWorkflowId } = state;
+      const { availableWorkflows, selectedWorkflowId, tempWorkflow } = state;
       const hasCompatibleRules = areWorkflowRulesCompatibleWithWorkflow(
         workflow,
         state.activeWorkflowRules,
       );
-      const resolvedRules = hasCompatibleRules
+      let resolvedRules = hasCompatibleRules
         ? state.activeWorkflowRules
         : EMPTY_WORKFLOW_RULES;
-      const resolvedRulesSourceId = hasCompatibleRules
-        ? state.rulesWorkflowSourceId
+      let resolvedRulesSourceId = hasCompatibleRules
+        ? (tempWorkflow?.rulesSourceId ?? state.rulesWorkflowSourceId)
         : null;
-      const resolvedRulesWarnings = hasCompatibleRules
+      let resolvedRulesWarnings = hasCompatibleRules
         ? state.activeRulesWarnings
         : [];
+
+      try {
+        const resolved = await comfyApi.resolveWorkflowRules({
+          workflow,
+          graphData,
+          workflowId: resolvedRulesSourceId,
+        });
+        resolvedRules = resolved.rules;
+        resolvedRulesWarnings = resolved.warnings ?? [];
+      } catch (error) {
+        console.warn(
+          "[Generation] Failed to resolve live workflow rules from editor sync; falling back to cached rules",
+          error,
+        );
+      }
+
       const presented = applyPresentationRules(
         inputs,
         resolvedRules,

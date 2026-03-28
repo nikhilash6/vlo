@@ -215,6 +215,44 @@ def _resolve_workflow_sidecar_path(filename: str) -> Path | None:
     return None
 
 
+def _resolve_workflow_rules_response(
+    workflow: dict[str, Any],
+    *,
+    workflow_id: str | None = None,
+) -> dict[str, Any]:
+    rules_model, warnings = load_rules_model_for_workflow(
+        WORKFLOWS_DIR,
+        workflow_id,
+        fallback_dirs=[DEFAULT_WORKFLOWS_DIR],
+    )
+    rules_model = enrich_rules_with_object_info(rules_model, workflow)
+    rules = dump_resolved_rules(rules_model)
+    nodes_with_widgets = {
+        nid: list(nr.get("widgets", {}).keys())
+        for nid, nr in rules.get("nodes", {}).items()
+        if isinstance(nr, dict) and nr.get("widgets")
+    }
+    logger.info(
+        "[rules/%s] Returning rules with %d widget nodes: %s",
+        workflow_id or "<inline>",
+        len(nodes_with_widgets),
+        nodes_with_widgets,
+    )
+
+    has_sidecar = (
+        isinstance(workflow_id, str)
+        and _is_safe_workflow_filename(workflow_id)
+        and _resolve_workflow_sidecar_path(workflow_id) is not None
+    )
+
+    return {
+        "workflow_id": workflow_id or "",
+        "has_sidecar": has_sidecar,
+        "rules": rules,
+        "warnings": dump_warning_models(warnings),
+    }
+
+
 def _merge_input_node_entries(
     dynamic_entries: list[dict[str, Any]],
     static_entries: list[dict[str, Any]],
@@ -515,35 +553,15 @@ async def get_workflow_rules(filename: str):
         )
 
     try:
-        rules_model, warnings = load_rules_model_for_workflow(
-            WORKFLOWS_DIR, filename,
-            fallback_dirs=[DEFAULT_WORKFLOWS_DIR],
-        )
-
-        # Enrich with auto-discovered widgets from object_info
-        try:
-            workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
-            if isinstance(workflow, dict):
-                rules_model = enrich_rules_with_object_info(rules_model, workflow)
-            else:
-                logger.warning("[rules/%s] workflow is not a dict: %s", filename, type(workflow).__name__)
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("[rules/%s] Failed to read workflow for enrichment: %s", filename, exc)
-
-        rules = dump_resolved_rules(rules_model)
-        nodes_with_widgets = {
-            nid: list(nr.get("widgets", {}).keys())
-            for nid, nr in rules.get("nodes", {}).items()
-            if isinstance(nr, dict) and nr.get("widgets")
-        }
-        logger.info("[rules/%s] Returning rules with %d widget nodes: %s", filename, len(nodes_with_widgets), nodes_with_widgets)
-
-        return {
-            "workflow_id": filename,
-            "has_sidecar": _resolve_workflow_sidecar_path(filename) is not None,
-            "rules": rules,
-            "warnings": dump_warning_models(warnings),
-        }
+        workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+        if not isinstance(workflow, dict):
+            logger.warning(
+                "[rules/%s] workflow is not a dict: %s",
+                filename,
+                type(workflow).__name__,
+            )
+            workflow = {}
+        return _resolve_workflow_rules_response(workflow, workflow_id=filename)
     except OSError as exc:
         return error_response(
             500,
@@ -552,6 +570,48 @@ async def get_workflow_rules(filename: str):
             retryable=True,
             details={"reason": str(exc)},
         )
+
+
+@router.post("/workflow/rules/resolve")
+async def resolve_workflow_rules(request: Request):
+    """Resolve rules for arbitrary workflow content and optional graph data."""
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        return error_response(
+            400,
+            "invalid_workflow_rules_payload",
+            "Workflow rules payload must be valid JSON",
+            retryable=False,
+        )
+
+    if not isinstance(body, dict):
+        return error_response(
+            400,
+            "invalid_workflow_rules_payload",
+            "Workflow rules payload must be an object",
+            retryable=False,
+        )
+
+    workflow = body.get("workflow")
+    if not isinstance(workflow, dict):
+        return error_response(
+            400,
+            "invalid_workflow_payload",
+            "Workflow rules resolution requires a workflow object",
+            retryable=False,
+        )
+
+    graph_data = body.get("graph_data")
+    workflow_for_enrichment = graph_data if isinstance(graph_data, dict) else workflow
+    workflow_id = body.get("workflow_id")
+    if not isinstance(workflow_id, str):
+        workflow_id = None
+
+    return _resolve_workflow_rules_response(
+        workflow_for_enrichment,
+        workflow_id=workflow_id,
+    )
 
 
 @router.post("/generate")
