@@ -98,6 +98,15 @@ export async function upsertFamily(family: AssetFamily): Promise<void> {
   await useAssetStore.getState().upsertFamily(family);
 }
 
+export async function setFamilyRepresentative(
+  familyId: string,
+  representativeAssetId: string,
+): Promise<void> {
+  await useAssetStore
+    .getState()
+    .setFamilyRepresentative(familyId, representativeAssetId);
+}
+
 export async function deleteAsset(assetId: string): Promise<void> {
   await useAssetStore.getState().deleteAsset(assetId);
 }

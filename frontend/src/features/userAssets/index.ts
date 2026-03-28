@@ -17,6 +17,7 @@ export {
   getAssets,
   inspectAssetFamilyCompatibility,
   scanForNewAssets,
+  setFamilyRepresentative,
   upsertFamily,
   useAsset,
   useAssetSourceUrl,

@@ -39,6 +39,10 @@ interface AssetStore {
     compatibilityHint?: AssetFamilyCompatibility | null,
   ) => Promise<Asset | null>;
   upsertFamily: (family: AssetFamily) => Promise<void>;
+  setFamilyRepresentative: (
+    familyId: string,
+    representativeAssetId: string,
+  ) => Promise<void>;
   updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
   fetchAssets: () => Promise<void>;
   scanForNewAssets: () => Promise<void>;
@@ -145,6 +149,85 @@ function pickRepresentativeAssetIdForFamily(
     })[0]?.id;
 }
 
+function isRepresentativeAssetIdValidForFamily(
+  assets: readonly Asset[],
+  family: AssetFamily,
+  representativeAssetId: string | undefined,
+): representativeAssetId is string {
+  if (!representativeAssetId) {
+    return false;
+  }
+
+  const representativeAsset = assets.find(
+    (asset) => asset.id === representativeAssetId,
+  );
+  return Boolean(
+    representativeAsset && doesAssetBelongToFamily(representativeAsset, family),
+  );
+}
+
+function setRepresentativeAssetIdForFamily(
+  assets: readonly Asset[],
+  families: readonly AssetFamily[],
+  familyId: string,
+  representativeAssetId: string,
+  updatedAt = Date.now(),
+): AssetFamily[] {
+  const family = families.find((candidate) => candidate.id === familyId);
+  if (!family) {
+    return [...families];
+  }
+
+  const representativeAsset = assets.find(
+    (asset) => asset.id === representativeAssetId,
+  );
+  if (
+    !representativeAsset ||
+    !doesAssetBelongToFamily(representativeAsset, family) ||
+    family.representativeAssetId === representativeAssetId
+  ) {
+    return [...families];
+  }
+
+  return families.map((candidate) =>
+    candidate.id === familyId
+      ? {
+          ...candidate,
+          representativeAssetId,
+          updatedAt,
+        }
+      : candidate,
+  );
+}
+
+function syncAssetFamilyIdsToDraftAssets(
+  draftAssets: Record<string, Asset> | undefined,
+  assets: readonly Asset[],
+): void {
+  if (!draftAssets) {
+    return;
+  }
+
+  for (const asset of assets) {
+    if (!draftAssets[asset.id]) {
+      continue;
+    }
+
+    draftAssets[asset.id].familyId = asset.familyId;
+  }
+}
+
+function syncFamiliesToDraft(
+  draft: { assetFamilies?: Record<string, AssetFamily> },
+  families: readonly AssetFamily[],
+): void {
+  if (families.length > 0) {
+    draft.assetFamilies = toAssetFamilyRecordMap(families);
+  } else {
+    delete draft.assetFamilies;
+  }
+}
+
 function clearInvalidFamilyReferences(
   assets: readonly Asset[],
   families: readonly AssetFamily[],
@@ -174,7 +257,13 @@ function reconcileFamiliesWithAssets(
   updatedAt = Date.now(),
 ): AssetFamily[] {
   return families.flatMap((family) => {
-    const representativeAssetId = pickRepresentativeAssetIdForFamily(assets, family);
+    const representativeAssetId = isRepresentativeAssetIdValidForFamily(
+      assets,
+      family,
+      family.representativeAssetId,
+    )
+      ? family.representativeAssetId
+      : pickRepresentativeAssetIdForFamily(assets, family);
     if (!representativeAssetId) {
       return [];
     }
@@ -630,25 +719,52 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
 
     try {
       await projectDocumentService.updateProjectDocument((draft) => {
-        if (draft.assets) {
-          for (const asset of sanitizedState.assets) {
-            if (!draft.assets[asset.id]) {
-              continue;
-            }
-
-            draft.assets[asset.id].familyId = asset.familyId;
-          }
-        }
-
-        if (sanitizedState.families.length > 0) {
-          draft.assetFamilies = toAssetFamilyRecordMap(sanitizedState.families);
-        } else {
-          delete draft.assetFamilies;
-        }
+        syncAssetFamilyIdsToDraftAssets(draft.assets, sanitizedState.assets);
+        syncFamiliesToDraft(draft, sanitizedState.families);
       });
     } catch (error) {
       console.error(
         `Failed to persist asset family update for '${family.id}'`,
+        error,
+      );
+      set({ assets: previousAssets, families: previousFamilies });
+    }
+  },
+
+  setFamilyRepresentative: async (familyId: string, representativeAssetId: string) => {
+    const previousAssets = get().assets;
+    const previousFamilies = get().families;
+    const updatedAt = Date.now();
+    const nextFamilies = setRepresentativeAssetIdForFamily(
+      previousAssets,
+      previousFamilies,
+      familyId,
+      representativeAssetId,
+      updatedAt,
+    );
+
+    if (
+      nextFamilies.length === previousFamilies.length &&
+      nextFamilies.every((family, index) => family === previousFamilies[index])
+    ) {
+      return;
+    }
+
+    const sanitizedState = sanitizeAssetFamilyState(
+      previousAssets,
+      nextFamilies,
+      updatedAt,
+    );
+    set(sanitizedState);
+
+    try {
+      await projectDocumentService.updateProjectDocument((draft) => {
+        syncAssetFamilyIdsToDraftAssets(draft.assets, sanitizedState.assets);
+        syncFamiliesToDraft(draft, sanitizedState.families);
+      });
+    } catch (error) {
+      console.error(
+        `Failed to persist representative update for family '${familyId}'`,
         error,
       );
       set({ assets: previousAssets, families: previousFamilies });
@@ -663,11 +779,25 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
 
     const previousAssets = get().assets;
     const previousFamilies = get().families;
+    const updatedAt = Date.now();
+    const nextAssets = previousAssets.map((asset) =>
+      asset.id === id ? { ...asset, ...updates } : asset,
+    );
+    const nextUpdatedAsset = nextAssets.find((asset) => asset.id === id);
+    const nextFamilies =
+      updates.favourite === true && nextUpdatedAsset?.familyId
+        ? setRepresentativeAssetIdForFamily(
+            nextAssets,
+            previousFamilies,
+            nextUpdatedAsset.familyId,
+            nextUpdatedAsset.id,
+            updatedAt,
+          )
+        : [...previousFamilies];
     const sanitizedState = sanitizeAssetFamilyState(
-      previousAssets.map((asset) =>
-        asset.id === id ? { ...asset, ...updates } : asset,
-      ),
-      previousFamilies,
+      nextAssets,
+      nextFamilies,
+      updatedAt,
     );
 
     set(sanitizedState);
@@ -678,13 +808,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
           return;
         }
 
-        for (const asset of sanitizedState.assets) {
-          if (!draft.assets[asset.id]) {
-            continue;
-          }
-
-          draft.assets[asset.id].familyId = asset.familyId;
-        }
+        syncAssetFamilyIdsToDraftAssets(draft.assets, sanitizedState.assets);
 
         const nextAsset = sanitizedState.assets.find((asset) => asset.id === id);
         if (nextAsset) {
@@ -693,11 +817,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
           });
         }
 
-        if (sanitizedState.families.length > 0) {
-          draft.assetFamilies = toAssetFamilyRecordMap(sanitizedState.families);
-        } else {
-          delete draft.assetFamilies;
-        }
+        syncFamiliesToDraft(draft, sanitizedState.families);
       });
     } catch (error) {
       console.error(`Failed to persist asset update for '${id}'`, error);
@@ -788,19 +908,8 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
 
         delete draft.assets[id];
 
-        for (const asset of sanitizedState.assets) {
-          if (!draft.assets[asset.id]) {
-            continue;
-          }
-
-          draft.assets[asset.id].familyId = asset.familyId;
-        }
-
-        if (sanitizedState.families.length > 0) {
-          draft.assetFamilies = toAssetFamilyRecordMap(sanitizedState.families);
-        } else {
-          delete draft.assetFamilies;
-        }
+        syncAssetFamilyIdsToDraftAssets(draft.assets, sanitizedState.assets);
+        syncFamiliesToDraft(draft, sanitizedState.families);
       });
     } catch (e) {
       console.error("Failed to update project.json during deletion", e);

@@ -361,6 +361,218 @@ describe("useAssetStore", () => {
     );
   });
 
+  it("setFamilyRepresentative updates the stored representative", async () => {
+    (useProjectStore.getState as Mock).mockReturnValue({ rootHandle: {} });
+
+    useAssetStore.setState({
+      assets: [
+        {
+          id: "asset-1",
+          name: "clip-a.mp4",
+          hash: "hash-1",
+          src: "blob:clip-a",
+          type: "video",
+          familyId: "family-1",
+          duration: 5,
+          fps: 24,
+          createdAt: 1,
+        },
+        {
+          id: "asset-2",
+          name: "clip-b.mp4",
+          hash: "hash-2",
+          src: "blob:clip-b",
+          type: "video",
+          familyId: "family-1",
+          duration: 5,
+          fps: 24,
+          createdAt: 2,
+        },
+      ],
+      families: [
+        {
+          id: "family-1",
+          representativeAssetId: "asset-1",
+          autoMatchKeys: ["generation-family:v1:test"],
+          compatibility: {
+            assetType: "video",
+            durationMs: 5000,
+            fpsMilli: 24000,
+          },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+    });
+
+    const mockProjectJson = JSON.stringify({
+      assets: {
+        "asset-1": {
+          id: "asset-1",
+          name: "clip-a.mp4",
+          hash: "hash-1",
+          src: "clip-a.mp4",
+          type: "video",
+          familyId: "family-1",
+          createdAt: 1,
+        },
+        "asset-2": {
+          id: "asset-2",
+          name: "clip-b.mp4",
+          hash: "hash-2",
+          src: "clip-b.mp4",
+          type: "video",
+          familyId: "family-1",
+          createdAt: 2,
+        },
+      },
+      assetFamilies: {
+        "family-1": {
+          id: "family-1",
+          representativeAssetId: "asset-1",
+          compatibility: {
+            assetType: "video",
+            durationMs: 5000,
+            fpsMilli: 24000,
+          },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      },
+    });
+
+    (fileSystemService.readFile as Mock).mockImplementation(async (path: string) => {
+      if (path === ".vloproject/project.json") {
+        return { text: async () => mockProjectJson };
+      }
+      throw new Error("File not found: " + path);
+    });
+
+    await useAssetStore
+      .getState()
+      .setFamilyRepresentative("family-1", "asset-2");
+
+    expect(useAssetStore.getState().families).toEqual([
+      expect.objectContaining({
+        id: "family-1",
+        representativeAssetId: "asset-2",
+      }),
+    ]);
+    expect(fileSystemService.writeFile).toHaveBeenCalledWith(
+      ".vloproject/project.json",
+      expect.stringContaining('"representativeAssetId": "asset-2"'),
+    );
+  });
+
+  it("updateAsset promotes the latest favourited family member to representative", async () => {
+    (useProjectStore.getState as Mock).mockReturnValue({ rootHandle: {} });
+
+    useAssetStore.setState({
+      assets: [
+        {
+          id: "asset-1",
+          name: "clip-a.mp4",
+          hash: "hash-1",
+          src: "blob:clip-a",
+          type: "video",
+          familyId: "family-1",
+          duration: 5,
+          fps: 24,
+          createdAt: 1,
+          favourite: false,
+        },
+        {
+          id: "asset-2",
+          name: "clip-b.mp4",
+          hash: "hash-2",
+          src: "blob:clip-b",
+          type: "video",
+          familyId: "family-1",
+          duration: 5,
+          fps: 24,
+          createdAt: 2,
+          favourite: false,
+        },
+      ],
+      families: [
+        {
+          id: "family-1",
+          representativeAssetId: "asset-1",
+          autoMatchKeys: ["generation-family:v1:test"],
+          compatibility: {
+            assetType: "video",
+            durationMs: 5000,
+            fpsMilli: 24000,
+          },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+    });
+
+    const mockProjectJson = JSON.stringify({
+      assets: {
+        "asset-1": {
+          id: "asset-1",
+          name: "clip-a.mp4",
+          hash: "hash-1",
+          src: "clip-a.mp4",
+          type: "video",
+          familyId: "family-1",
+          createdAt: 1,
+          favourite: false,
+        },
+        "asset-2": {
+          id: "asset-2",
+          name: "clip-b.mp4",
+          hash: "hash-2",
+          src: "clip-b.mp4",
+          type: "video",
+          familyId: "family-1",
+          createdAt: 2,
+          favourite: false,
+        },
+      },
+      assetFamilies: {
+        "family-1": {
+          id: "family-1",
+          representativeAssetId: "asset-1",
+          compatibility: {
+            assetType: "video",
+            durationMs: 5000,
+            fpsMilli: 24000,
+          },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      },
+    });
+
+    (fileSystemService.readFile as Mock).mockImplementation(async (path: string) => {
+      if (path === ".vloproject/project.json") {
+        return { text: async () => mockProjectJson };
+      }
+      throw new Error("File not found: " + path);
+    });
+
+    await useAssetStore.getState().updateAsset("asset-2", { favourite: true });
+
+    expect(
+      useAssetStore.getState().assets.find((asset) => asset.id === "asset-2")
+        ?.favourite,
+    ).toBe(true);
+    expect(useAssetStore.getState().families).toEqual([
+      expect.objectContaining({
+        id: "family-1",
+        representativeAssetId: "asset-2",
+      }),
+    ]);
+    expect(fileSystemService.writeFile).toHaveBeenCalledWith(
+      ".vloproject/project.json",
+      expect.stringContaining('"representativeAssetId": "asset-2"'),
+    );
+  });
+
   it("updateAsset rolls back the optimistic change when persistence fails", async () => {
     const consoleErrorSpy = vi
       .spyOn(console, "error")
