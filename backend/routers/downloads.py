@@ -32,7 +32,7 @@ def list_available_models():
 
 
 @router.post("/start")
-def start_download(request: StartDownloadRequest):
+async def start_download(request: StartDownloadRequest):
     if request.modelType == "sam2":
         try:
             specs = get_sam2_download_specs(request.modelKey)
@@ -47,7 +47,11 @@ def start_download(request: StartDownloadRequest):
     else:
         raise HTTPException(status_code=400, detail=f"Unknown model type: {request.modelType}")
 
-    job = download_service.start_download(label=label, files=specs)
+    try:
+        job = download_service.start_download(label=label, files=specs)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
     return {"jobId": job.job_id, "label": job.label, "status": job.status}
 
 
@@ -68,7 +72,7 @@ async def stream_progress(job_id: str):
             if job.status in ("complete", "failed", "cancelled"):
                 return
 
-            progress_event: asyncio.Event | None = getattr(job, "_progress_event", None)
+            progress_event = job.progress_event
             if progress_event is not None:
                 progress_event.clear()
                 try:

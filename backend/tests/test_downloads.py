@@ -1,0 +1,72 @@
+import asyncio
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from routers import downloads
+from services import download_service
+from services.download_service import DownloadFileSpec, DownloadJob
+
+
+def test_start_download_route_runs_inside_event_loop(monkeypatch, tmp_path):
+    spec = DownloadFileSpec(
+        url="https://example.com/sam2.1_hiera_small.pt",
+        dest_path=str(tmp_path / "sam2.1_hiera_small.pt"),
+        filename="sam2.1_hiera_small.pt",
+    )
+
+    monkeypatch.setattr(download_service, "_active_jobs", {})
+    monkeypatch.setattr(download_service, "_active_destinations", {})
+    monkeypatch.setattr(download_service, "_job_destinations", {})
+    monkeypatch.setattr("routers.downloads.get_sam2_download_specs", lambda _model_key: [spec])
+    monkeypatch.setattr(
+        "routers.downloads.get_available_sam2_models",
+        lambda: [{"key": "sam2.1_hiera_small", "label": "SAM2.1 Small"}],
+    )
+
+    def fake_start_download(label: str, files: list[DownloadFileSpec]) -> DownloadJob:
+        asyncio.get_running_loop()
+        return DownloadJob(job_id="job-1", label=label, files=files)
+
+    monkeypatch.setattr("routers.downloads.download_service.start_download", fake_start_download)
+
+    response = asyncio.run(
+        downloads.start_download(
+            downloads.StartDownloadRequest(
+                modelType="sam2",
+                modelKey="sam2.1_hiera_small",
+            )
+        )
+    )
+
+    assert response == {
+        "jobId": "job-1",
+        "label": "SAM2.1 Small",
+        "status": "pending",
+    }
+
+
+def test_start_download_reuses_active_job_for_same_destinations(monkeypatch, tmp_path):
+    monkeypatch.setattr(download_service, "_active_jobs", {})
+    monkeypatch.setattr(download_service, "_active_destinations", {})
+    monkeypatch.setattr(download_service, "_job_destinations", {})
+
+    spec = DownloadFileSpec(
+        url="https://example.com/sam2.1_hiera_small.pt",
+        dest_path=str(tmp_path / "sam2.1_hiera_small.pt"),
+        filename="sam2.1_hiera_small.pt",
+    )
+
+    class _FakeLoop:
+        def create_task(self, coro):
+            coro.close()
+            return object()
+
+    monkeypatch.setattr(download_service.asyncio, "get_running_loop", lambda: _FakeLoop())
+
+    first_job = download_service.start_download("SAM2.1 Small", [spec])
+    duplicate_job = download_service.start_download("SAM2.1 Small", [spec])
+
+    assert duplicate_job is first_job
+    assert duplicate_job.job_id == first_job.job_id

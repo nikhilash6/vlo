@@ -52,8 +52,8 @@ export function Sam2ModelDownloadOverlay({ onModelsInstalled }: Sam2ModelDownloa
       const response = await getAvailableModels();
       setModels(response.sam2);
 
-      const allInstalled = response.sam2.length > 0 && response.sam2.every((m) => m.installed);
-      if (allInstalled) {
+      const hasInstalledModel = response.sam2.some((m) => m.installed);
+      if (hasInstalledModel) {
         onModelsInstalled();
       }
     } catch {

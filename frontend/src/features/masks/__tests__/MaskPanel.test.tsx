@@ -42,6 +42,11 @@ vi.mock("../components/Sam2MaskPanel", () => ({
     <div data-testid="sam2-mask-panel">{props.maskLabel}</div>
   ),
 }));
+vi.mock("../components/Sam2ModelDownloadOverlay", () => ({
+  Sam2ModelDownloadOverlay: () => (
+    <div data-testid="sam2-download-overlay">SAM2 download overlay</div>
+  ),
+}));
 
 function createMaskClip(
   parentClipId: string,
@@ -84,6 +89,7 @@ describe("MaskPanel", () => {
   const mockGenerateSam2FramePreview = vi.fn();
   const mockGenerateSam2Mask = vi.fn();
   const mockDeleteSelectedMask = vi.fn();
+  const mockEnsureSam2Available = vi.fn(async () => true);
   let baseHookValue: ReturnType<typeof useMaskPanel>;
 
   beforeEach(() => {
@@ -110,6 +116,7 @@ describe("MaskPanel", () => {
       isSam2Available: true,
       isSam2Checking: false,
       sam2AvailabilityError: null,
+      ensureSam2Available: mockEnsureSam2Available,
       clearSam2Points: mockClearSam2Points,
       clearSam2CurrentFramePoints: mockClearSam2CurrentFramePoints,
       generateSam2FramePreview: mockGenerateSam2FramePreview,
@@ -174,6 +181,17 @@ describe("MaskPanel", () => {
       "aria-disabled",
       "true",
     );
+  });
+
+  it("shows the SAM2 download overlay while SAM2 is unavailable", () => {
+    vi.mocked(useMaskPanel).mockReturnValue({
+      ...baseHookValue,
+      isSam2Available: false,
+    });
+
+    render(<MaskPanel />);
+
+    expect(screen.getByTestId("sam2-download-overlay")).toBeInTheDocument();
   });
 
   it("opens shape menu and dispatches selected shape", () => {
