@@ -1,4 +1,22 @@
 {
   "name": "LTX2.3 I2V",
-  "version": 1
+  "version": 1,
+  "aspect_ratio_processing": {
+    "enabled": true,
+    "stride": 32,
+    "resolutions": [480, 720, 1080],
+    "search_steps": 2,
+    "target_nodes": [
+      {
+        "node_id": "267",
+        "width_param": "value_2",
+        "height_param": "value_3"
+      }
+    ],
+    "postprocess": {
+      "enabled": true,
+      "mode": "stretch_exact",
+      "apply_to": "all_visual_outputs"
+    }
+  }
 }
