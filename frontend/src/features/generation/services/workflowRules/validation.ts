@@ -60,12 +60,62 @@ function messageForValidationRule(rule: WorkflowInputValidationRule): string {
   return "";
 }
 
+function buildApplicableValidationTargets(
+  workflowInputs: readonly WorkflowInput[],
+): ReadonlySet<string> {
+  const targets = new Set<string>();
+
+  for (const input of workflowInputs) {
+    targets.add(getWorkflowInputId(input));
+    targets.add(input.nodeId);
+  }
+
+  return targets;
+}
+
+function resolveApplicableValidationRule(
+  rule: WorkflowInputValidationRule,
+  applicableTargets: ReadonlySet<string> | null,
+): WorkflowInputValidationRule | null {
+  if (!applicableTargets) {
+    return rule;
+  }
+
+  if (rule.kind === "required" || rule.kind === "optional") {
+    return applicableTargets.has(rule.input) ? rule : null;
+  }
+
+  const filteredInputs = Array.from(
+    new Set((rule.inputs ?? []).filter((inputId) => applicableTargets.has(inputId))),
+  );
+  if (filteredInputs.length === 0) {
+    return null;
+  }
+
+  return {
+    ...rule,
+    inputs: filteredInputs,
+    min: Math.min(rule.min, filteredInputs.length),
+  };
+}
+
 export function findUnsatisfiedInputValidationRules(
   rules: WorkflowRules | null | undefined,
   providedInputIds: ReadonlySet<string>,
+  workflowInputs?: readonly WorkflowInput[],
 ): WorkflowInputValidationFailure[] {
+  const applicableTargets =
+    workflowInputs !== undefined
+      ? buildApplicableValidationTargets(workflowInputs)
+      : null;
+
   return resolveInputValidationRules(rules).flatMap<WorkflowInputValidationFailure>(
-    (rule) => {
+    (rawRule) => {
+      const rule = resolveApplicableValidationRule(rawRule, applicableTargets);
+      if (!rule) {
+        return [];
+      }
+
       if (rule.kind === "optional") {
         return [];
       }
@@ -144,6 +194,7 @@ export function findWorkflowInputValidationFailures(
   const explicitOrLegacy = findUnsatisfiedInputValidationRules(
     rules,
     providedInputIds,
+    workflowInputs,
   );
   const legacyRequired = findMissingRequiredWorkflowInputs(
     workflowInputs,

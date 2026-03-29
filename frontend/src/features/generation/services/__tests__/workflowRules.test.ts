@@ -315,6 +315,63 @@ describe("resolvePresentedInputs", () => {
     ]);
   });
 
+  it("ignores explicit validation targets that are absent from the current prompt inputs", () => {
+    const { rules } = normalizeWorkflowRules({
+      version: 1,
+      validation: {
+        inputs: [
+          {
+            kind: "required",
+            input: "76",
+            message: "Primary image is required.",
+          },
+          {
+            kind: "required",
+            input: "81",
+            message: "Secondary image is required.",
+          },
+        ],
+      },
+    });
+
+    const workflowInputs: WorkflowInput[] = [
+      {
+        nodeId: "76",
+        classType: "LoadImage",
+        inputType: "image",
+        param: "image",
+        label: "Primary image",
+        currentValue: null,
+        origin: "inferred",
+      },
+    ];
+
+    expect(
+      findWorkflowInputValidationFailures(workflowInputs, rules, new Set()),
+    ).toEqual([
+      {
+        kind: "required",
+        input: "76",
+        message: "Primary image is required.",
+      },
+    ]);
+
+    expect(
+      findWorkflowInputValidationFailures(
+        workflowInputs,
+        rules,
+        new Set(["76", "76:image"]),
+      ),
+    ).toEqual([]);
+    expect(
+      isWorkflowInputValidationSatisfied(
+        workflowInputs,
+        rules,
+        new Set(["76", "76:image"]),
+      ),
+    ).toBe(true);
+  });
+
   it("treats inputs as required unless explicitly marked optional", () => {
     const { rules } = normalizeWorkflowRules({
       version: 1,
