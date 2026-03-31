@@ -9,5 +9,6 @@ export type {
   ProjectConfig,
   AspectRatio,
   AssetBrowserDisplay,
+  ProjectFitMode,
 } from "./useProjectStore";
 export type { ProjectDocument, TimelineSnapshot } from "./types/ProjectDocument";

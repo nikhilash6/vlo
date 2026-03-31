@@ -16,10 +16,16 @@ import CheckIcon from "@mui/icons-material/Check";
 import type {
   AspectRatio,
   AssetBrowserDisplay,
+  ProjectFitMode,
 } from "../../features/project";
 import { useProjectStore } from "../../features/project/useProjectStore";
 
 const FPS_OPTIONS = [16, 24, 25, 30, 60];
+
+const FIT_MODE_OPTIONS: Array<{ value: ProjectFitMode; label: string }> = [
+  { value: "contain", label: "Contain (Letterbox)" },
+  { value: "cover", label: "Cover (Fill & Crop)" },
+];
 
 const ASPECT_RATIO_OPTIONS: Array<{ value: AspectRatio; label: string }> = [
   { value: "16:9", label: "16:9 (Landscape)" },
@@ -58,10 +64,16 @@ export function ProjectSettingsMenu() {
     void updateConfig({ aspectRatio });
     handleClose();
   };
+  const handleFitModeChange = (fitMode: ProjectFitMode) => {
+    void updateConfig({ fitMode });
+    handleClose();
+  };
+
   const handleAssetBrowserDisplayChange = (display: AssetBrowserDisplay) => {
     void updateConfig({ assetBrowserDisplay: display });
     handleClose();
   };
+  const currentFitMode = config.fitMode || "contain";
   const currentLayout = config.layoutMode || "compact";
   const currentFps = config.fps || 30;
   const currentAspectRatio = config.aspectRatio || "16:9";
@@ -156,6 +168,24 @@ export function ProjectSettingsMenu() {
           >
             <ListItemText>{ratio.label}</ListItemText>
             {currentAspectRatio === ratio.value && (
+              <CheckIcon fontSize="small" color="primary" sx={{ ml: 1 }} />
+            )}
+          </MenuItem>
+        ))}
+
+        <Divider sx={{ borderColor: "#333" }} />
+        <Box sx={{ px: 2, py: 1 }}>
+          <Typography variant="caption" color="gray">
+            FIT MODE
+          </Typography>
+        </Box>
+        {FIT_MODE_OPTIONS.map((option) => (
+          <MenuItem
+            key={option.value}
+            onClick={() => handleFitModeChange(option.value)}
+          >
+            <ListItemText>{option.label}</ListItemText>
+            {currentFitMode === option.value && (
               <CheckIcon fontSize="small" color="primary" sx={{ ml: 1 }} />
             )}
           </MenuItem>

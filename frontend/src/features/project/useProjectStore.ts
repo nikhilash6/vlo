@@ -17,10 +17,12 @@ import type {
 
 export type AspectRatio = "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
 export type AssetBrowserDisplay = "grouped" | "ungrouped";
+export type ProjectFitMode = "contain" | "cover";
 
 export interface ProjectConfig {
   aspectRatio: AspectRatio;
   fps: number;
+  fitMode: ProjectFitMode;
   layoutMode?: "full-height" | "compact";
   assetBrowserDisplay: AssetBrowserDisplay;
 }
@@ -28,12 +30,14 @@ export interface ProjectConfig {
 const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   aspectRatio: "16:9",
   fps: 30,
+  fitMode: "cover",
   layoutMode: "compact",
   assetBrowserDisplay: "grouped",
 };
 
 const VALID_ASPECT_RATIOS = new Set<AspectRatio>(PROJECT_ASPECT_RATIOS);
 
+const VALID_FIT_MODES = new Set<ProjectFitMode>(["contain", "cover"]);
 const VALID_LAYOUT_MODES = new Set<NonNullable<ProjectConfig["layoutMode"]>>([
   "full-height",
   "compact",
@@ -66,6 +70,12 @@ const getProjectConfigFromDocument = (
     typeof value?.fps === "number" && Number.isFinite(value.fps) && value.fps > 0
       ? value.fps
       : DEFAULT_PROJECT_CONFIG.fps;
+
+  // Existing projects without fitMode default to "contain" for backwards compat
+  const fitMode = VALID_FIT_MODES.has(value?.fitMode as ProjectFitMode)
+    ? (value?.fitMode as ProjectFitMode)
+    : "contain";
+
   const assetBrowserDisplay = VALID_ASSET_BROWSER_DISPLAY_MODES.has(
     value?.assetBrowserDisplay as AssetBrowserDisplay,
   )
@@ -75,6 +85,7 @@ const getProjectConfigFromDocument = (
   return {
     aspectRatio,
     fps,
+    fitMode,
     layoutMode,
     assetBrowserDisplay,
   };
@@ -86,6 +97,7 @@ const hasProjectConfigChanged = (
 ): boolean =>
   current.aspectRatio !== next.aspectRatio ||
   current.fps !== next.fps ||
+  current.fitMode !== next.fitMode ||
   current.layoutMode !== next.layoutMode ||
   current.assetBrowserDisplay !== next.assetBrowserDisplay;
 

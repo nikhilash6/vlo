@@ -29,8 +29,8 @@ import { TemplateRegistry } from "./templates/index";
  *
  * Uses the "contain" template by default.
  */
-export const getBaseLayout = (containerSize: Size, contentSize: Size) => {
-  const template = TemplateRegistry["contain"];
+export const getBaseLayout = (containerSize: Size, contentSize: Size, mode: string = "contain") => {
+  const template = TemplateRegistry[mode] ?? TemplateRegistry["contain"];
   const defaults = template({ container: containerSize, content: contentSize });
 
   // Return only layout-related defaults
