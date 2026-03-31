@@ -160,7 +160,7 @@ vi.mock("../TrackAudioRenderer", () => ({
 
 vi.mock("../../../userAssets", () => ({
   getAssetInput: vi.fn(),
-  ensureAssetSourceLoaded: vi.fn(),
+  ensureAssetSourceLoaded: vi.fn().mockResolvedValue(null),
 }));
 
 // Mock OfflineAudioContext

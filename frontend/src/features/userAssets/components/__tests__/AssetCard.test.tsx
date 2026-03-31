@@ -51,7 +51,7 @@ vi.mock("../../useAssetStore");
 const mockAsset: Asset = {
   id: "asset-1",
   name: "clip.mp4",
-  src: "clip.mp4",
+  src: "blob:http://localhost/clip-mp4",
   proxySrc: "proxy-clip.mp4",
   type: "video",
   hash: "hash-1",
@@ -153,6 +153,7 @@ function mockStores(timelineClipCount: number) {
     selector({
       deleteAsset: mocks.mockDeleteAsset,
       updateAsset: mocks.mockUpdateAsset,
+      assets: [mockAsset] as Asset[],
     } as unknown as AssetStoreState),
   );
 }
