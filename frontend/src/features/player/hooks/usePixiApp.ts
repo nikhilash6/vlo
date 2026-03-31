@@ -42,6 +42,7 @@ export function usePixiApp(
       pixiApp.stage.hitArea = pixiApp.screen;
 
       appRef.current = pixiApp;
+      (window as unknown as Record<string, unknown>).__PIXI_APP__ = pixiApp;
       setApp(pixiApp);
       setCanvasSize({ width: clientWidth, height: clientHeight });
     };

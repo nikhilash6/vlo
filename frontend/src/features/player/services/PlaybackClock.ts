@@ -39,6 +39,10 @@ export class PlaybackClock {
 
 export const playbackClock = new PlaybackClock();
 export const playbackFrameClock = new PlaybackClock();
+// DEBUG: expose for console diagnostics
+const _w = window as unknown as Record<string, unknown>;
+_w.__PLAYBACK_CLOCK__ = playbackClock;
+_w.__PLAYBACK_FRAME_CLOCK__ = playbackFrameClock;
 
 export function alignPlaybackTickToFrame(
   time: number,

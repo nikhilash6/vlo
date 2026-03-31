@@ -831,7 +831,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       return inputCache.get(assetId)!;
     }
 
-    let asset = get().assets.find((a) => a.id === assetId);
+    let asset: Asset | null = get().assets.find((a) => a.id === assetId) ?? null;
     if (!asset) return null;
 
     if (!asset.file && !isHydratedAssetUrl(asset.src)) {
@@ -987,3 +987,5 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     }
   },
 }));
+// DEBUG: expose for console diagnostics
+(window as unknown as Record<string, unknown>).__ASSET_STORE__ = useAssetStore;

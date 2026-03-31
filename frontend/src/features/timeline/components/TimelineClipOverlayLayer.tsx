@@ -470,17 +470,24 @@ function TimelineClipOverlayItemCollection({
       {timedItems.map((item) => {
         const placement = item.placement;
         const { top, translateY } = getLanePosition(placement.lane);
+        let visualTicks: number;
+        let offsetPx: number;
 
-        const visualTicks =
-          placement.kind === "sourceTime"
-            ? mapSourceTimeToVisualTime(clip, placement.sourceTimeTicks)
-            : mapLayerInputToVisualTime(
-                clip,
-                placement.transformId,
-                placement.layerInputTicks,
-              );
+        if (placement.kind === "sourceTime") {
+          visualTicks = mapSourceTimeToVisualTime(clip, placement.sourceTimeTicks);
+          offsetPx = placement.offsetPx;
+        } else if (placement.kind === "layerTime") {
+          visualTicks = mapLayerInputToVisualTime(
+            clip,
+            placement.transformId,
+            placement.layerInputTicks,
+          );
+          offsetPx = placement.offsetPx;
+        } else {
+          return null;
+        }
+
         const baseLeftPx = toBasePixels(visualTicks);
-        const offsetPx = placement.offsetPx;
 
         return (
           <TimelineClipOverlayItemNode

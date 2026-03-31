@@ -95,12 +95,11 @@ describe("useTimelineKeyframeClipOverlay", () => {
       "layerTime",
       "layerTime",
     ]);
-    expect(result.current.map((item) => item.placement.transformId)).toEqual([
-      "position_1",
-      "scale_1",
-      "position_1",
-      "rotation_1",
-    ]);
+    expect(
+      result.current.map((item) =>
+        item.placement.kind === "layerTime" ? item.placement.transformId : null,
+      ),
+    ).toEqual(["position_1", "scale_1", "position_1", "rotation_1"]);
     expect(result.current.map((item) => item.placement.lane)).toEqual([
       "top",
       "middle",
@@ -156,9 +155,13 @@ describe("useTimelineKeyframeClipOverlay", () => {
     const { result } = renderHook(() => useOverlayItems(parentClip));
 
     expect(result.current).toHaveLength(2);
-    expect(result.current.every((item) => item.placement.transformId === "speed_1")).toBe(
-      true,
-    );
+    expect(
+      result.current.every(
+        (item) =>
+          item.placement.kind === "layerTime" &&
+          item.placement.transformId === "speed_1",
+      ),
+    ).toBe(true);
     expect(result.current.every((item) => item.placement.lane === "middle")).toBe(true);
   });
 });

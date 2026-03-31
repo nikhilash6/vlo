@@ -253,7 +253,7 @@ describe("useGenerationStore workflow editor sync", () => {
       workflowId: "wf.json",
     });
     expect(
-      useGenerationStore.getState().activeWorkflowRules?.nodes["4814"]?.widgets
+      useGenerationStore.getState().activeWorkflowRules?.nodes?.["4814"]?.widgets
         ?.noise_seed?.default_randomize,
     ).toBe(true);
   });
@@ -532,6 +532,7 @@ describe("useGenerationStore workflow editor sync", () => {
       deferred: false,
       workflowResult: null,
       reason: "sync failed",
+      warnings: null,
     });
 
     useGenerationStore.setState({

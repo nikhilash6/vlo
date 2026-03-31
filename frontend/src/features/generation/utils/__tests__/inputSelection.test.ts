@@ -14,6 +14,7 @@ describe("inputSelection", () => {
         aspectRatio: "16:9",
         fps: 24,
         layoutMode: "compact",
+        assetBrowserDisplay: "grouped",
       },
     });
     useTimelineStore.setState({

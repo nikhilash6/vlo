@@ -1552,3 +1552,5 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
     },
   };
 });
+// DEBUG: expose for console diagnostics
+(window as unknown as Record<string, unknown>).__TIMELINE_STORE__ = useTimelineStore;

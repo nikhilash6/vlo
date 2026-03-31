@@ -208,7 +208,7 @@ export function buildWorkflowStoreState(
       let resolvedRules = hasCompatibleRules
         ? state.activeWorkflowRules
         : EMPTY_WORKFLOW_RULES;
-      let resolvedRulesSourceId = hasCompatibleRules
+      const resolvedRulesSourceId = hasCompatibleRules
         ? (tempWorkflow?.rulesSourceId ?? state.rulesWorkflowSourceId)
         : null;
       let resolvedRulesWarnings = hasCompatibleRules

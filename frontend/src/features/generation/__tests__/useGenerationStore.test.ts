@@ -76,6 +76,7 @@ describe("useGenerationStore workflow rules", () => {
         aspectRatio: "16:9",
         fps: 30,
         layoutMode: "compact",
+        assetBrowserDisplay: "grouped",
       },
     });
 

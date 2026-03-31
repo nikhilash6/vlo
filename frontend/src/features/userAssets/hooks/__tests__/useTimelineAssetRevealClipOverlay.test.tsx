@@ -1,13 +1,13 @@
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Asset, AssetFamily } from "../../../../types/Asset";
-import type { TimelineClip } from "../../../../types/TimelineTypes";
+import type { StandardTimelineClip } from "../../../../types/TimelineTypes";
 import { TICKS_PER_SECOND, useTimelineStore } from "../../../timeline";
 import { useAssetBrowserRevealStore } from "../../useAssetBrowserRevealStore";
 import { useAssetStore } from "../../useAssetStore";
 import { useTimelineAssetRevealClipOverlay } from "../useTimelineAssetRevealClipOverlay";
 
-const baseClip: TimelineClip = {
+const baseClip: StandardTimelineClip = {
   id: "clip-1",
   trackId: "track-1",
   start: 0,
@@ -74,7 +74,7 @@ const families: AssetFamily[] = [
   },
 ];
 
-function useOverlayItems(clip: TimelineClip) {
+function useOverlayItems(clip: StandardTimelineClip) {
   const overlay = useTimelineAssetRevealClipOverlay();
   return overlay.useItems({ clip, isSelected: false });
 }
@@ -141,7 +141,7 @@ describe("useTimelineAssetRevealClipOverlay", () => {
     });
 
     rerender({
-      clip: useTimelineStore.getState().clips[0],
+      clip: useTimelineStore.getState().clips[0] as StandardTimelineClip,
     });
     result.current[2].onClick?.();
     expect(useTimelineStore.getState().clips[0]).toMatchObject({

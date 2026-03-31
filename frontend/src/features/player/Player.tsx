@@ -340,7 +340,7 @@ function PlayerImpl() {
     } finally {
       closeDialog();
     }
-  }, [config.fps]);
+  }, []);
 
   const handleExtractFrame = useCallback(() => {
     const { closeDialog, enterFrameSelectionMode, setOnConfirmSelection } =

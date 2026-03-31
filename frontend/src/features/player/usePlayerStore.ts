@@ -11,3 +11,5 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   setIsPlaying: (isPlaying) => set({ isPlaying }),
   togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
 }));
+// DEBUG: expose for console diagnostics
+(window as unknown as Record<string, unknown>).__PLAYER_STORE__ = usePlayerStore;

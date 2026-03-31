@@ -7,6 +7,8 @@ import {
 } from "./workflowInputs";
 
 type MediaInputType = Exclude<WorkflowInput["inputType"], "text">;
+type TextWorkflowInput = WorkflowInput & { inputType: "text" };
+type MediaWorkflowInput = WorkflowInput & { inputType: MediaInputType };
 
 type CarryoverValueMap<T> = Readonly<Record<string, T>>;
 
@@ -34,17 +36,17 @@ function buildClassParamSignature(input: WorkflowInput): string {
   ].join("|");
 }
 
-function buildCarryoverMatches(
-  previousInputs: readonly WorkflowInput[],
-  nextInputs: readonly WorkflowInput[],
-  canUseDirect: (input: WorkflowInput) => boolean,
-  canUseHeuristic: (input: WorkflowInput) => boolean,
+function buildCarryoverMatches<TInput extends WorkflowInput>(
+  previousInputs: readonly TInput[],
+  nextInputs: readonly TInput[],
+  canUseDirect: (input: TInput) => boolean,
+  canUseHeuristic: (input: TInput) => boolean,
 ): Map<string, string> {
   const previousInputLookup = buildWorkflowInputLookup(previousInputs);
   const usedPreviousIds = new Set<string>();
   const matches = new Map<string, string>();
 
-  const assign = (nextInput: WorkflowInput, previousInput: WorkflowInput) => {
+  const assign = (nextInput: TInput, previousInput: TInput) => {
     const nextId = getWorkflowInputId(nextInput);
     const previousId = getWorkflowInputId(previousInput);
     matches.set(nextId, previousId);
@@ -52,9 +54,9 @@ function buildCarryoverMatches(
   };
 
   const resolveUnmatchedCandidates = (
-    nextInput: WorkflowInput,
-    predicate: (input: WorkflowInput) => boolean,
-  ): WorkflowInput[] =>
+    nextInput: TInput,
+    predicate: (input: TInput) => boolean,
+  ): TInput[] =>
     previousInputs.filter((previousInput) => {
       const previousId = getWorkflowInputId(previousInput);
       return (
@@ -69,7 +71,7 @@ function buildCarryoverMatches(
       previousInputLookup.get(getWorkflowInputId(nextInput)),
       previousInputLookup.get(nextInput.nodeId),
     ]
-      .filter((candidate): candidate is WorkflowInput => Boolean(candidate))
+      .filter((candidate): candidate is TInput => Boolean(candidate))
       .filter(
         (candidate, index, candidates) =>
           candidates.findIndex(
@@ -90,7 +92,7 @@ function buildCarryoverMatches(
 
   const heuristicSignaturePasses = [
     buildLabelClassParamSignature,
-    (input: WorkflowInput) => normalizeLabel(input.label),
+    (input: TInput) => normalizeLabel(input.label),
     buildClassParamSignature,
   ];
 
@@ -187,9 +189,11 @@ export function carryOverTextValues(
   nextInputs: readonly WorkflowInput[],
 ): Record<string, string> {
   const previousTextInputs = previousInputs.filter(
-    (input) => input.inputType === "text",
+    (input): input is TextWorkflowInput => input.inputType === "text",
   );
-  const nextTextInputs = nextInputs.filter((input) => input.inputType === "text");
+  const nextTextInputs = nextInputs.filter(
+    (input): input is TextWorkflowInput => input.inputType === "text",
+  );
   const previousInputLookup = buildWorkflowInputLookup(previousTextInputs);
   const previousValuesById = new Map<string, string>();
 
@@ -230,12 +234,10 @@ export function carryOverMediaInputs(
   nextInputs: readonly WorkflowInput[],
 ): Record<string, GenerationMediaInputValue | null> {
   const previousMediaInputs = previousInputs.filter(
-    (input): input is WorkflowInput & { inputType: MediaInputType } =>
-      input.inputType !== "text",
+    (input): input is MediaWorkflowInput => input.inputType !== "text",
   );
   const nextMediaInputs = nextInputs.filter(
-    (input): input is WorkflowInput & { inputType: MediaInputType } =>
-      input.inputType !== "text",
+    (input): input is MediaWorkflowInput => input.inputType !== "text",
   );
   const previousInputLookup = buildWorkflowInputLookup(previousMediaInputs);
   const previousValuesById = new Map<string, GenerationMediaInputValue>();
