@@ -1,5 +1,5 @@
 export * from "./types";
-export { applyClipTransforms, type FitMode } from "./applyTransformations";
+export { applyClipTransforms } from "./applyTransformations";
 export { TransformationPanel } from "./components/TransformationPanel";
 export { DefaultTransformationSections } from "./components/DefaultTransformationSections";
 export {

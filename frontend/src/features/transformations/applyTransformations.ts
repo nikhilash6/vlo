@@ -12,10 +12,8 @@ import type { ScalarParameter } from "./types";
 import { liveParamStore } from "./services/liveParamStore";
 import { livePreviewParamStore } from "./services/livePreviewParamStore";
 
-export type FitMode = "contain" | "cover";
-
 export interface ApplyClipTransformsOptions {
-  baseLayoutMode?: FitMode | "origin";
+  baseLayoutMode?: "contain" | "origin";
   notifyLiveParams?: boolean;
 }
 
@@ -84,17 +82,7 @@ export function applyClipTransforms(
   const texWidth = contentSizeOverride?.width ?? targetTextureSize?.width ?? 1;
   const texHeight = contentSizeOverride?.height ?? targetTextureSize?.height ?? 1;
 
-  // Per-clip fitMode override (from a "fitMode" transform entry) takes priority
-  const clipFitTransform = clip.transformations?.find(
-    (t) => t.type === "fitMode" && t.isEnabled,
-  );
-  const clipFitMode =
-    clipFitTransform?.parameters?.fitMode === "contain" ||
-    clipFitTransform?.parameters?.fitMode === "cover"
-      ? (clipFitTransform.parameters.fitMode as FitMode)
-      : undefined;
-
-  const baseLayoutMode = clipFitMode ?? options?.baseLayoutMode ?? "contain";
+  const baseLayoutMode = options?.baseLayoutMode ?? "contain";
   const layoutDefaults =
     baseLayoutMode === "origin"
       ? {
@@ -107,7 +95,7 @@ export function applyClipTransforms(
       : getBaseLayout(logicalContainerSize, {
           width: texWidth,
           height: texHeight,
-        }, baseLayoutMode);
+        });
 
   const state: TransformState = {
     ...TransformationSystem.getDefaults(),

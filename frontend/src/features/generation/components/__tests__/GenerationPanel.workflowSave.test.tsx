@@ -115,6 +115,7 @@ function makeHookState(
     handleInputDrop: vi.fn(),
     handleExternalInputDrop: vi.fn(),
     handleInputClear: vi.fn(),
+    handleSwapMediaInputs: vi.fn(),
     handleClickSelect: vi.fn(),
     widgetInputs: [],
     widgetValues: {},

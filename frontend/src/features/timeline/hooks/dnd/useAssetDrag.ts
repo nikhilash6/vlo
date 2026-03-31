@@ -66,26 +66,37 @@ export const useAssetDrag = () => {
       const interaction = useInteractionStore.getState();
       const activeClip = interaction.activeClip;
       const snappedStartTicks = interaction.snappedStartTicks;
+      const activeData = event.active.data.current;
+      const overData = event.over?.data.current;
 
       // Always clean up interaction state first
       interaction.stopDrag();
 
-      if (!activeClip) return;
-
       // Check for asset-slot drop (e.g. GenerationPanel input slots)
-      const overData = event.over?.data.current;
-      if (overData?.type === "asset-slot" && overData.onDrop) {
-        const asset = event.active.data.current?.asset as Asset | undefined;
+      if (overData?.type === "asset-slot") {
+        if (activeData?.type === "asset" && overData.onDrop) {
+          const asset = activeData.asset as Asset | undefined;
+          if (
+            asset &&
+            (overData.accept as AssetType[]).some((acceptedType) =>
+              assetMatchesType(asset, acceptedType),
+            )
+          ) {
+            overData.onDrop(asset);
+          }
+          return;
+        }
+
         if (
-          asset &&
-          (overData.accept as AssetType[]).some((acceptedType) =>
-            assetMatchesType(asset, acceptedType),
-          )
+          activeData?.type === "media-input" &&
+          typeof overData.onReorderDrop === "function"
         ) {
-          overData.onDrop(asset);
+          overData.onReorderDrop(activeData);
         }
         return;
       }
+
+      if (!activeClip) return;
 
       // Check if we effectively dropped "on" the timeline
       // The moveStrategy.handleEnd contains the logic to calculate coordinates
