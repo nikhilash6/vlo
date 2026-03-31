@@ -196,7 +196,7 @@ class NodePolicyRule(TypedDict):
 DEFAULT_NODE_POLICY_RULES: list[NodePolicyRule] = [
     {
         "constraint": {"class_names": frozenset({"KSampler", "KSamplerAdvanced"})},
-        "policy": {"default_widget_params": ["cfg", "noise_seed"]},
+        "policy": {"default_widget_params": ["cfg", "seed", "noise_seed"]},
     },
     {
         "constraint": {"class_names": frozenset({"EmptyLTXVLatentVideo"})},

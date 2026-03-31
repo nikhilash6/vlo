@@ -32,6 +32,8 @@ from services.workflow_rules.schema import dump_resolved_rules
 
 log = logging.getLogger(__name__)
 
+_ALWAYS_DISCOVERED_WIDGET_PARAMS = frozenset({"seed", "noise_seed"})
+
 OBJECT_INFO_PATH = (
     Path(__file__).parent.parent.parent / "assets" / ".config" / "object_info.json"
 )
@@ -331,6 +333,18 @@ def _resolve_default_policy_widgets(
         widget_entry = all_widgets.get(param_name)
         if isinstance(widget_entry, dict):
             selected_widgets[param_name] = widget_entry
+
+    for param_name, widget_entry in all_widgets.items():
+        if not isinstance(widget_entry, dict):
+            continue
+
+        normalized_param = param_name.strip().lower()
+        should_force_include = normalized_param in _ALWAYS_DISCOVERED_WIDGET_PARAMS or (
+            widget_entry.get("control_after_generate") is True
+            and widget_entry.get("default_randomize") is True
+        )
+        if should_force_include:
+            selected_widgets.setdefault(param_name, widget_entry)
 
     return selected_widgets or None
 

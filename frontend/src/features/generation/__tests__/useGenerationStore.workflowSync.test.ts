@@ -365,6 +365,96 @@ describe("useGenerationStore workflow editor sync", () => {
     ]);
   });
 
+  it("keeps derived mask sidecar rules when the visual editor graph omits a node but the api workflow still includes it", async () => {
+    vi.spyOn(comfyApi, "resolveWorkflowRules").mockImplementation(
+      async ({ workflowId }) => ({
+        workflow_id: workflowId ?? "",
+        rules:
+          workflowId === "vlo_VACE_inpaint.json"
+            ? createDefaultWorkflowRules({
+                nodes: {
+                  "101": {
+                    binary_derived_mask_of: "98",
+                  },
+                },
+              })
+            : createDefaultWorkflowRules(),
+        warnings: [],
+      }),
+    );
+
+    useGenerationStore.setState({
+      selectedWorkflowId: "vlo_VACE_inpaint.json",
+      availableWorkflows: [
+        { id: "vlo_VACE_inpaint.json", name: "VACE Inpaint" },
+      ],
+      activeRulesWarnings: [],
+      activeWorkflowRules: createDefaultWorkflowRules({
+        nodes: {
+          "101": {
+            binary_derived_mask_of: "98",
+          },
+        },
+      }),
+      rulesWorkflowSourceId: "vlo_VACE_inpaint.json",
+    });
+
+    await useGenerationStore.getState().registerWorkflowFromEditor(
+      {
+        "98": { class_type: "LoadVideo", inputs: { video: "source.mov" } },
+        "101": { class_type: "LoadVideo", inputs: { video: "mask.mov" } },
+      },
+      {
+        nodes: [{ id: 98, type: "LoadVideo" }],
+      },
+      [
+        {
+          nodeId: "98",
+          classType: "LoadVideo",
+          inputType: "video",
+          param: "video",
+          label: "Video",
+          currentValue: null,
+          origin: "inferred",
+        },
+        {
+          nodeId: "101",
+          classType: "LoadVideo",
+          inputType: "video",
+          param: "video",
+          label: "Mask Video",
+          currentValue: null,
+          origin: "inferred",
+        },
+      ],
+      "__temp__.json",
+    );
+
+    expect(comfyApi.resolveWorkflowRules).toHaveBeenCalledWith({
+      workflow: {
+        "98": { class_type: "LoadVideo", inputs: { video: "source.mov" } },
+        "101": { class_type: "LoadVideo", inputs: { video: "mask.mov" } },
+      },
+      graphData: {
+        nodes: [{ id: 98, type: "LoadVideo" }],
+      },
+      workflowId: "vlo_VACE_inpaint.json",
+    });
+
+    const state = useGenerationStore.getState();
+    expect(state.rulesWorkflowSourceId).toBe("vlo_VACE_inpaint.json");
+    expect(state.workflowInputs.map((input) => input.nodeId)).toEqual(["98"]);
+    expect(state.derivedMaskMappings).toEqual([
+      {
+        maskNodeId: "101",
+        maskParam: "video",
+        sourceNodeId: "98",
+        sourceInputId: "98:video",
+        maskType: "binary",
+      },
+    ]);
+  });
+
   it("drops incompatible persisted rules when a different workflow is loaded into the editor tab", async () => {
     useGenerationStore.setState({
       selectedWorkflowId: "video_ltx2_3_i2v.json",

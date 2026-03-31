@@ -191,11 +191,20 @@ export function buildWorkflowStoreState(
     registerWorkflowFromEditor: async (workflow, graphData, inputs, filename) => {
       const state = get();
       const { availableWorkflows, selectedWorkflowId, tempWorkflow } = state;
-      const compatibilityWorkflow = graphData ?? workflow;
-      const hasCompatibleRules = areWorkflowRulesCompatibleWithWorkflow(
-        compatibilityWorkflow,
-        state.activeWorkflowRules,
-      );
+      const hasCompatibleRules =
+        // Prefer whichever editor payload still has the full node set.
+        // ComfyUI can transiently report a partial visual graph even when the
+        // API workflow remains complete after simple widget edits.
+        (graphData
+          ? areWorkflowRulesCompatibleWithWorkflow(
+              graphData,
+              state.activeWorkflowRules,
+            )
+          : false) ||
+        areWorkflowRulesCompatibleWithWorkflow(
+          workflow,
+          state.activeWorkflowRules,
+        );
       let resolvedRules = hasCompatibleRules
         ? state.activeWorkflowRules
         : EMPTY_WORKFLOW_RULES;

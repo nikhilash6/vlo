@@ -31,6 +31,7 @@ from services.workflow_rules import (  # noqa: E402
     normalize_rules_model,
 )
 from services.workflow_rules.object_info import set_object_info_cache  # noqa: E402
+from services.workflow_rules import object_info as workflow_object_info  # noqa: E402
 from services.workflow_rules.schema import (  # noqa: E402
     ResolvedWorkflowRules,
     compile_authored_v1_to_resolved,
@@ -880,6 +881,26 @@ def test_real_vace_inpaint_default_validation_requires_video_not_text():
     )
 
 
+def test_real_vace_inpaint_discovers_seed_widget_for_ksampler():
+    base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
+    workflow_path = base / "vlo_VACE_inpaint.json"
+    workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+
+    set_object_info_cache(None)
+    try:
+        rules_model, warnings = load_rules_model_for_workflow(base, workflow_path.name)
+        assert warnings == []
+        rules_model = enrich_rules_with_object_info(rules_model, workflow)
+        rules = dump_resolved_rules(rules_model)
+    finally:
+        set_object_info_cache(None)
+
+    sampler_widgets = rules["nodes"]["92"]["widgets"]
+    assert "cfg" in sampler_widgets
+    assert "seed" in sampler_widgets
+    assert sampler_widgets["seed"]["control_after_generate"] is True
+
+
 def test_enrich_rules_with_object_info_auto_discovers_length_widget_for_video_nodes():
     workflow = {
         "nodes": [
@@ -1144,7 +1165,7 @@ def test_enrich_rules_with_object_info_skips_linked_length_widget_targets():
     assert rules["nodes"]["267:228"].get("widgets", {}) == {}
 
 
-def test_enrich_rules_with_object_info_defaults_ksampler_to_cfg_only():
+def test_enrich_rules_with_object_info_defaults_ksampler_to_cfg_and_seed():
     workflow = {
         "145": {
             "class_type": "KSampler",
@@ -1215,8 +1236,9 @@ def test_enrich_rules_with_object_info_defaults_ksampler_to_cfg_only():
         set_object_info_cache(None)
 
     widgets = rules["nodes"]["145"]["widgets"]
-    assert list(widgets.keys()) == ["cfg"]
+    assert list(widgets.keys()) == ["cfg", "seed"]
     assert widgets["cfg"]["value_type"] == "float"
+    assert widgets["seed"]["control_after_generate"] is True
 
 
 def test_enrich_rules_with_object_info_defaults_ksampler_advanced_to_cfg_and_noise_seed():
@@ -1302,6 +1324,123 @@ def test_enrich_rules_with_object_info_defaults_ksampler_advanced_to_cfg_and_noi
     assert list(widgets.keys()) == ["cfg", "noise_seed"]
     assert widgets["cfg"]["value_type"] == "float"
     assert widgets["noise_seed"]["control_after_generate"] is True
+
+
+def test_enrich_rules_with_object_info_always_discovers_seed_widgets_under_policy_overrides(
+    monkeypatch,
+):
+    workflow = {
+        "145": {
+            "class_type": "CustomSampler",
+            "inputs": {
+                "seed": 1,
+                "cfg": 7.5,
+            },
+            "_meta": {"title": "CustomSampler"},
+        }
+    }
+    rules = {
+        "version": 1,
+        "nodes": {},
+        "output_injections": {},
+        "slots": {},
+        "mask_cropping": {"mode": "crop"},
+        "postprocessing": {
+            "mode": "auto",
+            "panel_preview": "raw_outputs",
+            "on_failure": "fallback_raw",
+        },
+    }
+    object_info = {
+        "CustomSampler": {
+            "input": {
+                "required": {
+                    "seed": ["INT", {"control_after_generate": True}],
+                    "cfg": ["FLOAT", {}],
+                }
+            },
+            "input_order": {
+                "required": ["seed", "cfg"],
+            },
+        }
+    }
+
+    monkeypatch.setattr(
+        workflow_object_info,
+        "resolve_node_policy",
+        lambda class_type, class_info, rules=None: (
+            {"default_widget_params": ["cfg"]} if class_type == "CustomSampler" else {}
+        ),
+    )
+    set_object_info_cache(object_info)
+    try:
+        enrich_rules_with_object_info(rules, workflow)
+    finally:
+        set_object_info_cache(None)
+
+    widgets = rules["nodes"]["145"]["widgets"]
+    assert list(widgets.keys()) == ["cfg", "seed"]
+    assert widgets["seed"]["control_after_generate"] is True
+
+
+def test_enrich_rules_with_object_info_always_discovers_randomized_cag_widgets_under_policy_overrides(
+    monkeypatch,
+):
+    workflow = {
+        "nodes": [
+            {
+                "id": 145,
+                "type": "CustomRandomizedNode",
+                "title": "CustomRandomizedNode",
+                "widgets_values": [5, "randomize", 7.5],
+            }
+        ]
+    }
+    rules = {
+        "version": 1,
+        "nodes": {},
+        "output_injections": {},
+        "slots": {},
+        "mask_cropping": {"mode": "crop"},
+        "postprocessing": {
+            "mode": "auto",
+            "panel_preview": "raw_outputs",
+            "on_failure": "fallback_raw",
+        },
+    }
+    object_info = {
+        "CustomRandomizedNode": {
+            "input": {
+                "required": {
+                    "strength": ["INT", {"control_after_generate": True}],
+                    "cfg": ["FLOAT", {}],
+                }
+            },
+            "input_order": {
+                "required": ["strength", "cfg"],
+            },
+        }
+    }
+
+    monkeypatch.setattr(
+        workflow_object_info,
+        "resolve_node_policy",
+        lambda class_type, class_info, rules=None: (
+            {"default_widget_params": ["cfg"]}
+            if class_type == "CustomRandomizedNode"
+            else {}
+        ),
+    )
+    set_object_info_cache(object_info)
+    try:
+        enrich_rules_with_object_info(rules, workflow)
+    finally:
+        set_object_info_cache(None)
+
+    widgets = rules["nodes"]["145"]["widgets"]
+    assert list(widgets.keys()) == ["cfg", "strength"]
+    assert widgets["strength"]["control_after_generate"] is True
+    assert widgets["strength"]["default_randomize"] is True
 
 
 def test_enrich_rules_with_object_info_appends_default_ksampler_advanced_widgets_to_sidecar_widgets():
