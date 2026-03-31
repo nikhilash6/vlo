@@ -103,6 +103,7 @@ function makeHookState(
     connectionChipLabel: "Connected",
     connectionChipColor: "success",
     connectionSummary: null,
+    comfyuiModelDownloadsEnabled: false,
     handleGenerate: vi.fn(),
     handleInterruptCurrent: vi.fn(),
     handleClearQueue: vi.fn(),

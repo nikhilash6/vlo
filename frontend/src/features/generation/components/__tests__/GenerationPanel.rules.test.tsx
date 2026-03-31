@@ -130,7 +130,8 @@ describe("GenerationPanel workflow rule hints", () => {
     });
   });
 
-  it("shows inferred input experimental hint", () => {
+  it("moves inferred-input and rule warnings to debug logging", () => {
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
     (useGenerationPanel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
       makeHookState({
         workflowInputs: [
@@ -145,13 +146,34 @@ describe("GenerationPanel workflow rule hints", () => {
           },
         ],
         hasInferredInputs: true,
+        workflowRuleWarnings: [
+          {
+            code: "unknown_widget_type",
+            message: "Unrecognized widget type 'custom_slider'",
+            node_id: "144",
+          },
+        ],
       }),
     );
 
     render(<GenerationPanel />);
+
     expect(
-      screen.getByText("Inferred inputs - experimental feature"),
-    ).toBeInTheDocument();
+      screen.queryByText("Inferred inputs - experimental feature"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Workflow rule warnings")).not.toBeInTheDocument();
+    expect(
+      debugSpy.mock.calls.some(
+        ([message]) => message === "[GenerationPanel] Using inferred workflow inputs",
+      ),
+    ).toBe(true);
+    expect(
+      debugSpy.mock.calls.some(
+        ([message]) => message === "[GenerationPanel] Workflow rule warnings",
+      ),
+    ).toBe(true);
+
+    debugSpy.mockRestore();
   }, 10000);
 
   it("hides stale workflow inputs while a new workflow is loading", () => {
@@ -277,26 +299,6 @@ describe("GenerationPanel workflow rule hints", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText("Generation resolution controls the short edge before strided resize."),
-    ).toBeInTheDocument();
-  });
-
-  it("renders rule warnings inline", () => {
-    (useGenerationPanel as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
-      makeHookState({
-        workflowRuleWarnings: [
-          {
-            code: "unknown_widget_type",
-            message: "Unrecognized widget type 'custom_slider'",
-            node_id: "144",
-          },
-        ],
-      }),
-    );
-
-    render(<GenerationPanel />);
-    expect(screen.getByText("Workflow rule warnings")).toBeInTheDocument();
-    expect(
-      screen.getByText("[144] Unrecognized widget type 'custom_slider'"),
     ).toBeInTheDocument();
   });
 
@@ -541,6 +543,93 @@ describe("GenerationPanel workflow rule hints", () => {
 
     render(<GenerationPanel />);
     expect(screen.getByRole("button", { name: "Send to Timeline" })).toBeInTheDocument();
+  });
+
+  it("switches to manual mode, hides smart-only controls, and shows edit workflow", async () => {
+    const setEditorOpen = vi.fn();
+    useGenerationStore.setState({
+      activeWorkflowRules: createDefaultWorkflowRules({
+        aspect_ratio_processing: {
+          enabled: true,
+          stride: 16,
+          search_steps: 2,
+          resolutions: [480, 720],
+          target_nodes: [
+            {
+              node_id: "49",
+              width_param: "width",
+              height_param: "height",
+            },
+          ],
+          postprocess: {
+            enabled: true,
+            mode: "stretch_exact",
+            apply_to: "all_visual_outputs",
+          },
+        },
+      }),
+      derivedMaskMappings: [
+        {
+          sourceNodeId: "1",
+          maskNodeId: "2",
+          maskParam: "file",
+          maskType: "binary",
+        },
+      ],
+      maskCropMode: "crop",
+    });
+
+    (useGenerationPanel as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (mode: "smart" | "manual" | undefined) =>
+        makeHookState({
+          setEditorOpen,
+          workflowInputs: [
+            {
+              nodeId: "6",
+              classType: "CLIPTextEncode",
+              inputType: "text",
+              param: "text",
+              label: mode === "manual" ? "Manual Prompt" : "Prompt",
+              currentValue: "",
+              origin: mode === "manual" ? "inferred" : "rule",
+            },
+          ],
+          widgetInputs:
+            mode === "manual"
+              ? [
+                  {
+                    nodeId: "145",
+                    param: "seed",
+                    currentValue: 123,
+                    config: {
+                      label: "Seed",
+                      controlAfterGenerate: false,
+                      valueType: "int",
+                    },
+                  },
+                ]
+              : [],
+          canGenerate: true,
+        }),
+    );
+
+    render(<GenerationPanel />);
+
+    expect(screen.getByLabelText("Resolution")).toBeInTheDocument();
+    expect(screen.getByLabelText("Mask processing")).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByLabelText("Mode"));
+    fireEvent.click(screen.getByRole("option", { name: "Manual" }));
+
+    expect(screen.queryByLabelText("Resolution")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Mask processing")).not.toBeInTheDocument();
+
+    const editWorkflowButton = await screen.findByRole("button", {
+      name: "Edit workflow",
+    });
+    fireEvent.click(editWorkflowButton);
+
+    expect(setEditorOpen).toHaveBeenCalledWith(true);
   });
 });
 

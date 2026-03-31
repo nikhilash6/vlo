@@ -26,6 +26,7 @@ import {
   renderTimelineSelectionToWebmWithMask,
 } from "../utils/inputSelection";
 import { resolveWidgetInputs } from "../store/workflowState";
+import { parseWorkflowInputs } from "../services/workflowBridge";
 import {
   DEFAULT_DERIVED_MASK_SOURCE_VIDEO_TREATMENT,
   resolveDerivedMaskVideoTreatments,
@@ -47,6 +48,8 @@ import {
 } from "../utils/mediaInputAssets";
 import { carryOverTextValues } from "../utils/workflowInputCarryover";
 import { assetMatchesType } from "../../../shared/utils/assetTypeDetection";
+import { getObjectInfo } from "../services/comfyuiApi";
+import { resolveManualWidgetInputs } from "../services/manualWorkflowWidgets";
 
 function applySelectionConfigDefaults(
   selection: ReturnType<typeof createTimelineSelection>,
@@ -107,10 +110,15 @@ function parseStoredWidgetValue(
   return storedValue;
 }
 
-export function useGenerationPanel() {
+export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
   const [editorOpen, setEditorOpen] = useState(false);
   const [urlAnchorEl, setUrlAnchorEl] = useState<null | HTMLElement>(null);
   const [urlInput, setUrlInput] = useState("");
+  const [manualObjectInfo, setManualObjectInfo] = useState<
+    Record<string, unknown> | null
+  >(null);
+  const [manualObjectInfoRequested, setManualObjectInfoRequested] =
+    useState(false);
 
   // Slot values keyed by workflow input ID
   const [textValues, setTextValues] = useState<Record<string, string>>({});
@@ -131,7 +139,7 @@ export function useGenerationPanel() {
   const latestPreviewUrl = useGenerationStore((s) => s.latestPreviewUrl);
   const previewAnimation = useGenerationStore((s) => s.previewAnimation);
   const comfyuiDirectUrl = useGenerationStore((s) => s.comfyuiDirectUrl);
-  const workflowInputs = useGenerationStore((s) => s.workflowInputs);
+  const smartWorkflowInputs = useGenerationStore((s) => s.workflowInputs);
   const mediaInputs = useGenerationStore((s) => s.mediaInputs);
   const activeJobId = useGenerationStore((s) => s.activeJobId);
   const jobs = useGenerationStore((s) => s.jobs);
@@ -206,27 +214,89 @@ export function useGenerationPanel() {
 
   // Resolve widget inputs from the synced workflow + active rules
   const syncedWorkflow = useGenerationStore((s) => s.syncedWorkflow);
+  const syncedGraphData = useGenerationStore((s) => s.syncedGraphData);
   const activeWorkflowRules = useGenerationStore((s) => s.activeWorkflowRules);
+  const inputNodeMap = useGenerationStore((s) => s.inputNodeMap);
   const lastAppliedWidgetValues = useGenerationStore(
     (s) => s.lastAppliedWidgetValues,
   );
-  const widgetInputs = useMemo(
+  const smartWidgetInputs = useMemo(
     () => resolveWidgetInputs(syncedWorkflow, activeWorkflowRules),
     [syncedWorkflow, activeWorkflowRules],
   );
+  const manualWorkflowInputs = useMemo(
+    () =>
+      syncedWorkflow ? parseWorkflowInputs(syncedWorkflow, inputNodeMap) : [],
+    [inputNodeMap, syncedWorkflow],
+  );
+  const manualWidgetInputs = useMemo(
+    () =>
+      resolveManualWidgetInputs(
+        syncedWorkflow,
+        manualObjectInfo,
+        syncedGraphData,
+      ),
+    [manualObjectInfo, syncedGraphData, syncedWorkflow],
+  );
+  const workflowInputs =
+    mode === "manual" ? manualWorkflowInputs : smartWorkflowInputs;
+  const widgetInputs =
+    mode === "manual" ? manualWidgetInputs : smartWidgetInputs;
   const workflowInputById = useMemo(
     () => buildWorkflowInputLookup(workflowInputs),
     [workflowInputs],
   );
   const derivedMaskVideoTreatmentBySourceNodeId = useMemo(
     () =>
-      resolveDerivedMaskVideoTreatments(
-        derivedMaskMappings,
-        widgetInputs,
-        widgetValues,
-      ),
-    [derivedMaskMappings, widgetInputs, widgetValues],
+      mode === "manual"
+        ? {}
+        : resolveDerivedMaskVideoTreatments(
+            derivedMaskMappings,
+            smartWidgetInputs,
+            widgetValues,
+          ),
+    [derivedMaskMappings, mode, smartWidgetInputs, widgetValues],
   );
+
+  useEffect(() => {
+    if (
+      mode !== "manual" ||
+      manualObjectInfo ||
+      manualObjectInfoRequested ||
+      connectionStatus !== "connected"
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    setManualObjectInfoRequested(true);
+
+    void getObjectInfo()
+      .then((nextObjectInfo) => {
+        if (cancelled) {
+          return;
+        }
+        setManualObjectInfo(nextObjectInfo);
+      })
+      .catch((error) => {
+        if (!import.meta.env.DEV) {
+          return;
+        }
+        console.debug(
+          "[useGenerationPanel] Failed to fetch object_info for manual widget discovery",
+          error,
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    connectionStatus,
+    manualObjectInfo,
+    manualObjectInfoRequested,
+    mode,
+  ]);
 
   useEffect(() => {
     widgetValuesRef.current = widgetValues;
@@ -393,11 +463,13 @@ export function useGenerationPanel() {
     const store = useGenerationStore.getState();
     const currentWidgetValues = widgetValuesRef.current;
     const currentDerivedMaskVideoTreatmentBySourceNodeId =
-      resolveDerivedMaskVideoTreatments(
-        derivedMaskMappings,
-        widgetInputs,
-        currentWidgetValues,
-      );
+      mode === "manual"
+        ? {}
+        : resolveDerivedMaskVideoTreatments(
+            derivedMaskMappings,
+            smartWidgetInputs,
+            currentWidgetValues,
+          );
 
     if (store.connectionStatus !== "connected") {
       store.connect();
@@ -407,7 +479,7 @@ export function useGenerationPanel() {
     // Build slot values from current UI state
     const slotValues: Record<string, SlotValue> = {};
 
-    for (const input of store.workflowInputs) {
+    for (const input of workflowInputs) {
       const inputId = getWorkflowInputId(input);
       if (input.inputType === "text") {
         const text =
@@ -459,8 +531,10 @@ export function useGenerationPanel() {
             preparedVideoFile: value.preparedVideoFile ?? undefined,
             preparedMaskFile: value.preparedMaskFile ?? undefined,
             derivedMaskVideoTreatment:
-              currentDerivedMaskVideoTreatmentBySourceNodeId[input.nodeId] ??
-              undefined,
+              mode === "manual"
+                ? undefined
+                : currentDerivedMaskVideoTreatmentBySourceNodeId[input.nodeId] ??
+                  undefined,
             preparedDerivedMaskVideoTreatment:
               value.preparedDerivedMaskVideoTreatment ?? undefined,
           };
@@ -511,12 +585,15 @@ export function useGenerationPanel() {
       count,
     );
   }, [
+    mode,
     queueGeneration,
     workflowInputById,
+    workflowInputs,
     textValues,
     widgetInputs,
-    randomizeToggles,
     derivedMaskMappings,
+    randomizeToggles,
+    smartWidgetInputs,
   ]);
 
   const handleClearQueue = useCallback(() => {
@@ -738,11 +815,15 @@ export function useGenerationPanel() {
             );
             closeSelectionMode();
 
-            const nodeMasks = derivedMaskMappings.filter(
-              (mapping) =>
-                mapping.sourceInputId === inputId ||
-                (!mapping.sourceInputId && mapping.sourceNodeId === input?.nodeId),
-            );
+            const nodeMasks =
+              mode === "manual"
+                ? []
+                : derivedMaskMappings.filter(
+                    (mapping) =>
+                      mapping.sourceInputId === inputId ||
+                      (!mapping.sourceInputId &&
+                        mapping.sourceNodeId === input?.nodeId),
+                  );
 
             if (nodeMasks.length > 0) {
               const videoTreatment =
@@ -833,6 +914,7 @@ export function useGenerationPanel() {
     [
       derivedMaskMappings,
       derivedMaskVideoTreatmentBySourceNodeId,
+      mode,
       setMediaInputFrameWithSelection,
       setMediaInputTimelineSelection,
       workflowInputById,
@@ -929,11 +1011,14 @@ export function useGenerationPanel() {
     return provided;
   }, [mediaInputs, textValues, workflowInputById, workflowInputs]);
 
-  const inputValidationFailures = findWorkflowInputValidationFailures(
-    workflowInputs,
-    activeWorkflowRules,
-    providedInputIds,
-  );
+  const inputValidationFailures =
+    mode === "manual"
+      ? []
+      : findWorkflowInputValidationFailures(
+          workflowInputs,
+          activeWorkflowRules,
+          providedInputIds,
+        );
   const inputValidationSatisfied = inputValidationFailures.length === 0;
 
   const backendConnected =

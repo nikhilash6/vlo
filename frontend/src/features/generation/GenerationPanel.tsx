@@ -196,6 +196,7 @@ function LivePreviewPlayback({
 
 export function GenerationPanel() {
   const [isBackendSavePending, setIsBackendSavePending] = useState(false);
+  const [workflowMode, setWorkflowMode] = useState<"smart" | "manual">("smart");
   const [generateMenuAnchorEl, setGenerateMenuAnchorEl] =
     useState<HTMLElement | null>(null);
   const [customGenerateDialogOpen, setCustomGenerateDialogOpen] =
@@ -272,7 +273,7 @@ export function GenerationPanel() {
     importedAssets,
     sendableAssets,
     handleSendToTimeline,
-  } = useGenerationPanel();
+  } = useGenerationPanel(workflowMode);
 
   const derivedMaskMappings = useGenerationStore((s) => s.derivedMaskMappings);
   const activeWorkflowRules = useGenerationStore((s) => s.activeWorkflowRules);
@@ -295,6 +296,8 @@ export function GenerationPanel() {
   const showResolutionSelector = Boolean(
     aspectRatioProcessingConfig?.enabled && hasAspectRatioTargets,
   );
+  const showSmartResolutionSelector =
+    workflowMode === "smart" && showResolutionSelector;
   const supportedResolutions =
     getSupportedWorkflowResolutions(activeWorkflowRules);
   const resolutionOptions: number[] =
@@ -329,6 +332,31 @@ export function GenerationPanel() {
       syncedWorkflow,
     ],
   );
+  const hasVisibleGenerationControls =
+    workflowInputs.length > 0 || widgetInputs.length > 0;
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
+    if (hasInferredInputs) {
+      console.debug("[GenerationPanel] Using inferred workflow inputs", {
+        workflowId: selectedWorkflowId,
+      });
+    }
+
+    if (workflowRuleWarnings.length > 0) {
+      console.debug("[GenerationPanel] Workflow rule warnings", {
+        workflowId: selectedWorkflowId,
+        warnings: workflowRuleWarnings,
+      });
+    }
+  }, [
+    hasInferredInputs,
+    selectedWorkflowId,
+    workflowRuleWarnings,
+  ]);
 
   useEffect(() => {
     if (!editorOpen) {
@@ -645,17 +673,35 @@ export function GenerationPanel() {
         </FormControl>
       </Box>
 
+      <Box sx={{ px: 2, pb: 2 }}>
+        <FormControl fullWidth size="small">
+          <InputLabel id="generation-mode-label">Mode</InputLabel>
+          <Select
+            labelId="generation-mode-label"
+            value={workflowMode}
+            label="Mode"
+            onChange={(event) =>
+              setWorkflowMode(event.target.value as "smart" | "manual")
+            }
+            sx={{ bgcolor: "#1a1a1a" }}
+          >
+            <MenuItem value="smart">Smart</MenuItem>
+            <MenuItem value="manual">Manual</MenuItem>
+          </Select>
+        </FormControl>
+      </Box>
+
       {showInlineWorkflowResolver ? (
         <WorkflowDependencyResolver
           workflowId={selectedWorkflowId}
-          warning={workflowWarning}
+          warning={workflowWarning!}
           onOpenEditor={() => setEditorOpen(true)}
           onRefreshWarning={handleRetryWorkflow}
         />
       ) : (
         <>
       {/* Dynamic Workflow Inputs */}
-      {showResolutionSelector && !isWorkflowLoading && (
+      {showSmartResolutionSelector && !isWorkflowLoading && (
         <Box sx={{ px: 2, pb: 2 }}>
           <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.25 }}>
             <FormControl fullWidth size="small">
@@ -760,7 +806,7 @@ export function GenerationPanel() {
             Retry workflow load
           </Button>
         </Box>
-      ) : workflowInputs.length === 0 ? (
+      ) : !hasVisibleGenerationControls ? (
         <Box sx={{ px: 2, pb: 2 }}>
           <Typography variant="caption" sx={{ color: "text.secondary" }}>
             No inputs detected (or workflow has no editable parameters).
@@ -769,35 +815,6 @@ export function GenerationPanel() {
           </Typography>
         </Box>
       ) : null}
-
-      {!isWorkflowLoading && hasInferredInputs && (
-        <Box sx={{ px: 2, pb: 1 }}>
-          <Typography variant="caption" sx={{ color: "warning.main" }}>
-            Inferred inputs - experimental feature
-          </Typography>
-        </Box>
-      )}
-
-      {!isWorkflowLoading && workflowRuleWarnings.length > 0 && (
-        <Box sx={{ px: 2, pb: 2 }}>
-          <Typography
-            variant="caption"
-            sx={{ color: "warning.light", display: "block", mb: 0.5 }}
-          >
-            Workflow rule warnings
-          </Typography>
-          {workflowRuleWarnings.slice(0, 4).map((warning, idx) => (
-            <Typography
-              key={`${warning.code}-${warning.node_id ?? "global"}-${idx}`}
-              variant="caption"
-              sx={{ color: "warning.main", display: "block", lineHeight: 1.4 }}
-            >
-              {warning.node_id ? `[${warning.node_id}] ` : ""}
-              {warning.message}
-            </Typography>
-          ))}
-        </Box>
-      )}
 
       {!isWorkflowLoading && !workflowLoadError ? (
         <GenerationInputs
@@ -814,7 +831,7 @@ export function GenerationPanel() {
           randomizeToggles={randomizeToggles}
           onWidgetChange={handleWidgetChange}
           onToggleRandomize={handleToggleRandomize}
-          showExactAspectRatioControl={showResolutionSelector}
+          showExactAspectRatioControl={showSmartResolutionSelector}
           exactAspectRatio={exactAspectRatio}
           onExactAspectRatioChange={setExactAspectRatio}
           exactAspectRatioTooltip={EXACT_ASPECT_RATIO_TOOLTIP}
@@ -822,7 +839,7 @@ export function GenerationPanel() {
       ) : null}
 
       {/* Mask processing */}
-      {hasMaskMappings && (
+      {workflowMode === "smart" && hasMaskMappings && (
         <Box sx={{ px: 2, pb: 2 }}>
           <FormControl
             fullWidth
@@ -865,6 +882,20 @@ export function GenerationPanel() {
           ) : null}
         </Box>
       )}
+
+      {workflowMode === "manual" ? (
+        <Box sx={{ px: 2, pb: 1 }}>
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={<OpenInNew />}
+            onClick={() => setEditorOpen(true)}
+            sx={{ textTransform: "none" }}
+          >
+            Edit workflow
+          </Button>
+        </Box>
+      ) : null}
 
       {/* Generate / Cancel Button */}
       <Box sx={{ px: 2, py: 2 }}>

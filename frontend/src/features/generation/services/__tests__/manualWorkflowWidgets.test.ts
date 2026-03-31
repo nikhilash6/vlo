@@ -1,0 +1,111 @@
+import { describe, expect, it } from "vitest";
+import { resolveManualWidgetInputs } from "../manualWorkflowWidgets";
+
+describe("resolveManualWidgetInputs", () => {
+  it("discovers seed-like workflow params without object_info", () => {
+    const widgets = resolveManualWidgetInputs(
+      {
+        "145": {
+          class_type: "KSampler",
+          inputs: {
+            seed: 123,
+            random_strength: 0.75,
+            cfg: 7,
+            noise_seed: ["12", 0],
+          },
+          _meta: { title: "Sampler" },
+        },
+      },
+      null,
+    );
+
+    expect(widgets.map((widget) => widget.param)).toEqual([
+      "seed",
+      "random_strength",
+    ]);
+    expect(widgets[0]?.config.valueType).toBe("int");
+    expect(widgets[1]?.config.valueType).toBe("float");
+  });
+
+  it("discovers control-after-generate params from object_info and graph widget values", () => {
+    const widgets = resolveManualWidgetInputs(
+      {
+        "145": {
+          class_type: "KSampler",
+          inputs: {},
+          _meta: { title: "Sampler" },
+        },
+      },
+      {
+        KSampler: {
+          input: {
+            required: {
+              seed: [
+                "INT",
+                {
+                  control_after_generate: true,
+                  default: 0,
+                  min: 0,
+                  max: 999,
+                },
+              ],
+              strength: [
+                "FLOAT",
+                {
+                  control_after_generate: true,
+                  default: 0.5,
+                  min: 0,
+                  max: 1,
+                },
+              ],
+            },
+          },
+          input_order: {
+            required: ["seed", "strength"],
+            optional: [],
+          },
+        },
+      },
+      {
+        nodes: [
+          {
+            id: 145,
+            title: "Sampler",
+            widgets_values: [77, "randomize", 0.65, "fixed"],
+          },
+        ],
+      },
+    );
+
+    expect(widgets.map((widget) => widget.param)).toEqual([
+      "seed",
+      "strength",
+    ]);
+    expect(widgets[0]?.currentValue).toBe(77);
+    expect(widgets[0]?.config.valueType).toBe("int");
+    expect(widgets[0]?.config.min).toBe(0);
+    expect(widgets[0]?.config.max).toBe(999);
+    expect(widgets[1]?.currentValue).toBe(0.65);
+    expect(widgets[1]?.config.valueType).toBe("float");
+  });
+
+  it("uses the node title for seed-like proxy value widgets", () => {
+    const widgets = resolveManualWidgetInputs(
+      {
+        "201": {
+          class_type: "PrimitiveNode",
+          inputs: {
+            value: 456,
+          },
+          _meta: { title: "Seed" },
+        },
+      },
+      null,
+    );
+
+    expect(widgets).toHaveLength(1);
+    expect(widgets[0]?.param).toBe("value");
+    expect(widgets[0]?.config.label).toBe("Seed");
+    expect(widgets[0]?.currentValue).toBe(456);
+  });
+});
