@@ -596,6 +596,13 @@ function AssetBrowserComponent() {
       return;
     }
 
+    if (
+      useAssetBrowserRevealStore.getState().revealRequest?.requestId !==
+      revealRequest.requestId
+    ) {
+      return;
+    }
+
     const assetToReveal = assets.find(
       (asset) => asset.id === revealRequest.assetId,
     );
@@ -604,7 +611,7 @@ function AssetBrowserComponent() {
     }
 
     if (!isAssetVisibleInBrowser(assetToReveal)) {
-      clearRevealRequest();
+      clearRevealRequest(revealRequest.requestId);
       return;
     }
 
@@ -613,7 +620,7 @@ function AssetBrowserComponent() {
     setFamilyScope(resolveFamilyScopeForAsset(assetToReveal, assets, families));
     selectAsset(assetToReveal.id);
     setPendingScrollAssetId(assetToReveal.id);
-    clearRevealRequest();
+    clearRevealRequest(revealRequest.requestId);
   }, [assets, clearRevealRequest, families, revealRequest, selectAsset]);
 
   React.useEffect(() => {

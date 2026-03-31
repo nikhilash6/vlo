@@ -8,7 +8,7 @@ interface AssetBrowserRevealRequest {
 interface AssetBrowserRevealState {
   revealRequest: AssetBrowserRevealRequest | null;
   revealAssetInBrowser: (assetId: string) => void;
-  clearRevealRequest: () => void;
+  clearRevealRequest: (requestId?: number) => void;
 }
 
 let nextRevealRequestId = 1;
@@ -26,8 +26,17 @@ export const useAssetBrowserRevealStore = create<AssetBrowserRevealState>(
 
       nextRevealRequestId += 1;
     },
-    clearRevealRequest: () => {
-      set({ revealRequest: null });
+    clearRevealRequest: (requestId) => {
+      set((state) => {
+        if (
+          requestId !== undefined &&
+          state.revealRequest?.requestId !== requestId
+        ) {
+          return state;
+        }
+
+        return { revealRequest: null };
+      });
     },
   }),
 );

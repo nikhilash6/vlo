@@ -5,7 +5,13 @@ import { TimelineContainer } from "../TimelineContainer";
 import { useTimelineStore } from "../useTimelineStore";
 import type { TimelineTrack, TimelineClip } from "../../../types/TimelineTypes";
 import type { TimelineViewState } from "../hooks/useTimelineViewStore";
+import type { TimelineClipOverlayDefinition } from "../clipOverlayApi";
+import { createEndpointOverlayItem } from "../clipOverlayApi";
 import { useAssetBrowserSelectionStore } from "../../userAssets/useAssetBrowserSelectionStore";
+import {
+  revealAssetInBrowser,
+  useAssetBrowserRevealStore,
+} from "../../userAssets/useAssetBrowserRevealStore";
 
 // --- 1. SETUP GLOBAL MOCKS ---
 globalThis.ResizeObserver = class ResizeObserver {
@@ -47,6 +53,44 @@ vi.mock("../components/TimelineToolbar", () => ({
 
 vi.mock("../components/HoverGapIndicator", () => ({
   HoverGapIndicator: () => <div data-testid="gap-indicator" />,
+}));
+
+vi.mock("../components/TimelineClip", () => ({
+  TimelineClipItem: ({
+    clip,
+    clipOverlays = [],
+  }: {
+    clip: TimelineClip;
+    clipOverlays?: readonly TimelineClipOverlayDefinition[];
+  }) => {
+    const overlayItems = clipOverlays.flatMap((definition) =>
+      definition.useItems({ clip, isSelected: false }),
+    );
+
+    return (
+      <div
+        data-testid={`timeline-clip-${clip.id}`}
+        onClick={(event) => {
+          event.stopPropagation();
+        }}
+      >
+        {clip.name}
+        {overlayItems.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            data-testid={`timeline-overlay-${item.id}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              item.onClick?.();
+            }}
+          >
+            {item.id}
+          </button>
+        ))}
+      </div>
+    );
+  },
 }));
 
 // Mock both possible paths for safety
@@ -128,6 +172,7 @@ describe("TimelineContainer", () => {
     });
 
     useAssetBrowserSelectionStore.setState({ selectedAssetIds: [] });
+    useAssetBrowserRevealStore.setState({ revealRequest: null });
   });
 
   afterEach(() => {
@@ -148,7 +193,15 @@ describe("TimelineContainer", () => {
     expect(screen.getByText("Track 1")).toBeInTheDocument();
   });
 
-  it("deselects clips when clicking the background", () => {
+  it("deselects clips and asset browser state when clicking the background", () => {
+    useAssetBrowserSelectionStore.setState({ selectedAssetIds: ["asset-1"] });
+    useAssetBrowserRevealStore.setState({
+      revealRequest: {
+        assetId: "asset-stale",
+        requestId: 1,
+      },
+    });
+
     render(
       <TimelineContainer
         scrollContainerRef={mockScrollRef}
@@ -165,6 +218,127 @@ describe("TimelineContainer", () => {
     fireEvent.click(scrollContainer);
 
     expect(useTimelineStore.getState().selectedClipIds).toEqual([]);
+    expect(useAssetBrowserSelectionStore.getState().selectedAssetIds).toEqual(
+      [],
+    );
+    expect(useAssetBrowserRevealStore.getState().revealRequest).toBeNull();
+  });
+
+  it("clears asset browser selection when clicking a timeline clip", () => {
+    useAssetBrowserSelectionStore.setState({ selectedAssetIds: ["asset-1"] });
+    useTimelineStore.setState({
+      tracks: [
+        {
+          id: "t1",
+          label: "Track 1",
+          isVisible: true,
+          isLocked: false,
+          isMuted: false,
+        },
+      ],
+      clips: [
+        {
+          id: "c1",
+          trackId: "t1",
+          type: "video",
+          name: "Clip 1",
+          start: 0,
+          timelineDuration: 50,
+          offset: 0,
+          croppedSourceDuration: 50,
+          transformedOffset: 0,
+          sourceDuration: 50,
+          transformedDuration: 50,
+          transformations: [],
+        } as TimelineClip,
+      ],
+      selectedClipIds: [],
+    });
+
+    render(
+      <TimelineContainer
+        scrollContainerRef={mockScrollRef}
+        insertGapIndex={null}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("timeline-clip-c1"));
+
+    expect(useAssetBrowserSelectionStore.getState().selectedAssetIds).toEqual(
+      [],
+    );
+  });
+
+  it("keeps clip asset reveal clicks working after clearing timeline asset state", () => {
+    useAssetBrowserSelectionStore.setState({ selectedAssetIds: ["asset-1"] });
+    useAssetBrowserRevealStore.setState({
+      revealRequest: {
+        assetId: "asset-stale",
+        requestId: 1,
+      },
+    });
+    useTimelineStore.setState({
+      tracks: [
+        {
+          id: "t1",
+          label: "Track 1",
+          isVisible: true,
+          isLocked: false,
+          isMuted: false,
+        },
+      ],
+      clips: [
+        {
+          id: "c1",
+          trackId: "t1",
+          type: "video",
+          name: "Clip 1",
+          start: 0,
+          timelineDuration: 50,
+          offset: 0,
+          croppedSourceDuration: 50,
+          transformedOffset: 0,
+          sourceDuration: 50,
+          transformedDuration: 50,
+          transformations: [],
+        } as TimelineClip,
+      ],
+      selectedClipIds: [],
+    });
+
+    const clipOverlays: readonly TimelineClipOverlayDefinition[] = [
+      {
+        id: "test-reveal-overlay",
+        useItems: ({ clip }) => [
+          createEndpointOverlayItem({
+            id: `reveal-${clip.id}`,
+            edge: "end",
+            content: <span>Reveal</span>,
+            onClick: () => {
+              revealAssetInBrowser("asset-from-overlay");
+            },
+          }),
+        ],
+      },
+    ];
+
+    render(
+      <TimelineContainer
+        scrollContainerRef={mockScrollRef}
+        insertGapIndex={null}
+        clipOverlays={clipOverlays}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("timeline-overlay-reveal-c1"));
+
+    expect(useAssetBrowserSelectionStore.getState().selectedAssetIds).toEqual(
+      [],
+    );
+    expect(useAssetBrowserRevealStore.getState().revealRequest).toMatchObject({
+      assetId: "asset-from-overlay",
+      requestId: expect.any(Number),
+    });
   });
 
   it("handles Delete key to remove selected clips", () => {

@@ -39,6 +39,7 @@ import { type TimelineClip } from "../../types";
 import type { TimelineClipOverlayDefinition } from "./clipOverlayApi";
 import { useTimelineSelectionStore } from "../timelineSelection";
 import { useAssetBrowserSelectionStore } from "../userAssets/useAssetBrowserSelectionStore";
+import { useAssetBrowserRevealStore } from "../userAssets/useAssetBrowserRevealStore";
 
 const containerStyles = {
   width: "100%",
@@ -343,12 +344,25 @@ function TimelineContainerComponent({
     redo,
   ]);
 
+  const handleTimelineInteractionCapture = useCallback(() => {
+    const assetBrowserRevealState = useAssetBrowserRevealStore.getState();
+    if (assetBrowserRevealState.revealRequest !== null) {
+      assetBrowserRevealState.clearRevealRequest();
+    }
+
+    const assetBrowserSelectionState = useAssetBrowserSelectionStore.getState();
+    if (assetBrowserSelectionState.selectedAssetIds.length > 0) {
+      assetBrowserSelectionState.clearSelection();
+    }
+  }, []);
+
   return (
     <Box sx={containerStyles}>
       <TimelineToolbar />
       <Box
         sx={scrollStyles}
         ref={setScrollRef}
+        onClickCapture={handleTimelineInteractionCapture}
         onClick={(e) => {
           // Suppress click-to-seek in selection mode
           if (useTimelineSelectionStore.getState().selectionMode) return;
