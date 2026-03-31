@@ -175,6 +175,54 @@ describe("GenerationInputs", () => {
     expect(screen.getByText("Height")).toBeInTheDocument();
   });
 
+  it("renders media inputs before text prompts by default", () => {
+    render(
+      <GenerationInputs
+        inputs={[
+          {
+            nodeId: "6",
+            classType: "CLIPTextEncode",
+            inputType: "text",
+            param: "text",
+            label: "Prompt",
+            currentValue: "",
+            origin: "rule",
+          },
+          {
+            nodeId: "12",
+            classType: "LoadImage",
+            inputType: "image",
+            param: "image",
+            label: "Reference image",
+            currentValue: null,
+            origin: "rule",
+          },
+        ]}
+        textValues={{}}
+        onTextValueCommit={vi.fn()}
+        mediaInputs={{}}
+        onInputDrop={vi.fn()}
+        onExternalInputDrop={vi.fn()}
+        onInputClear={vi.fn()}
+        onSwapMediaInputs={vi.fn()}
+        onClickSelect={vi.fn()}
+        widgetInputs={[]}
+        widgetValues={{}}
+        randomizeToggles={{}}
+        onWidgetChange={vi.fn()}
+        onToggleRandomize={vi.fn()}
+      />,
+    );
+
+    const mediaTitle = screen.getByText("Reference image");
+    const promptTitle = screen.getByText("Prompt");
+
+    expect(
+      mediaTitle.compareDocumentPosition(promptTitle) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+  });
+
   it("renders derived denoise widgets as sliders", () => {
     render(
       <GenerationInputs

@@ -280,6 +280,16 @@ type RenderableInputBlock =
       inputs: WorkflowInput[];
     };
 
+function getRenderableInputBlockPriority(block: RenderableInputBlock): number {
+  switch (block.kind) {
+    case "media":
+    case "mediaGroup":
+      return 0;
+    case "text":
+      return 1;
+  }
+}
+
 function buildRenderableInputBlocks(inputs: WorkflowInput[]): RenderableInputBlock[] {
   type GroupedInputEntry = {
     input: WorkflowInput;
@@ -329,39 +339,52 @@ function buildRenderableInputBlocks(inputs: WorkflowInput[]): RenderableInputBlo
     });
   }
 
-  return blocks.map((block) => {
-    if (block.kind !== "mediaGroup") {
-      return block;
-    }
+  return blocks
+    .map((block, index) => {
+      if (block.kind !== "mediaGroup") {
+        return { block, index };
+      }
 
-    const group = groupedEntries.get(block.id);
-    if (!group) {
-      return block;
-    }
+      const group = groupedEntries.get(block.id);
+      if (!group) {
+        return { block, index };
+      }
 
-    const sortedInputs = [...group.entries]
-      .sort((left, right) => {
-        if (
-          typeof left.order === "number" &&
-          typeof right.order === "number"
-        ) {
-          if (left.order !== right.order) {
-            return left.order - right.order;
+      const sortedInputs = [...group.entries]
+        .sort((left, right) => {
+          if (
+            typeof left.order === "number" &&
+            typeof right.order === "number"
+          ) {
+            if (left.order !== right.order) {
+              return left.order - right.order;
+            }
+            return left.index - right.index;
           }
+          if (typeof left.order === "number") return -1;
+          if (typeof right.order === "number") return 1;
           return left.index - right.index;
-        }
-        if (typeof left.order === "number") return -1;
-        if (typeof right.order === "number") return 1;
-        return left.index - right.index;
-      })
-      .map((entry) => entry.input);
+        })
+        .map((entry) => entry.input);
 
-    return {
-      ...block,
-      title: group.title || block.title,
-      inputs: sortedInputs,
-    };
-  });
+      return {
+        index,
+        block: {
+          ...block,
+          title: group.title || block.title,
+          inputs: sortedInputs,
+        },
+      };
+    })
+    .sort((left, right) => {
+      const leftPriority = getRenderableInputBlockPriority(left.block);
+      const rightPriority = getRenderableInputBlockPriority(right.block);
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority;
+      }
+      return left.index - right.index;
+    })
+    .map(({ block }) => block);
 }
 
 interface TextInputSectionProps {
