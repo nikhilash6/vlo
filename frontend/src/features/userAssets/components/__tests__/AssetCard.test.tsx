@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   mockDeleteAsset: vi.fn(),
   mockUpdateAsset: vi.fn(),
   mockInsertAssetAtTime: vi.fn(),
+  mockCreateClipFromAsset: vi.fn(),
   mockLoadWorkflowFromAssetMetadata: vi.fn(),
   mockOpenFamily: vi.fn(),
   mockUseDraggable: vi.fn(() => ({
@@ -25,11 +26,7 @@ vi.mock("@dnd-kit/core", () => ({
 
 vi.mock("../../../timeline", () => {
   return {
-    createClipFromAsset: (asset: Asset) => ({
-      id: `clip-${asset.id}`,
-      type: asset.type,
-      timelineDuration: 1,
-    }),
+    createClipFromAsset: mocks.mockCreateClipFromAsset,
     insertAssetAtTime: mocks.mockInsertAssetAtTime,
     useTimelineClipCountForAsset: () => mocks.timelineClipCount,
   };
@@ -164,6 +161,12 @@ describe("AssetCard actions", () => {
     mocks.mockDeleteAsset.mockReset();
     mocks.mockUpdateAsset.mockReset();
     mocks.mockInsertAssetAtTime.mockReset();
+    mocks.mockCreateClipFromAsset.mockReset();
+    mocks.mockCreateClipFromAsset.mockImplementation((asset: Asset) => ({
+      id: `clip-${asset.id}`,
+      type: asset.type,
+      timelineDuration: 1,
+    }));
     mocks.mockLoadWorkflowFromAssetMetadata.mockReset();
     mocks.mockLoadWorkflowFromAssetMetadata.mockResolvedValue(undefined);
     mocks.mockOpenFamily.mockReset();
@@ -390,6 +393,25 @@ describe("AssetCard actions", () => {
     expect(screen.getByTestId("asset-card")).toHaveAttribute(
       "data-drag-disabled",
       "true",
+    );
+  });
+
+  it("passes a clip payload through dnd data", () => {
+    mockStores(0);
+
+    render(<AssetCard asset={mockAsset} />);
+
+    expect(mocks.mockUseDraggable).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: `asset_${mockAsset.id}`,
+        data: expect.objectContaining({
+          type: "asset",
+          asset: mockAsset,
+          clip: expect.objectContaining({
+            id: `clip-${mockAsset.id}`,
+          }),
+        }),
+      }),
     );
   });
 });

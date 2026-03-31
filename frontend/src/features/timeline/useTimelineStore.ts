@@ -21,6 +21,7 @@ import type {
 } from "../../types/TimelineTypes";
 import type { Asset } from "../../types/Asset";
 import type { TimelineSnapshot } from "../project/types/ProjectDocument";
+import { useProjectStore } from "../project/useProjectStore";
 import { fileSystemService } from "../project/services/FileSystemService";
 import { projectDocumentService } from "../project/services/ProjectDocumentService";
 import { TICKS_PER_SECOND } from "./constants";
@@ -67,6 +68,38 @@ const createDefaultTimelineSnapshot = (): TimelineSnapshot => ({
   tracks: [createNewTrack("Track 1")],
   clips: [],
 });
+
+function createDefaultFitModeTransform(): ClipTransform {
+  return {
+    id: crypto.randomUUID(),
+    type: "fitMode",
+    isEnabled: true,
+    parameters: {
+      fitMode: useProjectStore.getState().config.fitMode,
+    },
+  };
+}
+
+function withTimelineClipDefaults(clip: TimelineClip): TimelineClip {
+  if (clip.type !== "video" && clip.type !== "image") {
+    return clip;
+  }
+
+  const hasFitModeTransform = clip.transformations.some(
+    (transform) => transform.type === "fitMode",
+  );
+  if (hasFitModeTransform) {
+    return clip;
+  }
+
+  return {
+    ...clip,
+    transformations: [
+      createDefaultFitModeTransform(),
+      ...structuredClone(clip.transformations || []),
+    ],
+  };
+}
 
 const cloneTimelineClip = (
   clip: TimelineClip,
@@ -873,12 +906,15 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
 
     addClip: (clip) => {
       commitModelMutation((draft) => {
-        const targetTrack = draft.tracks.find((track) => track.id === clip.trackId);
+        const clipWithDefaults = withTimelineClipDefaults(clip);
+        const targetTrack = draft.tracks.find(
+          (track) => track.id === clipWithDefaults.trackId,
+        );
         if (targetTrack && !targetTrack.type) {
-          targetTrack.type = getTrackTypeFromClipType(clip.type);
+          targetTrack.type = getTrackTypeFromClipType(clipWithDefaults.type);
         }
 
-        draft.clips.push(clip);
+        draft.clips.push(clipWithDefaults);
         maybeTrimAndPadTracks(draft);
       });
     },

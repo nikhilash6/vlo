@@ -1,6 +1,6 @@
 import type { Asset } from "../../../types/Asset";
 import type { BaseClip, ClipType } from "../../../types/TimelineTypes";
-import { getProjectDimensions } from "../../renderer";
+import { getProjectDimensions } from "../../renderer/utils/dimensions";
 import { useProjectStore } from "../../project/useProjectStore";
 import { TICKS_PER_SECOND } from "../constants";
 import { deriveClipTransformsFromAsset } from "./metadataTransforms";
@@ -24,7 +24,7 @@ export const createClipFromAsset = (asset: Asset): BaseClip => {
     0,
     Math.floor(durationSeconds * TICKS_PER_SECOND),
   );
-  const aspectRatio = useProjectStore.getState().config.aspectRatio;
+  const { aspectRatio } = useProjectStore.getState().config;
   const transformations = deriveClipTransformsFromAsset(asset, {
     fallbackContainerSize: getProjectDimensions(aspectRatio),
   });

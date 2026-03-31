@@ -120,9 +120,8 @@ export const layoutDefinition: TransformationDefinition = {
             type: "select",
             label: "Fit",
             name: "fitMode",
-            defaultValue: "",
+            defaultValue: "contain",
             options: [
-              { label: "Project Default", value: "" },
               { label: "Contain (Letterbox)", value: "contain" },
               { label: "Cover (Fill)", value: "cover" },
             ],

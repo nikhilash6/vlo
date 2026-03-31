@@ -275,6 +275,7 @@ describe("useProjectStore", () => {
     expect(useProjectStore.getState().config).toEqual({
       aspectRatio: "9:16",
       fps: 24,
+      fitMode: "contain",
       layoutMode: "full-height",
       assetBrowserDisplay: "ungrouped",
     });
@@ -309,6 +310,7 @@ describe("useProjectStore", () => {
     expect(writtenData.config).toEqual({
       aspectRatio: "9:16",
       fps: 24,
+      fitMode: "cover",
       layoutMode: "full-height",
       assetBrowserDisplay: "ungrouped",
     });

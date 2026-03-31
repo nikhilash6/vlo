@@ -12,11 +12,15 @@ import {
   useSensor,
   useSensors,
   pointerWithin,
+  type DragStartEvent,
+  type DragEndEvent,
 } from "@dnd-kit/core";
 import { AssetCard } from "../../../../userAssets";
 import { useAssetDrag } from "../useAssetDrag";
 import { useInteractionStore } from "../../useInteractionStore";
 import { useTimelineStore } from "../../../useTimelineStore";
+import { createClipFromAsset } from "../../../utils/clipFactory";
+import { useProjectStore } from "../../../../project";
 import type { Asset } from "../../../../../types/Asset";
 import { TRACK_HEIGHT, RULER_HEIGHT } from "../../../constants";
 
@@ -33,17 +37,6 @@ vi.mock("../dragGeometry", () => ({
   getGhostClipPosition: (x: number, y: number) => ({ x, y }),
   GHOST_CLIP_HEIGHT: 50,
   snapToCursorOffset: () => ({}),
-}));
-
-vi.mock("../utils/clipFactory", () => ({
-  createClipFromAsset: (asset: Asset) => ({
-    id: `mock_clip_${asset.id}`,
-    sourceId: asset.id,
-    timelineDuration: 100,
-    start: 0,
-    type: asset.type,
-    name: asset.name,
-  }),
 }));
 
 vi.mock("../hooks/dnd/useClipResize", () => ({
@@ -74,6 +67,10 @@ vi.mock("../utils/formatting", () => ({
 
 // --- TEST COMPONENT ---
 
+let latestAssetDragHandlers:
+  | ReturnType<typeof useAssetDrag>
+  | null = null;
+
 const TestDragApp = ({
   asset,
   forceNoCollision = false,
@@ -87,6 +84,12 @@ const TestDragApp = ({
     handleAssetDragEnd,
     scrollContainerRef,
   } = useAssetDrag();
+  latestAssetDragHandlers = {
+    handleAssetDragStart,
+    handleAssetDragMove,
+    handleAssetDragEnd,
+    scrollContainerRef,
+  };
   const insertGapIndex = useInteractionStore(
     (state) => state.externalInsertGapIndex,
   );
@@ -146,11 +149,22 @@ describe("Asset Drag Integration", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    latestAssetDragHandlers = null;
     useInteractionStore.setState({
       activeClip: null,
       operation: null,
       externalInsertGapIndex: null,
     });
+    useProjectStore.setState((state) => ({
+      ...state,
+      config: {
+        aspectRatio: "16:9",
+        fps: 30,
+        fitMode: "cover",
+        layoutMode: "compact",
+        assetBrowserDisplay: "grouped",
+      },
+    }));
     useTimelineStore.setState({
       clips: [],
       tracks: [
@@ -228,4 +242,60 @@ describe("Asset Drag Integration", () => {
       expect(gapDisplay.textContent).toBe("null");
     });
   }, 15000);
+
+  it("drops a dragged asset onto the timeline and stamps the clip with the project fit mode", async () => {
+    render(<TestDragApp asset={mockAsset} forceNoCollision={true} />);
+
+    const container = screen.getByTestId("timeline-container");
+    expect(latestAssetDragHandlers).not.toBeNull();
+    const payloadClip = createClipFromAsset(mockAsset);
+
+    mockRect(container, { left: 0, top: 0, width: 800, height: 600 });
+
+    await act(async () => {
+      fireEvent.pointerMove(window, { clientX: 250, clientY: 55, buttons: 1 });
+      latestAssetDragHandlers?.handleAssetDragStart({
+        active: {
+          id: `asset_${mockAsset.id}`,
+          data: {
+            current: {
+              type: "asset",
+              asset: mockAsset,
+              clip: payloadClip,
+            },
+          },
+        },
+      } as DragStartEvent);
+      latestAssetDragHandlers?.handleAssetDragEnd({
+        active: {
+          id: `asset_${mockAsset.id}`,
+          data: {
+            current: {
+              type: "asset",
+              asset: mockAsset,
+              clip: payloadClip,
+            },
+          },
+        },
+        over: null,
+        delta: { x: 0, y: 0 },
+        activatorEvent: null,
+      } as DragEndEvent);
+    });
+
+    await waitFor(() => {
+      expect(useTimelineStore.getState().clips).toHaveLength(1);
+    });
+
+    const droppedClip = useTimelineStore.getState().clips[0];
+    const fitModeTransform = droppedClip.transformations.find(
+      (transform) => transform.type === "fitMode",
+    );
+
+    expect(droppedClip.trackId).toBe("track-0");
+    expect(fitModeTransform).toMatchObject({
+      type: "fitMode",
+      parameters: { fitMode: "cover" },
+    });
+  });
 });
