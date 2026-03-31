@@ -324,6 +324,14 @@ export async function getHistory(
   return (await resp.json()) as Record<string, unknown>;
 }
 
+export async function getQueue(): Promise<Record<string, unknown>> {
+  const resp = await fetch(`${COMFY_API}/api/queue`);
+  if (!resp.ok) {
+    await throwRequestError("Queue fetch", resp);
+  }
+  return (await resp.json()) as Record<string, unknown>;
+}
+
 export async function fetchOutputAsFile(
   filename: string,
   subfolder = "",

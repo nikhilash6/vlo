@@ -10,6 +10,8 @@ const {
   mockFrontendPreprocess,
   mockGenerate,
   mockGetConfig,
+  mockGetPromptHistoryStateWithRetry,
+  mockGetQueue,
   mockGetRuntimeStatus,
   mockGetHistoryOutputsWithRetry,
   mockInterrupt,
@@ -20,6 +22,8 @@ const {
   mockFrontendPreprocess: vi.fn(),
   mockGenerate: vi.fn(),
   mockGetConfig: vi.fn(),
+  mockGetPromptHistoryStateWithRetry: vi.fn(),
+  mockGetQueue: vi.fn(),
   mockGetRuntimeStatus: vi.fn(),
   mockGetHistoryOutputsWithRetry: vi.fn(),
   mockInterrupt: vi.fn(),
@@ -137,6 +141,7 @@ vi.mock("../services/comfyuiApi", async (importOriginal) => {
     ...actual,
     generate: mockGenerate,
     getConfig: mockGetConfig,
+    getQueue: mockGetQueue,
     interrupt: mockInterrupt,
     listWorkflows: mockListWorkflows,
   };
@@ -148,6 +153,7 @@ vi.mock("../../../services/runtimeApi", () => ({
 
 vi.mock("../store/history", () => ({
   getHistoryOutputsWithRetry: mockGetHistoryOutputsWithRetry,
+  getPromptHistoryStateWithRetry: mockGetPromptHistoryStateWithRetry,
 }));
 
 vi.mock("../utils/pipeline", async (importOriginal) => {
@@ -282,6 +288,8 @@ describe("useGenerationStore pipeline phases", () => {
     mockFrontendPostprocess.mockReset();
     mockGenerate.mockReset();
     mockGetConfig.mockReset();
+    mockGetPromptHistoryStateWithRetry.mockReset();
+    mockGetQueue.mockReset();
     mockGetRuntimeStatus.mockReset();
     mockGetHistoryOutputsWithRetry.mockReset();
     mockInterrupt.mockReset();
@@ -343,6 +351,14 @@ describe("useGenerationStore pipeline phases", () => {
         viewUrl: "/output.png",
       },
     ]);
+    mockGetPromptHistoryStateWithRetry.mockResolvedValue({
+      hasPromptEntry: false,
+      outputs: [],
+    });
+    mockGetQueue.mockResolvedValue({
+      queue_running: [],
+      queue_pending: [],
+    });
     mockInterrupt.mockResolvedValue(undefined);
     mockListWorkflows.mockResolvedValue([]);
 
@@ -835,6 +851,80 @@ describe("useGenerationStore pipeline phases", () => {
       useGenerationStore.getState().jobs.get("prompt-dual-finish")
         ?.importedAssetIds,
     ).toEqual(["asset-1"]);
+  });
+
+  it("reconciles an in-flight job from history after websocket reconnect", async () => {
+    useGenerationStore.setState({
+      jobs: new Map([["prompt-recover", makeQueuedJob("prompt-recover")]]),
+      activeJobId: "prompt-recover",
+      pipelineRunToken: 1,
+    });
+    mockGetPromptHistoryStateWithRetry.mockResolvedValueOnce({
+      hasPromptEntry: true,
+      outputs: [
+        {
+          filename: "recovered.png",
+          subfolder: "",
+          type: "output",
+          viewUrl: "/recovered.png",
+        },
+      ],
+    });
+    mockGetHistoryOutputsWithRetry.mockResolvedValueOnce([
+      {
+        filename: "recovered.png",
+        subfolder: "",
+        type: "output",
+        viewUrl: "/recovered.png",
+      },
+    ]);
+
+    useGenerationStore.getState().connect();
+    const client = getLatestClient();
+
+    client.emitConnectionChange("connected");
+    await flushMicrotasks();
+    client.emitConnectionChange("disconnected");
+    client.emitConnectionChange("connected");
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    const state = useGenerationStore.getState();
+    expect(state.activeJobId).toBeNull();
+    expect(state.jobs.get("prompt-recover")?.status).toBe("completed");
+    expect(state.jobs.get("prompt-recover")?.outputs).toEqual([
+      {
+        filename: "recovered.png",
+        subfolder: "",
+        type: "output",
+        viewUrl: "/recovered.png",
+      },
+    ]);
+  });
+
+  it("marks unrecoverable in-flight jobs as error after websocket reconnect", async () => {
+    useGenerationStore.setState({
+      jobs: new Map([["prompt-missing", makeQueuedJob("prompt-missing")]]),
+      activeJobId: "prompt-missing",
+      pipelineRunToken: 1,
+    });
+
+    useGenerationStore.getState().connect();
+    const client = getLatestClient();
+
+    client.emitConnectionChange("connected");
+    await flushMicrotasks();
+    client.emitConnectionChange("disconnected");
+    client.emitConnectionChange("connected");
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    const state = useGenerationStore.getState();
+    expect(state.activeJobId).toBeNull();
+    expect(state.jobs.get("prompt-missing")?.status).toBe("error");
+    expect(state.jobs.get("prompt-missing")?.error).toContain(
+      "could not be recovered",
+    );
   });
 
   it("queues generations when graph snapshots include non-serializable browser values", async () => {

@@ -62,3 +62,38 @@ export function parseHistoryOutputs(
 
   return { hasPromptEntry, outputs };
 }
+
+function extractQueuePromptId(entry: unknown): string | null {
+  if (Array.isArray(entry)) {
+    return typeof entry[1] === "string" ? entry[1] : null;
+  }
+
+  if (!isRecord(entry)) {
+    return null;
+  }
+
+  return typeof entry.prompt_id === "string" ? entry.prompt_id : null;
+}
+
+export function parseQueuePromptIds(queue: unknown): Set<string> {
+  const promptIds = new Set<string>();
+  if (!isRecord(queue)) {
+    return promptIds;
+  }
+
+  for (const key of ["queue_running", "queue_pending"] as const) {
+    const entries = queue[key];
+    if (!Array.isArray(entries)) {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const promptId = extractQueuePromptId(entry);
+      if (promptId) {
+        promptIds.add(promptId);
+      }
+    }
+  }
+
+  return promptIds;
+}

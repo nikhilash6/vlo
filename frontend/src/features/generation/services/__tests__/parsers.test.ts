@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseHistoryOutputs, parseNodeOutputItems } from "../parsers";
+import {
+  parseHistoryOutputs,
+  parseNodeOutputItems,
+  parseQueuePromptIds,
+} from "../parsers";
 
 describe("generation parsers", () => {
   it("parses mixed node outputs into viewable output items", () => {
@@ -23,5 +27,21 @@ describe("generation parsers", () => {
     const result = parseHistoryOutputs({}, "prompt-1");
     expect(result.hasPromptEntry).toBe(false);
     expect(result.outputs).toEqual([]);
+  });
+
+  it("extracts prompt ids from queue tuples and object entries", () => {
+    const result = parseQueuePromptIds({
+      queue_running: [[1, "prompt-running", {}, {}, []]],
+      queue_pending: [
+        [2, "prompt-pending", {}, {}, []],
+        { prompt_id: "prompt-object" },
+      ],
+    });
+
+    expect(Array.from(result)).toEqual([
+      "prompt-running",
+      "prompt-pending",
+      "prompt-object",
+    ]);
   });
 });

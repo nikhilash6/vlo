@@ -5,17 +5,29 @@ import type { GenerationJobOutput } from "../types";
 const HISTORY_FETCH_ATTEMPTS = 4;
 const HISTORY_FETCH_RETRY_MS = 250;
 
-export async function getHistoryOutputsWithRetry(
+export interface PromptHistoryState {
+  hasPromptEntry: boolean;
+  outputs: GenerationJobOutput[];
+}
+
+export async function getPromptHistoryState(
   promptId: string,
-): Promise<GenerationJobOutput[]> {
+): Promise<PromptHistoryState> {
+  const history = await comfyApi.getHistory(promptId);
+  return parseHistoryOutputs(history, promptId);
+}
+
+export async function getPromptHistoryStateWithRetry(
+  promptId: string,
+): Promise<PromptHistoryState> {
   let lastError: unknown = null;
 
   for (let attempt = 0; attempt < HISTORY_FETCH_ATTEMPTS; attempt += 1) {
     try {
-      const history = await comfyApi.getHistory(promptId);
-      const { hasPromptEntry, outputs } = parseHistoryOutputs(history, promptId);
+      const historyState = await getPromptHistoryState(promptId);
+      const { hasPromptEntry, outputs } = historyState;
       if (hasPromptEntry || outputs.length > 0) {
-        return outputs;
+        return historyState;
       }
     } catch (error) {
       lastError = error;
@@ -29,5 +41,12 @@ export async function getHistoryOutputsWithRetry(
   }
 
   if (lastError) throw lastError;
-  return [];
+  return { hasPromptEntry: false, outputs: [] };
+}
+
+export async function getHistoryOutputsWithRetry(
+  promptId: string,
+): Promise<GenerationJobOutput[]> {
+  const { outputs } = await getPromptHistoryStateWithRetry(promptId);
+  return outputs;
 }

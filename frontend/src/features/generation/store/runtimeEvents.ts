@@ -1,17 +1,22 @@
+import * as comfyApi from "../services/comfyuiApi";
 import type {
   ComfyUIEvent,
   ComfyUIPreview,
   ComfyUIWebSocket,
 } from "../services/ComfyUIWebSocket";
-import { parseNodeOutputItems } from "../services/parsers";
+import { parseNodeOutputItems, parseQueuePromptIds } from "../services/parsers";
 import { frontendPostprocess } from "../utils/pipeline";
-import { getHistoryOutputsWithRetry } from "./history";
+import {
+  getHistoryOutputsWithRetry,
+  getPromptHistoryStateWithRetry,
+} from "./history";
 import {
   applyExecutingNode,
   applyJobProgress,
   appendJobOutputs,
   applyPreviewUpdate,
   completeGenerationJob,
+  isActiveGenerationJob,
   markActiveJobError,
   markJobError,
   setJobPostprocessResult,
@@ -24,6 +29,8 @@ export function attachRuntimeClientHandlers(
   get: GenerationStoreGet,
 ): void {
   const finalizingPromptIds = new Set<string>();
+  let hasSeenConnectedState = false;
+  let recoveryInFlight = false;
 
   async function finalizeCompletedJob(promptId: string): Promise<void> {
     if (finalizingPromptIds.has(promptId)) {
@@ -164,6 +171,79 @@ export function attachRuntimeClientHandlers(
     void get().processGenerationQueue();
   }
 
+  async function recoverIncompleteJobs(): Promise<void> {
+    // Reconnects do not replay missed websocket events, so reconcile any
+    // locally-known in-flight prompts against ComfyUI history/queue state.
+    const incompleteJobs = Array.from(get().jobs.values()).filter((job) =>
+      isActiveGenerationJob(job),
+    );
+    if (incompleteJobs.length === 0) {
+      return;
+    }
+
+    let queuePromptIds: Set<string> | null = null;
+    try {
+      const queue = await comfyApi.getQueue();
+      queuePromptIds = parseQueuePromptIds(queue);
+    } catch (error) {
+      console.warn("[Generation] Failed to fetch queue during recovery", error);
+    }
+
+    for (const job of incompleteJobs) {
+      const latestJob = get().jobs.get(job.id);
+      if (!latestJob || !isActiveGenerationJob(latestJob)) {
+        continue;
+      }
+
+      let historyLookupSucceeded = false;
+      try {
+        const historyState = await getPromptHistoryStateWithRetry(job.id);
+        historyLookupSucceeded = true;
+        if (historyState.hasPromptEntry) {
+          void finalizeCompletedJob(job.id);
+          continue;
+        }
+      } catch (error) {
+        console.warn(
+          "[Generation] Failed to fetch history during reconnect recovery",
+          error,
+        );
+      }
+
+      if (
+        historyLookupSucceeded &&
+        queuePromptIds !== null &&
+        !queuePromptIds.has(job.id)
+      ) {
+        set((state) =>
+          markJobError(
+            state,
+            job.id,
+            "Generation status could not be recovered after reconnect",
+            null,
+            {
+              clearActiveJob: state.activeJobId === job.id,
+              completedAt: Date.now(),
+            },
+          ),
+        );
+      }
+    }
+
+    resumeQueuedDispatch();
+  }
+
+  function scheduleIncompleteJobRecovery(): void {
+    if (recoveryInFlight) {
+      return;
+    }
+
+    recoveryInFlight = true;
+    void recoverIncompleteJobs().finally(() => {
+      recoveryInFlight = false;
+    });
+  }
+
   client.onEvent((event: ComfyUIEvent) => {
     switch (event.type) {
       case "status": {
@@ -292,9 +372,14 @@ export function attachRuntimeClientHandlers(
 
   client.onConnectionChange((wsState) => {
     if (wsState === "connected") {
+      const shouldRecover = hasSeenConnectedState;
+      hasSeenConnectedState = true;
       void get().refreshRuntimeStatus();
       if (get().connectionStatus !== "connected") {
         set({ connectionStatus: "connecting" });
+      }
+      if (shouldRecover) {
+        scheduleIncompleteJobRecovery();
       }
       resumeQueuedDispatch();
     } else {
