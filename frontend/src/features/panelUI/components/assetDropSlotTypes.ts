@@ -6,6 +6,11 @@ export interface AssetDropSlotValue {
   thumbnail?: string;
 }
 
+export interface AssetDropSlotReorderData {
+  type: "media-input";
+  inputId: string;
+}
+
 export interface AssetDropSlotProps {
   /** Unique identifier for this slot */
   id: string;
@@ -23,4 +28,8 @@ export interface AssetDropSlotProps {
   onSelect?: () => void;
   /** Label shown above the slot */
   label?: string;
+  /** Makes a filled slot draggable for media-input reordering */
+  reorderData?: AssetDropSlotReorderData | null;
+  /** Called when a media-input slot is dropped onto this slot */
+  onReorderDrop?: (data: AssetDropSlotReorderData) => void;
 }

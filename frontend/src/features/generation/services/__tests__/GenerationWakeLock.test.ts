@@ -87,7 +87,10 @@ describe("GenerationWakeLock", () => {
     expect(request).not.toHaveBeenCalled();
 
     doc.visibilityState = "visible";
-    visibilityListener?.();
+    const fireVisibilityChange = visibilityListener as (() => void) | null;
+    if (fireVisibilityChange) {
+      fireVisibilityChange();
+    }
     await Promise.resolve();
 
     expect(request).toHaveBeenCalledTimes(1);

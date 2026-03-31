@@ -121,6 +121,16 @@ export interface WorkflowInputDispatch {
   selectionConfig?: WorkflowSelectionConfig;
 }
 
+export interface WorkflowInputPresentationGroup {
+  id: string;
+  title?: string;
+  order?: number;
+}
+
+export interface WorkflowInputPresentation {
+  group?: WorkflowInputPresentationGroup;
+}
+
 export interface InputSlot {
   id: string;
   accept: AssetType[];
@@ -139,6 +149,7 @@ export interface WorkflowInput {
   currentValue: unknown;
   origin: "rule" | "inferred";
   dispatch?: WorkflowInputDispatch;
+  presentation?: WorkflowInputPresentation;
 }
 
 export interface WorkflowDefinition {

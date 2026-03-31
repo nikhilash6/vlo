@@ -235,6 +235,43 @@ describe("resolvePresentedInputs", () => {
     ]);
   });
 
+  it("preserves grouped media-input presentation metadata", () => {
+    const resolved = resolvePresentedInputs(
+      [
+        {
+          nodeId: "62",
+          classType: "LoadImage",
+          inputType: "image",
+          param: "image",
+          label: "Start frame",
+          currentValue: null,
+          origin: "inferred",
+        },
+      ],
+      {
+        version: 1,
+        nodes: {
+          "62": {
+            present: {
+              label: "Start frame",
+              group_id: "frames",
+              group_title: "Frames",
+              group_order: 0,
+            },
+          },
+        },
+      },
+    );
+
+    expect(resolved.inputs[0]?.presentation).toEqual({
+      group: {
+        id: "frames",
+        title: "Frames",
+        order: 0,
+      },
+    });
+  });
+
   it("evaluates input conditions against provided inputs", () => {
     const { rules } = normalizeWorkflowRules({
       version: 1,
