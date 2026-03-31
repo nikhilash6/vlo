@@ -901,6 +901,50 @@ def test_real_vace_inpaint_discovers_seed_widget_for_ksampler():
     assert sampler_widgets["seed"]["control_after_generate"] is True
 
 
+def test_real_ltx_single_stage_discovers_resize_image_mask_node_as_ar_target():
+    workflow_path = (
+        Path(__file__).resolve().parents[2]
+        / "LTX-2.3_T2V_I2V_Single_Stage_Distilled_Full.json"
+    )
+    workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+    rules = {
+        "version": 1,
+        "nodes": {},
+        "output_injections": {},
+        "slots": {},
+        "mask_cropping": {"mode": "crop"},
+        "postprocessing": {
+            "mode": "auto",
+            "panel_preview": "raw_outputs",
+            "on_failure": "fallback_raw",
+        },
+        "aspect_ratio_processing": {
+            "enabled": True,
+            "stride": 16,
+            "search_steps": 2,
+            "resolutions": [],
+            "target_nodes": [],
+            "postprocess": {
+                "enabled": True,
+                "mode": "stretch_exact",
+                "apply_to": "all_visual_outputs",
+            },
+        },
+    }
+
+    set_object_info_cache(None)
+    try:
+        enrich_rules_with_object_info(rules, workflow)
+    finally:
+        set_object_info_cache(None)
+
+    assert {
+        "node_id": "4981",
+        "width_param": "resize_type.width",
+        "height_param": "resize_type.height",
+    } in rules["aspect_ratio_processing"]["target_nodes"]
+
+
 def test_enrich_rules_with_object_info_auto_discovers_length_widget_for_video_nodes():
     workflow = {
         "nodes": [
@@ -2234,6 +2278,55 @@ def test_apply_aspect_ratio_processing_uses_provided_target_aspect_ratio():
     assert metadata["requested"]["height"] == 720
     assert workflow["49"]["inputs"]["width"] == metadata["strided"]["width"]
     assert workflow["49"]["inputs"]["height"] == metadata["strided"]["height"]
+
+
+def test_apply_aspect_ratio_processing_normalizes_resize_image_mask_node_targets():
+    workflow = {
+        "7": {
+            "class_type": "ResizeImageMaskNode",
+            "inputs": {
+                "resize_type": "scale longer dimension",
+                "resize_type.longer_size": 1536,
+                "scale_method": "lanczos",
+                "input": ["4", 0],
+            },
+        }
+    }
+    rules = {
+        "aspect_ratio_processing": {
+            "enabled": True,
+            "stride": 32,
+            "search_steps": 2,
+            "target_nodes": [
+                {
+                    "node_id": "7",
+                    "width_param": "resize_type.width",
+                    "height_param": "resize_type.height",
+                }
+            ],
+            "postprocess": {
+                "enabled": True,
+                "mode": "stretch_exact",
+                "apply_to": "all_visual_outputs",
+            },
+        }
+    }
+
+    metadata, warnings = apply_aspect_ratio_processing(
+        workflow,
+        rules,
+        "16:9",
+        720,
+    )
+
+    assert warnings == []
+    assert isinstance(metadata, dict)
+    assert workflow["7"]["inputs"]["resize_type"] == "scale dimensions"
+    assert workflow["7"]["inputs"]["resize_type.width"] == metadata["strided"]["width"]
+    assert workflow["7"]["inputs"]["resize_type.height"] == metadata["strided"]["height"]
+    assert workflow["7"]["inputs"]["resize_type.crop"] == "disabled"
+    assert workflow["7"]["inputs"]["scale_method"] == "lanczos"
+    assert "resize_type.longer_size" not in workflow["7"]["inputs"]
 
 
 def test_apply_aspect_ratio_processing_skips_when_no_target_nodes_are_configured():

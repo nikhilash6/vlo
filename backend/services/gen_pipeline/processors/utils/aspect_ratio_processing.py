@@ -3,6 +3,10 @@ from typing import Any
 
 from services.gen_pipeline.processors.utils.warning import pipeline_warning
 
+_RESIZE_IMAGE_MASK_NODE_TYPES = frozenset(
+    {"ResizeImageMaskNode", "RescaleImageMaskNode"}
+)
+
 
 def _to_positive_int(value: Any) -> int | None:
     if isinstance(value, bool):
@@ -162,6 +166,35 @@ def find_best_strided_dimensions(
     return candidates[0]
 
 
+def _normalize_resize_image_mask_target(
+    node: dict[str, Any],
+    inputs: dict[str, Any],
+    target_width: int,
+    target_height: int,
+) -> None:
+    class_type = node.get("class_type")
+    if class_type not in _RESIZE_IMAGE_MASK_NODE_TYPES:
+        return
+
+    scale_method = inputs.get("scale_method")
+    if not isinstance(scale_method, str) or not scale_method.strip():
+        scale_method = "area"
+
+    for key in list(inputs.keys()):
+        if isinstance(key, str) and key.startswith("resize_type.") and key not in {
+            "resize_type.width",
+            "resize_type.height",
+            "resize_type.crop",
+        }:
+            inputs.pop(key, None)
+
+    inputs["resize_type"] = "scale dimensions"
+    inputs["resize_type.width"] = target_width
+    inputs["resize_type.height"] = target_height
+    inputs["resize_type.crop"] = "disabled"
+    inputs["scale_method"] = scale_method
+
+
 def apply_aspect_ratio_processing(
     workflow: dict[str, Any],
     rules: dict[str, Any],
@@ -303,6 +336,12 @@ def apply_aspect_ratio_processing(
             )
             continue
 
+        _normalize_resize_image_mask_target(
+            node,
+            inputs,
+            best["width"],
+            best["height"],
+        )
         inputs[width_param] = best["width"]
         inputs[height_param] = best["height"]
         applied_nodes.append(

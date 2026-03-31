@@ -227,6 +227,16 @@ DEFAULT_NODE_POLICY_RULES: list[NodePolicyRule] = [
         },
     },
     {
+        "constraint": {
+            "class_names": frozenset({"ResizeImageMaskNode", "RescaleImageMaskNode"})
+        },
+        "policy": {
+            "ar_target": True,
+            "ar_width_param": "resize_type.width",
+            "ar_height_param": "resize_type.height",
+        },
+    },
+    {
         "constraint": {"name_contains": "resize", "has_params": ["width", "height"]},
         "policy": {
             "ar_target": True,
