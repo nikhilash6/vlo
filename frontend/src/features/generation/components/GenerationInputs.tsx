@@ -34,7 +34,6 @@ interface GenerationInputsProps {
   onInputDrop: (inputId: string, asset: Asset) => void;
   onExternalInputDrop: (inputId: string, file: File) => void | Promise<void>;
   onInputClear: (inputId: string) => void;
-  onSwapMediaInputs: (sourceInputId: string, targetInputId: string) => void;
   onClickSelect: (inputId: string, inputType: "image" | "video") => void;
   widgetInputs: WorkflowWidgetInput[];
   widgetValues: Record<string, Record<string, unknown>>;
@@ -264,129 +263,6 @@ function groupWidgetsByNode(widgetInputs: WorkflowWidgetInput[]): WidgetGroup[] 
   });
 }
 
-type RenderableInputBlock =
-  | {
-      kind: "text";
-      input: WorkflowInput;
-    }
-  | {
-      kind: "media";
-      input: WorkflowInput;
-    }
-  | {
-      kind: "mediaGroup";
-      id: string;
-      title: string;
-      inputs: WorkflowInput[];
-    };
-
-function getRenderableInputBlockPriority(block: RenderableInputBlock): number {
-  switch (block.kind) {
-    case "media":
-    case "mediaGroup":
-      return 0;
-    case "text":
-      return 1;
-  }
-}
-
-function buildRenderableInputBlocks(inputs: WorkflowInput[]): RenderableInputBlock[] {
-  type GroupedInputEntry = {
-    input: WorkflowInput;
-    index: number;
-    order?: number;
-  };
-
-  const blocks: RenderableInputBlock[] = [];
-  const groupedEntries = new Map<
-    string,
-    {
-      title: string;
-      entries: GroupedInputEntry[];
-    }
-  >();
-
-  for (const [index, input] of inputs.entries()) {
-    if (input.inputType === "text") {
-      blocks.push({ kind: "text", input });
-      continue;
-    }
-
-    const group = input.presentation?.group;
-    if (!group?.id) {
-      blocks.push({ kind: "media", input });
-      continue;
-    }
-
-    const existing = groupedEntries.get(group.id);
-    if (existing) {
-      existing.entries.push({ input, index, order: group.order });
-      if (!existing.title && group.title) {
-        existing.title = group.title;
-      }
-      continue;
-    }
-
-    groupedEntries.set(group.id, {
-      title: group.title ?? input.label,
-      entries: [{ input, index, order: group.order }],
-    });
-    blocks.push({
-      kind: "mediaGroup",
-      id: group.id,
-      title: group.title ?? input.label,
-      inputs: [],
-    });
-  }
-
-  return blocks
-    .map((block, index) => {
-      if (block.kind !== "mediaGroup") {
-        return { block, index };
-      }
-
-      const group = groupedEntries.get(block.id);
-      if (!group) {
-        return { block, index };
-      }
-
-      const sortedInputs = [...group.entries]
-        .sort((left, right) => {
-          if (
-            typeof left.order === "number" &&
-            typeof right.order === "number"
-          ) {
-            if (left.order !== right.order) {
-              return left.order - right.order;
-            }
-            return left.index - right.index;
-          }
-          if (typeof left.order === "number") return -1;
-          if (typeof right.order === "number") return 1;
-          return left.index - right.index;
-        })
-        .map((entry) => entry.input);
-
-      return {
-        index,
-        block: {
-          ...block,
-          title: group.title || block.title,
-          inputs: sortedInputs,
-        },
-      };
-    })
-    .sort((left, right) => {
-      const leftPriority = getRenderableInputBlockPriority(left.block);
-      const rightPriority = getRenderableInputBlockPriority(right.block);
-      if (leftPriority !== rightPriority) {
-        return leftPriority - rightPriority;
-      }
-      return left.index - right.index;
-    })
-    .map(({ block }) => block);
-}
-
 interface TextInputSectionProps {
   input: WorkflowInput;
   bgColor: string;
@@ -476,89 +352,6 @@ function MediaInputSection({
 }
 
 const MemoizedMediaInputSection = memo(MediaInputSection);
-
-interface MediaInputGroupSectionProps {
-  title: string;
-  inputs: WorkflowInput[];
-  bgColor: string;
-  mediaInputs: Record<string, GenerationMediaInputValue | null>;
-  onInputDrop: (inputId: string, asset: Asset) => void;
-  onExternalInputDrop: (inputId: string, file: File) => void | Promise<void>;
-  onInputClear: (inputId: string) => void;
-  onSwapMediaInputs: (sourceInputId: string, targetInputId: string) => void;
-  onClickSelect: (inputId: string, inputType: "image" | "video") => void;
-}
-
-function MediaInputGroupSection({
-  title,
-  inputs,
-  bgColor,
-  mediaInputs,
-  onInputDrop,
-  onExternalInputDrop,
-  onInputClear,
-  onSwapMediaInputs,
-  onClickSelect,
-}: MediaInputGroupSectionProps) {
-  return (
-    <PanelSection title={title} bgColor={bgColor} defaultOpen={true}>
-      <Box
-        sx={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 1.5,
-          alignItems: "flex-start",
-        }}
-      >
-        {inputs.map((input) => {
-          const inputId = getWorkflowInputId(input);
-          const mediaInputType: "image" | "video" =
-            input.inputType === "image" ? "image" : "video";
-          const acceptTypes =
-            mediaInputType === "image" ? ["image" as const] : ["video" as const];
-          const value = getWorkflowInputValue(mediaInputs, input);
-          const slotValue = toSlotValue(value);
-
-          return (
-            <Box key={inputId} sx={{ display: "flex", flexDirection: "column" }}>
-              <AssetDropSlot
-                id={inputId}
-                label={input.label}
-                accept={acceptTypes}
-                value={slotValue}
-                reorderData={slotValue ? { type: "media-input", inputId } : null}
-                onReorderDrop={(data) =>
-                  onSwapMediaInputs(data.inputId, inputId)
-                }
-                onClear={() => onInputClear(inputId)}
-                onDrop={(asset: Asset) => onInputDrop(inputId, asset)}
-                onExternalDrop={(file: File) =>
-                  onExternalInputDrop(inputId, file)
-                }
-                onSelect={() => onClickSelect(inputId, mediaInputType)}
-              />
-              {input.description ? (
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: "text.secondary",
-                    fontSize: "0.7rem",
-                    mt: 0.75,
-                    maxWidth: 120,
-                  }}
-                >
-                  {input.description}
-                </Typography>
-              ) : null}
-            </Box>
-          );
-        })}
-      </Box>
-    </PanelSection>
-  );
-}
-
-const MemoizedMediaInputGroupSection = memo(MediaInputGroupSection);
 
 interface WidgetRowProps {
   widget: WorkflowWidgetInput;
@@ -792,7 +585,6 @@ export const GenerationInputs = memo(function GenerationInputs({
   onInputDrop,
   onExternalInputDrop,
   onInputClear,
-  onSwapMediaInputs,
   onClickSelect,
   widgetInputs,
   widgetValues,
@@ -808,10 +600,6 @@ export const GenerationInputs = memo(function GenerationInputs({
     () => groupWidgetsByNode(widgetInputs),
     [widgetInputs],
   );
-  const inputBlocks = useMemo(
-    () => buildRenderableInputBlocks(inputs),
-    [inputs],
-  );
   const inputLookup = useMemo(() => buildWorkflowInputLookup(inputs), [inputs]);
   const exactAspectRatioWidgetKey = useMemo(() => {
     const widget = widgetInputs.find(isAspectRatioWidget);
@@ -819,15 +607,13 @@ export const GenerationInputs = memo(function GenerationInputs({
   }, [widgetInputs]);
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
-      {inputBlocks.map((block, index) => {
+      {inputs.map((input, index) => {
         const bgColor = index % 2 === 0 ? "#202024" : "#18181b";
+        const inputId = getWorkflowInputId(input);
+        const commitInputId =
+          inputLookup.get(input.nodeId) === input ? input.nodeId : inputId;
 
-        if (block.kind === "text") {
-          const input = block.input;
-          const inputId = getWorkflowInputId(input);
-          const commitInputId =
-            inputLookup.get(input.nodeId) === input ? input.nodeId : inputId;
-
+        if (input.inputType === "text") {
           return (
             <MemoizedTextInputSection
               key={inputId}
@@ -840,25 +626,6 @@ export const GenerationInputs = memo(function GenerationInputs({
           );
         }
 
-        if (block.kind === "mediaGroup") {
-          return (
-            <MemoizedMediaInputGroupSection
-              key={`media-group:${block.id}`}
-              title={block.title}
-              inputs={block.inputs}
-              bgColor={bgColor}
-              mediaInputs={mediaInputs}
-              onInputDrop={onInputDrop}
-              onExternalInputDrop={onExternalInputDrop}
-              onInputClear={onInputClear}
-              onSwapMediaInputs={onSwapMediaInputs}
-              onClickSelect={onClickSelect}
-            />
-          );
-        }
-
-        const input = block.input;
-        const inputId = getWorkflowInputId(input);
         return (
           <MemoizedMediaInputSection
             key={inputId}
@@ -875,7 +642,7 @@ export const GenerationInputs = memo(function GenerationInputs({
 
       {groupedWidgets.map((group, index) => {
         const bgColor =
-          (inputBlocks.length + index) % 2 === 0 ? "#202024" : "#18181b";
+          (inputs.length + index) % 2 === 0 ? "#202024" : "#18181b";
 
         return (
           <PanelSection

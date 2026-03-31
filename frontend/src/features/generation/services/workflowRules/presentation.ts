@@ -15,27 +15,6 @@ import {
 import { isRecord } from "../parsers";
 import { buildWorkflowInputId, getWorkflowInputId } from "../../utils/workflowInputs";
 
-function resolveInputPresentation(
-  present: WorkflowRuleNodePresent | null | undefined,
-): WorkflowInput["presentation"] | undefined {
-  const groupId = present?.group_id?.trim();
-  if (!groupId) {
-    return undefined;
-  }
-
-  return {
-    group: {
-      id: groupId,
-      ...(present?.group_title?.trim()
-        ? { title: present.group_title.trim() }
-        : {}),
-      ...(typeof present?.group_order === "number"
-        ? { order: present.group_order }
-        : {}),
-    },
-  };
-}
-
 function hasPresentOverrides(
   present: WorkflowRuleNodePresent | null | undefined,
 ): boolean {
@@ -289,10 +268,6 @@ export function resolvePresentedInputsFromRules(
         selectionConfig,
       };
     }
-    const presentation = resolveInputPresentation(present);
-    if (presentation) {
-      nextInput.presentation = presentation;
-    }
 
     if (present?.label) {
       nextInput.label = present.label;
@@ -380,9 +355,6 @@ export function resolvePresentedInputsFromRules(
         kind: "node",
         ...(selectionConfig ? { selectionConfig } : {}),
       },
-      ...(resolveInputPresentation(present)
-        ? { presentation: resolveInputPresentation(present) }
-        : {}),
     });
   }
 

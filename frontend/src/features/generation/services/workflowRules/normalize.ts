@@ -247,24 +247,6 @@ function normalizeNodeRules(
       if (typeof nodeRuleUnknown.present.class_type === "string") {
         present.class_type = nodeRuleUnknown.present.class_type;
       }
-      if (typeof nodeRuleUnknown.present.group_id === "string") {
-        const groupId = nodeRuleUnknown.present.group_id.trim();
-        if (groupId.length > 0) {
-          present.group_id = groupId;
-        }
-      }
-      if (typeof nodeRuleUnknown.present.group_title === "string") {
-        const groupTitle = nodeRuleUnknown.present.group_title.trim();
-        if (groupTitle.length > 0) {
-          present.group_title = groupTitle;
-        }
-      }
-      if (
-        typeof nodeRuleUnknown.present.group_order === "number" &&
-        nodeRuleUnknown.present.group_order >= 0
-      ) {
-        present.group_order = Math.floor(nodeRuleUnknown.present.group_order);
-      }
       nodeRule.present = present;
     }
 

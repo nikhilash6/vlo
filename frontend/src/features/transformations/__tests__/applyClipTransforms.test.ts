@@ -135,6 +135,116 @@ describe("applyClipTransforms", () => {
     expect(mockSprite.position.y).toBe(0);
   });
 
+  it("applies COVER base layout (fills canvas, crops overflow)", () => {
+    // Texture is wider than container
+    mockSprite.texture = {
+      valid: true,
+      width: 3840,
+      height: 1080,
+    } as unknown as Texture;
+
+    // With contain: scale = Math.min(1920/3840, 1080/1080) = 0.5
+    applyClipTransforms(mockSprite, mockClip, containerSize);
+    expect(mockSprite.scale.x).toBe(0.5);
+    expect(mockSprite.scale.y).toBe(0.5);
+
+    // With cover: scale = Math.max(1920/3840, 1080/1080) = 1.0
+    applyClipTransforms(
+      mockSprite,
+      mockClip,
+      containerSize,
+      undefined,
+      undefined,
+      { baseLayoutMode: "cover" },
+    );
+    expect(mockSprite.scale.x).toBe(1);
+    expect(mockSprite.scale.y).toBe(1);
+    expect(mockSprite.position.x).toBe(960);
+    expect(mockSprite.position.y).toBe(540);
+  });
+
+  it("applies COVER with taller content", () => {
+    // Texture is taller than container
+    mockSprite.texture = {
+      valid: true,
+      width: 1920,
+      height: 2160,
+    } as unknown as Texture;
+
+    // cover: scale = Math.max(1920/1920, 1080/2160) = Math.max(1, 0.5) = 1.0
+    applyClipTransforms(
+      mockSprite,
+      mockClip,
+      containerSize,
+      undefined,
+      undefined,
+      { baseLayoutMode: "cover" },
+    );
+    expect(mockSprite.scale.x).toBe(1);
+    expect(mockSprite.scale.y).toBe(1);
+  });
+
+  it("per-clip fitMode transform overrides project default", () => {
+    // Wide texture: contain gives 0.5, cover gives 1.0
+    mockSprite.texture = {
+      valid: true,
+      width: 3840,
+      height: 1080,
+    } as unknown as Texture;
+
+    // Project default is "contain" (via options), but clip overrides to "cover"
+    mockClip.transformations = [
+      {
+        id: "fit-1",
+        type: "fitMode",
+        isEnabled: true,
+        parameters: { fitMode: "cover" },
+      },
+    ];
+
+    applyClipTransforms(
+      mockSprite,
+      mockClip,
+      containerSize,
+      undefined,
+      undefined,
+      { baseLayoutMode: "contain" },
+    );
+    // Clip override to "cover" should win
+    expect(mockSprite.scale.x).toBe(1);
+    expect(mockSprite.scale.y).toBe(1);
+  });
+
+  it("empty per-clip fitMode falls back to project default", () => {
+    mockSprite.texture = {
+      valid: true,
+      width: 3840,
+      height: 1080,
+    } as unknown as Texture;
+
+    mockClip.transformations = [
+      {
+        id: "fit-1",
+        type: "fitMode",
+        isEnabled: true,
+        parameters: { fitMode: "" },
+      },
+    ];
+
+    // Project default is "cover"
+    applyClipTransforms(
+      mockSprite,
+      mockClip,
+      containerSize,
+      undefined,
+      undefined,
+      { baseLayoutMode: "cover" },
+    );
+    // Empty fitMode should fall back to project default "cover"
+    expect(mockSprite.scale.x).toBe(1);
+    expect(mockSprite.scale.y).toBe(1);
+  });
+
   it("publishes live speed factor using timeline-mapped sampling time", () => {
     const factorSpline = {
       type: "spline" as const,

@@ -1,8 +1,7 @@
 import React from "react";
 import { Box, Typography, IconButton } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import { useDroppable, useDndContext, useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
+import { useDroppable, useDndContext } from "@dnd-kit/core";
 import MusicNoteIcon from "@mui/icons-material/MusicNote";
 import CloseIcon from "@mui/icons-material/Close";
 import type { Asset, AssetType } from "../../../types/Asset";
@@ -81,37 +80,17 @@ function AssetDropSlotComponent({
   onExternalDrop,
   onSelect,
   label,
-  reorderData,
-  onReorderDrop,
 }: AssetDropSlotProps) {
   const filled = value != null;
-  const isReorderable = filled && reorderData != null;
   const [externalHighlight, setExternalHighlight] = React.useState<
     "compatible" | "incompatible" | "external" | null
   >(null);
   const externalDragDepthRef = React.useRef(0);
 
-  const { setNodeRef: setDroppableNodeRef, isOver } = useDroppable({
+  const { setNodeRef, isOver } = useDroppable({
     id: `asset-slot-${id}`,
-    data: { type: "asset-slot", accept, onDrop, onReorderDrop },
+    data: { type: "asset-slot", accept, onDrop },
   });
-  const {
-    listeners,
-    setNodeRef: setDraggableNodeRef,
-    transform,
-    isDragging,
-  } = useDraggable({
-    id: `asset-slot-item-${id}`,
-    data: reorderData ?? undefined,
-    disabled: !isReorderable,
-  });
-  const setNodeRef = React.useCallback(
-    (node: HTMLElement | null) => {
-      setDroppableNodeRef(node);
-      setDraggableNodeRef(node);
-    },
-    [setDraggableNodeRef, setDroppableNodeRef],
-  );
 
   // Determine highlight state when dragging over
   const { active } = useDndContext();
@@ -123,14 +102,6 @@ function AssetDropSlotComponent({
         ? "compatible"
         : "incompatible";
   }
-  if (
-    isOver &&
-    active?.data.current?.type === "media-input" &&
-    typeof onReorderDrop === "function" &&
-    active.data.current.inputId !== id
-  ) {
-    highlight = "compatible";
-  }
   if (externalHighlight) {
     highlight = externalHighlight;
   }
@@ -138,13 +109,7 @@ function AssetDropSlotComponent({
   const thumbnail = value?.thumbnail ?? null;
 
   return (
-    <SlotContainer
-      sx={{
-        transform: CSS.Translate.toString(transform),
-        opacity: isDragging ? 0.65 : 1,
-        zIndex: isDragging ? 1 : "auto",
-      }}
-    >
+    <SlotContainer>
       {label && (
         <Typography
           variant="caption"
@@ -158,18 +123,11 @@ function AssetDropSlotComponent({
         filled={filled}
         highlight={highlight}
         data-drop-slot-id={id}
-        {...(isReorderable ? listeners : {})}
         sx={{
           "&:hover .drop-slot-clear": {
             opacity: 1,
           },
-          cursor: isReorderable
-            ? isDragging
-              ? "grabbing"
-              : "grab"
-            : onSelect
-              ? "pointer"
-              : "default",
+          cursor: onSelect ? "pointer" : "default",
         }}
         role={onSelect ? "button" : undefined}
         tabIndex={onSelect ? 0 : -1}

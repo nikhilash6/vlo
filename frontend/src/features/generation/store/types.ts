@@ -110,7 +110,6 @@ export interface GenerationWorkflowState {
       extractionError?: string | null;
     },
   ) => void;
-  reassignMediaInput: (sourceInputId: string, targetInputId: string) => void;
   clearMediaInput: (inputId: string) => void;
   syncWorkflow: (
     workflow: Record<string, unknown>,

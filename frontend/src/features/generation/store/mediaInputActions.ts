@@ -14,32 +14,15 @@ import type {
 function removeMediaInputEntries(
   mediaInputs: Record<string, GenerationMediaInputValue | null>,
   inputIds: readonly string[],
-  options: { revoke?: boolean } = {},
 ): Record<string, GenerationMediaInputValue | null> {
   const next = { ...mediaInputs };
-  const shouldRevoke = options.revoke !== false;
 
   for (const inputId of new Set(inputIds)) {
-    if (shouldRevoke) {
-      revokePreviewUrl(next[inputId]);
-    }
+    revokePreviewUrl(next[inputId]);
     delete next[inputId];
   }
 
   return next;
-}
-
-function getExistingMediaInputValue(
-  mediaInputs: Record<string, GenerationMediaInputValue | null>,
-  inputIds: readonly string[],
-): GenerationMediaInputValue | null {
-  for (const inputId of inputIds) {
-    if (Object.prototype.hasOwnProperty.call(mediaInputs, inputId)) {
-      return mediaInputs[inputId] ?? null;
-    }
-  }
-
-  return null;
 }
 
 export function buildMediaInputActions(
@@ -51,7 +34,6 @@ export function buildMediaInputActions(
   | "setMediaInputFrame"
   | "setMediaInputFrameWithSelection"
   | "setMediaInputTimelineSelection"
-  | "reassignMediaInput"
   | "clearMediaInput"
 > {
   return {
@@ -105,11 +87,6 @@ export function buildMediaInputActions(
         }),
       }),
 
-    reassignMediaInput: (sourceInputId, targetInputId) =>
-      set({
-        mediaInputs: reassignMediaInputs(get, sourceInputId, targetInputId),
-      }),
-
     clearMediaInput: (inputId) => {
       const { workflowInputs, mediaInputs } = get();
       const inputById = buildWorkflowInputLookup(workflowInputs);
@@ -138,54 +115,4 @@ function updateMediaInputs(
     ...removeMediaInputEntries(mediaInputs, inputKeys),
     [canonicalInputId]: value,
   };
-}
-
-function reassignMediaInputs(
-  get: GenerationStoreGet,
-  sourceInputId: string,
-  targetInputId: string,
-): Record<string, GenerationMediaInputValue | null> {
-  const { workflowInputs, mediaInputs } = get();
-  const inputById = buildWorkflowInputLookup(workflowInputs);
-  const sourceInput = inputById.get(sourceInputId);
-  const targetInput = inputById.get(targetInputId);
-
-  if (!sourceInput || !targetInput) {
-    return mediaInputs;
-  }
-
-  if (
-    sourceInput.inputType !== targetInput.inputType ||
-    sourceInput.inputType === "text"
-  ) {
-    return mediaInputs;
-  }
-
-  const sourceKeys = resolveWorkflowInputKeys(sourceInputId, inputById);
-  const targetKeys = resolveWorkflowInputKeys(targetInputId, inputById);
-  const sourceCanonicalInputId = sourceKeys[0] ?? sourceInputId;
-  const targetCanonicalInputId = targetKeys[0] ?? targetInputId;
-
-  if (sourceCanonicalInputId === targetCanonicalInputId) {
-    return mediaInputs;
-  }
-
-  const sourceValue = getExistingMediaInputValue(mediaInputs, sourceKeys);
-  if (!sourceValue) {
-    return mediaInputs;
-  }
-
-  const targetValue = getExistingMediaInputValue(mediaInputs, targetKeys);
-  const next = removeMediaInputEntries(
-    mediaInputs,
-    [...sourceKeys, ...targetKeys],
-    { revoke: false },
-  );
-
-  next[targetCanonicalInputId] = sourceValue;
-  if (targetValue) {
-    next[sourceCanonicalInputId] = targetValue;
-  }
-
-  return next;
 }

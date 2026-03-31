@@ -24,19 +24,11 @@
     },
     "62": {
       "present": {
-        "label": "End frame",
-        "group_id": "frames",
-        "group_title": "Frames",
-        "group_order": 1,
         "required": false
       }
     },
     "68": {
       "present": {
-        "label": "Start frame",
-        "group_id": "frames",
-        "group_title": "Frames",
-        "group_order": 0,
         "required": false
       }
     },

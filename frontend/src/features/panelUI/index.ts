@@ -13,7 +13,6 @@ export type {
 export { AssetDropSlot } from "./components/AssetDropSlot";
 export type {
   AssetDropSlotProps,
-  AssetDropSlotReorderData,
   AssetDropSlotValue,
 } from "./components/assetDropSlotTypes";
 export { BufferedInput } from "./components/BufferedInput";

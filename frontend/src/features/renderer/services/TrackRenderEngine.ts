@@ -11,7 +11,7 @@ import {
   snapFrameTimeSeconds,
 } from "../utils/renderTime";
 import { findActiveClipAtTicks } from "../utils/clipLookup";
-import { applyClipTransforms } from "../../transformations";
+import { applyClipTransforms, type FitMode } from "../../transformations";
 import { SpriteClipMaskController } from "../../masks/runtime/SpriteClipMaskController";
 import { TICKS_PER_SECOND } from "../../timeline";
 import { ensureAssetSourceLoaded } from "../../userAssets";
@@ -30,6 +30,7 @@ interface LiveRenderRequest {
   localTimeSeconds: number;
   rawTimeTicks: number;
   enqueuedAtMs: number;
+  fitMode?: FitMode;
 }
 
 interface PendingLiveFrame {
@@ -145,9 +146,9 @@ export class TrackRenderEngine {
     maskClipsByParent: Map<string, MaskTimelineClip[]>,
     assets: Asset[],
     logicalDimensions: { width: number; height: number },
-    options: { shouldRender?: boolean; fps?: number } = {},
+    options: { shouldRender?: boolean; fps?: number; fitMode?: FitMode } = {},
   ): Promise<void> | void {
-    const { shouldRender = true, fps = 30 } = options;
+    const { shouldRender = true, fps = 30, fitMode } = options;
     const nowMs = performance.now();
     const isLikelyScrubbing = this.detectScrubbing(currentTime, fps, nowMs);
     const assetById = this.syncPreparedClips(
@@ -223,6 +224,7 @@ export class TrackRenderEngine {
         localTimeSeconds: renderTimeSeconds,
         rawTimeTicks: rawTimeSeconds,
         enqueuedAtMs: nowMs,
+        fitMode,
       });
     } else if (!shouldSend || !shouldRender) {
       // Keep transforms/filters responsive without requesting a new SAM2 frame.
@@ -248,6 +250,8 @@ export class TrackRenderEngine {
         activeClip,
         logicalDimensions,
         rawTimeSeconds,
+        undefined,
+        fitMode ? { baseLayoutMode: fitMode } : undefined,
       );
       this.maskController.syncMaskSpriteTransform();
     }
@@ -266,9 +270,9 @@ export class TrackRenderEngine {
     maskClipsByParent: Map<string, MaskTimelineClip[]>,
     assets: Asset[],
     logicalDimensions: { width: number; height: number },
-    options: { fps?: number } = {},
+    options: { fps?: number; fitMode?: FitMode } = {},
   ): Promise<void> {
-    const fps = options.fps ?? 30;
+    const { fps = 30, fitMode } = options;
     const nowMs = performance.now();
     const assetById = this.syncPreparedClips(
       currentTime,
@@ -364,6 +368,8 @@ export class TrackRenderEngine {
         activeClip,
         logicalDimensions,
         rawTimeSeconds,
+        undefined,
+        fitMode ? { baseLayoutMode: fitMode } : undefined,
       );
       this.maskController.syncMaskSpriteTransform();
     }
@@ -378,7 +384,7 @@ export class TrackRenderEngine {
     logicalDimensions: { width: number; height: number },
     maskClips: MaskTimelineClip[] = [],
     assetsById: Map<string, Asset> = new Map<string, Asset>(),
-    options: { fps?: number; signal?: AbortSignal } = {},
+    options: { fps?: number; signal?: AbortSignal; fitMode?: FitMode } = {},
   ): Promise<void> {
     this.invalidateLivePipeline();
 
@@ -413,7 +419,7 @@ export class TrackRenderEngine {
       };
 
       const resolveFrame = settle((bitmap: ImageBitmap | null) => {
-        this.updateTexture(bitmap, activeClip, logicalDimensions, rawTime);
+        this.updateTexture(bitmap, activeClip, logicalDimensions, rawTime, options.fitMode);
         resolve();
       });
       const rejectFrame = settle((error: Error) => {
@@ -664,6 +670,8 @@ export class TrackRenderEngine {
               request.clip,
               request.logicalDimensions,
               request.rawTimeTicks,
+              undefined,
+              request.fitMode ? { baseLayoutMode: request.fitMode } : undefined,
             );
             this.maskController.syncMaskSpriteTransform();
           }
@@ -737,11 +745,12 @@ export class TrackRenderEngine {
     clip: TimelineClip,
     dimensions: { width: number; height: number },
     rawTime: number,
+    fitMode?: FitMode,
   ) {
     if (bitmap) {
       const texture = Texture.from(bitmap);
       this.applyTexture(texture, clip.id);
-      applyClipTransforms(this.sprite, clip, dimensions, rawTime);
+      applyClipTransforms(this.sprite, clip, dimensions, rawTime, undefined, fitMode ? { baseLayoutMode: fitMode } : undefined);
       this.maskController.syncMaskSpriteTransform();
     }
   }
@@ -764,6 +773,7 @@ export class TrackRenderEngine {
     currentTime: number,
     maskClips: MaskTimelineClip[] = [],
     assetsById: Map<string, Asset> = new Map<string, Asset>(),
+    fitMode?: FitMode,
   ) {
     if (!this.sprite.visible) return;
     const rawTimeSeconds = currentTime - activeClip.start;
@@ -772,6 +782,8 @@ export class TrackRenderEngine {
       activeClip,
       logicalDimensions,
       rawTimeSeconds,
+      undefined,
+      fitMode ? { baseLayoutMode: fitMode } : undefined,
     );
     this.maskController.syncMaskSpriteTransform();
     void this.maskController

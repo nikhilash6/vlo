@@ -179,39 +179,6 @@ def test_load_rules_for_workflow_normalizes_node_selection(tmp_path: Path):
     }
 
 
-def test_load_rules_for_workflow_preserves_present_group_metadata(tmp_path: Path):
-    workflow_path = tmp_path / "example.json"
-    workflow_path.write_text("{}")
-    sidecar_path = tmp_path / "example.rules.json"
-    sidecar_path.write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "nodes": {
-                    "62": {
-                        "present": {
-                            "label": "Start frame",
-                            "group_id": "frames",
-                            "group_title": "Frames",
-                            "group_order": 0,
-                        }
-                    }
-                },
-            }
-        )
-    )
-
-    rules, warnings = load_rules_for_workflow(tmp_path, "example.json")
-
-    assert warnings == []
-    assert rules["nodes"]["62"]["present"] == {
-        "label": "Start frame",
-        "group_id": "frames",
-        "group_title": "Frames",
-        "group_order": 0,
-    }
-
-
 def test_load_rules_for_workflow_normalizes_slot_selection_config(tmp_path: Path):
     workflow_path = tmp_path / "example.json"
     workflow_path.write_text("{}")

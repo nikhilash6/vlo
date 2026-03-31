@@ -34,9 +34,6 @@ class WorkflowRuleNodePresent(WorkflowRuleBaseModel):
     param: str | None = None
     label: str | None = None
     class_type: str | None = None
-    group_id: str | None = None
-    group_title: str | None = None
-    group_order: int | None = None
 
 
 class WorkflowRuleWidgetEntry(WorkflowRuleBaseModel):

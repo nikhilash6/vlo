@@ -101,11 +101,13 @@ export function useTrackRenderEngine(
     [assets],
   );
   const fps = useProjectStore((state) => state.config.fps);
+  const fitMode = useProjectStore((state) => state.config.fitMode);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
   const [currentClipId, setCurrentClipId] = useState<string | null>(null);
   const currentClipIdRef = useRef<string | null>(null);
   const livePlaybackStateRef = useRef({
     assets,
+    fitMode,
     fps,
     maskClipsByParent,
     sortedTrackClips,
@@ -113,6 +115,7 @@ export function useTrackRenderEngine(
 
   livePlaybackStateRef.current = {
     assets,
+    fitMode,
     fps,
     maskClipsByParent,
     sortedTrackClips,
@@ -151,10 +154,12 @@ export function useTrackRenderEngine(
         currentRenderTime,
         activeMaskClips,
         assetsById,
+        fitMode,
       );
     }
   }, [
     assetsById,
+    fitMode,
     isPlaying,
     logicalDimensions,
     maskClipsByParent,
@@ -174,7 +179,7 @@ export function useTrackRenderEngine(
       currentState.maskClipsByParent,
       currentState.assets,
       logicalDimensionsRef.current,
-      { fps: currentState.fps },
+      { fps: currentState.fps, fitMode: currentState.fitMode },
     );
   }, [syncActiveClipState]);
 
@@ -232,12 +237,13 @@ export function useTrackRenderEngine(
         maskClipsByParent,
         assets,
         logicalDimensionsRef.current,
-        { fps },
+        { fps, fitMode },
       );
       syncActiveClipState(playbackClock.time, sortedTrackClips);
     });
   }, [
     assets,
+    fitMode,
     fps,
     isPlaying,
     maskClipsByParent,
@@ -285,6 +291,7 @@ export function useTrackRenderEngine(
           playbackClock.time,
           activeMaskClips,
           assetsById,
+          fitMode,
         );
       });
     };
@@ -319,11 +326,14 @@ export function useTrackRenderEngine(
       (clipId, transformTime) => {
         // Callback when frame is ready (Live Mode)
         if (activeClipRef.current && activeClipRef.current.id === clipId) {
+          const currentFitMode = livePlaybackStateRef.current.fitMode;
           applyClipTransforms(
             engine.sprite,
             activeClipRef.current,
             logicalDimensionsRef.current,
             transformTime,
+            undefined,
+            currentFitMode ? { baseLayoutMode: currentFitMode } : undefined,
           );
           engine.syncMaskSpriteTransform();
         }
@@ -395,7 +405,7 @@ export function useTrackRenderEngine(
         maskClipsByParent,
         assets,
         logicalDimensionsRef.current,
-        { fps },
+        { fps, fitMode },
       );
       syncActiveClipState(currentTime, sortedTrackClips);
     };
@@ -410,6 +420,7 @@ export function useTrackRenderEngine(
     return unsubscribe;
   }, [
     assets,
+    fitMode,
     fps,
     isPlaying,
     maskClipsByParent,

@@ -267,7 +267,6 @@ export function GenerationPanel() {
     handleInputDrop,
     handleExternalInputDrop,
     handleInputClear,
-    handleSwapMediaInputs,
     handleClickSelect,
 
     // Send to timeline
@@ -826,7 +825,6 @@ export function GenerationPanel() {
           onInputDrop={handleInputDrop}
           onExternalInputDrop={handleExternalInputDrop}
           onInputClear={handleInputClear}
-          onSwapMediaInputs={handleSwapMediaInputs}
           onClickSelect={handleClickSelect}
           widgetInputs={widgetInputs}
           widgetValues={widgetValues}

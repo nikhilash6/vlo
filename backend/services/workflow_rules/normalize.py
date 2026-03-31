@@ -454,18 +454,6 @@ def _normalize_rules_dict(raw: Any) -> tuple[WorkflowRules, list[WorkflowRuleWar
                 present["param"] = raw_present["param"]
             if isinstance(raw_present.get("class_type"), str):
                 present["class_type"] = raw_present["class_type"]
-            if isinstance(raw_present.get("group_id"), str):
-                group_id = raw_present["group_id"].strip()
-                if group_id:
-                    present["group_id"] = group_id
-            if isinstance(raw_present.get("group_title"), str):
-                group_title = raw_present["group_title"].strip()
-                if group_title:
-                    present["group_title"] = group_title
-            group_order = raw_present.get("group_order")
-            if isinstance(group_order, int) and not isinstance(group_order, bool):
-                if group_order >= 0:
-                    present["group_order"] = group_order
             if isinstance(raw_present.get("input_type"), str):
                 input_type = raw_present["input_type"].strip()
                 present["input_type"] = input_type

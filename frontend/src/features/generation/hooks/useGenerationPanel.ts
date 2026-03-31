@@ -185,7 +185,6 @@ export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
   const setMediaInputTimelineSelection = useGenerationStore(
     (s) => s.setMediaInputTimelineSelection,
   );
-  const reassignMediaInput = useGenerationStore((s) => s.reassignMediaInput);
   const clearMediaInput = useGenerationStore((s) => s.clearMediaInput);
   const pendingReplayPanelState = useGenerationStore(
     (s) => s.pendingReplayPanelState,
@@ -702,21 +701,6 @@ export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
     [clearMediaInput],
   );
 
-  const handleSwapMediaInputs = useCallback(
-    (sourceInputId: string, targetInputId: string) => {
-      if (sourceInputId === targetInputId) {
-        return;
-      }
-
-      selectionExtractionRequestIdsRef.current[sourceInputId] =
-        (selectionExtractionRequestIdsRef.current[sourceInputId] ?? 0) + 1;
-      selectionExtractionRequestIdsRef.current[targetInputId] =
-        (selectionExtractionRequestIdsRef.current[targetInputId] ?? 0) + 1;
-      reassignMediaInput(sourceInputId, targetInputId);
-    },
-    [reassignMediaInput],
-  );
-
   const handleClickSelect = useCallback(
     (inputId: string, inputType: "image" | "video") => {
       const extractStore = useExtractStore.getState();
@@ -1181,7 +1165,6 @@ export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
     handleInputDrop,
     handleExternalInputDrop,
     handleInputClear,
-    handleSwapMediaInputs,
     handleClickSelect,
   };
 }

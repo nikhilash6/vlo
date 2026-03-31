@@ -29,8 +29,8 @@ import { TemplateRegistry } from "./templates/index";
  *
  * Uses the "contain" template by default.
  */
-export const getBaseLayout = (containerSize: Size, contentSize: Size) => {
-  const template = TemplateRegistry["contain"];
+export const getBaseLayout = (containerSize: Size, contentSize: Size, mode: string = "contain") => {
+  const template = TemplateRegistry[mode] ?? TemplateRegistry["contain"];
   const defaults = template({ container: containerSize, content: contentSize });
 
   // Return only layout-related defaults
@@ -107,10 +107,28 @@ export const layoutDefinition: TransformationDefinition = {
   type: "layout",
   label: "Layout",
   compatibleClips: "visual",
-  handledTypes: ["position", "scale", "rotation"],
+  handledTypes: ["position", "scale", "rotation", "fitMode"],
   handler: layoutHandler,
   uiConfig: {
     groups: [
+      {
+        id: "fitMode",
+        title: "FIT MODE",
+        columns: 1,
+        controls: [
+          {
+            type: "select",
+            label: "Fit",
+            name: "fitMode",
+            defaultValue: "",
+            options: [
+              { label: "Project Default", value: "" },
+              { label: "Contain (Letterbox)", value: "contain" },
+              { label: "Cover (Fill)", value: "cover" },
+            ],
+          },
+        ],
+      },
       {
         id: "position",
         title: "POSITION (PX)",
