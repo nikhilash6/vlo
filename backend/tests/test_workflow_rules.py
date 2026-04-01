@@ -839,6 +839,36 @@ def test_real_wan_default_workflow_sidecar_waives_default_required_inputs():
     )
 
 
+def test_real_ltx_flf2v_custom_audio_default_workflow_sidecar_waives_default_required_inputs():
+    base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
+    workflow_path = base / "video_ltx2_3_flf2v_custom_audio.json"
+    workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+
+    set_object_info_cache(None)
+    try:
+        rules_model, warnings = load_rules_model_for_workflow(base, workflow_path.name)
+        assert warnings == []
+        rules_model = enrich_rules_with_object_info(rules_model, workflow)
+        rules = dump_resolved_rules(rules_model)
+    finally:
+        set_object_info_cache(None)
+
+    assert rules["name"] == "LTX2.3 FLF2V Custom Audio"
+
+    validation_inputs = rules["validation"]["inputs"]
+    assert {
+        "kind": "at_least_n",
+        "inputs": ["45", "47"],
+        "min": 1,
+        "message": "Provide at least one frame input.",
+    } in validation_inputs
+    assert not any(
+        rule.get("kind") == "required" and rule.get("input") in {"45", "47"}
+        for rule in validation_inputs
+        if isinstance(rule, dict)
+    )
+
+
 def test_real_video_wan_default_workflow_sidecar_requires_video_and_derives_denoise():
     base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
     workflow_path = base / "video_wan2_2_14B_flfv2v_vlo.json"
