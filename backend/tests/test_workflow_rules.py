@@ -650,7 +650,8 @@ def test_enrich_rules_with_object_info_auto_discovers_required_validation_for_me
         "nodes": [
             {"id": 10, "type": "ImageUploadNode", "title": "Image Upload"},
             {"id": 11, "type": "VideoUploadNode", "title": "Video Upload"},
-            {"id": 12, "type": "PromptNode", "title": "Prompt"},
+            {"id": 12, "type": "AudioUploadNode", "title": "Audio Upload"},
+            {"id": 13, "type": "PromptNode", "title": "Prompt"},
         ]
     }
     rules = {
@@ -682,6 +683,14 @@ def test_enrich_rules_with_object_info_auto_discovers_required_validation_for_me
             },
             "input_order": {"required": ["video"]},
         },
+        "AudioUploadNode": {
+            "input": {
+                "required": {
+                    "audio": [["example.wav"], {"audio_upload": True}],
+                }
+            },
+            "input_order": {"required": ["audio"]},
+        },
         "PromptNode": {
             "input": {
                 "required": {
@@ -701,6 +710,7 @@ def test_enrich_rules_with_object_info_auto_discovers_required_validation_for_me
     assert rules["validation"]["inputs"] == [
         {"kind": "required", "input": "10", "message": "Image is required."},
         {"kind": "required", "input": "11", "message": "Video is required."},
+        {"kind": "required", "input": "12", "message": "Audio is required."},
     ]
     failures = evaluate_input_validation(rules, set())
     assert failures == [
@@ -714,6 +724,39 @@ def test_enrich_rules_with_object_info_auto_discovers_required_validation_for_me
             "input": "11",
             "message": "Video is required.",
         },
+        {
+            "kind": "required",
+            "input": "12",
+            "message": "Audio is required.",
+        },
+    ]
+
+
+def test_parse_workflow_inputs_includes_load_audio_by_default():
+    set_object_info_cache({})
+    try:
+        inputs = comfyui._parse_workflow_inputs(
+            {
+                "145": {
+                    "class_type": "LoadAudio",
+                    "inputs": {"audio": "default.wav"},
+                }
+            }
+        )
+    finally:
+        set_object_info_cache(None)
+
+    assert inputs == [
+        {
+            "id": "145:audio",
+            "nodeId": "145",
+            "classType": "LoadAudio",
+            "inputType": "audio",
+            "param": "audio",
+            "label": "LoadAudio",
+            "description": None,
+            "currentValue": "default.wav",
+        }
     ]
 
 
@@ -2758,6 +2801,43 @@ async def test_generate_handles_video_upload_and_applies_rules(tmp_path: Path, m
     prompt = fake_comfy_client.prompt_payload["prompt"]
     assert prompt["49"]["inputs"]["control_video"] == ["300", 0]
     assert prompt["145"]["inputs"]["file"] == "uploaded_video.mp4"
+
+
+@pytest.mark.anyio
+async def test_generate_handles_audio_upload(tmp_path: Path, monkeypatch, fake_comfy_client):
+    monkeypatch.setattr(comfyui, "WORKFLOWS_DIR", tmp_path)
+
+    workflow = {
+        "145": {"class_type": "LoadAudio", "inputs": {"audio": "default.wav"}},
+        "200": {"class_type": "AudioConsumer", "inputs": {"audio": ["145", 0]}},
+    }
+
+    audio_file = SpooledTemporaryFile()
+    audio_file.write(b"audio-bytes")
+    audio_file.seek(0)
+
+    response = await comfyui.generate(
+        _as_request(
+            FormData(
+                [
+                    ("workflow", json.dumps(workflow)),
+                    (
+                        "audio_145",
+                        UploadFile(
+                            file=_as_binary_io(audio_file),
+                            filename="clip.wav",
+                            headers=Headers({"content-type": "audio/wav"}),
+                        ),
+                    ),
+                ]
+            )
+        )
+    )
+
+    assert response.status_code == 200
+    assert fake_comfy_client.prompt_payload is not None
+    prompt = fake_comfy_client.prompt_payload["prompt"]
+    assert prompt["145"]["inputs"]["audio"] == "uploaded_audio.wav"
 
 
 @pytest.mark.anyio

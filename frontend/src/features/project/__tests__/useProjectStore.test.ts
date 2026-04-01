@@ -36,6 +36,7 @@ describe("useProjectStore", () => {
   const defaultConfig = {
     aspectRatio: "16:9" as const,
     fps: 30,
+    fitMode: "cover" as const,
     layoutMode: "compact" as const,
     assetBrowserDisplay: "grouped" as const,
   };

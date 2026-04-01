@@ -25,6 +25,10 @@ import {
   renderTimelineSelectionToWebm,
   renderTimelineSelectionToWebmWithMask,
 } from "../utils/inputSelection";
+import {
+  createAudioSelectionPlaceholderFile,
+  extractAudioFromSelection,
+} from "../utils/manualSlotMedia";
 import { resolveWidgetInputs } from "../store/workflowState";
 import { parseWorkflowInputs } from "../services/workflowBridge";
 import {
@@ -513,6 +517,28 @@ export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
           continue;
         }
 
+        if (input.inputType === "audio") {
+          if (value.kind === "asset") {
+            if (!assetMatchesType(value.asset, "audio")) {
+              continue;
+            }
+            const file = await resolveAssetFileForGeneration(value.asset);
+            slotValues[inputId] = {
+              type: "audio",
+              file,
+            };
+          } else if (
+            value.kind === "timelineSelection" &&
+            value.preparedAudioFile
+          ) {
+            slotValues[inputId] = {
+              type: "audio",
+              file: value.preparedAudioFile,
+            };
+          }
+          continue;
+        }
+
         if (value.kind === "asset") {
           if (!assetMatchesType(value.asset, "video")) {
             continue;
@@ -718,7 +744,7 @@ export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
   );
 
   const handleClickSelect = useCallback(
-    (inputId: string, inputType: "image" | "video") => {
+    (inputId: string, inputType: "image" | "video" | "audio") => {
       const extractStore = useExtractStore.getState();
       const timelineSelectionStore = useTimelineSelectionStore.getState();
       const playerStore = usePlayerStore.getState();
@@ -811,10 +837,13 @@ export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
               createTimelineSelection(selectionStartTick, selectionEndTick),
               selectionConfig,
             );
-            const thumbnailFile = await captureFramePngAtTick(
-              selectionStartTick,
-              "generation-selection-thumb",
-            );
+            const thumbnailFile =
+              inputType === "audio"
+                ? createAudioSelectionPlaceholderFile()
+                : await captureFramePngAtTick(
+                    selectionStartTick,
+                    "generation-selection-thumb",
+                  );
             const extractionRequestId =
               (selectionExtractionRequestIdsRef.current[inputId] ?? 0) + 1;
             selectionExtractionRequestIdsRef.current[inputId] =
@@ -825,11 +854,42 @@ export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
               timelineSelection,
               thumbnailFile,
               {
+                mediaType: inputType === "audio" ? "audio" : "video",
                 isExtracting: true,
                 extractionRequestId,
               },
             );
             closeSelectionMode();
+
+            if (inputType === "audio") {
+              const preparedAudioFile = await extractAudioFromSelection(
+                timelineSelection,
+                {
+                  exportFps: recommendedFps ?? undefined,
+                },
+              );
+              if (
+                selectionExtractionRequestIdsRef.current[inputId] ===
+                extractionRequestId
+              ) {
+                setMediaInputTimelineSelection(
+                  inputId,
+                  timelineSelection,
+                  thumbnailFile,
+                  {
+                    mediaType: "audio",
+                    isExtracting: false,
+                    extractionRequestId,
+                    preparedAudioFile,
+                    extractionError:
+                      preparedAudioFile === null
+                        ? "No audio track was found in the selected timeline range"
+                        : null,
+                  },
+                );
+              }
+              return;
+            }
 
             const nodeMasks =
               mode === "manual"
@@ -861,6 +921,7 @@ export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
                   timelineSelection,
                   thumbnailFile,
                   {
+                    mediaType: "video",
                     isExtracting: false,
                     extractionRequestId,
                     preparedVideoFile: video,
@@ -881,6 +942,7 @@ export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
                   timelineSelection,
                   thumbnailFile,
                   {
+                    mediaType: "video",
                     isExtracting: false,
                     extractionRequestId,
                     preparedVideoFile,
@@ -908,6 +970,7 @@ export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
                 existingValue.timelineSelection,
                 existingValue.thumbnailFile,
                 {
+                  mediaType: existingValue.mediaType,
                   isExtracting: false,
                   extractionRequestId,
                   extractionError:
@@ -1016,7 +1079,7 @@ export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
 
       if (
         hasProvidedMediaInputValue(
-          input.inputType as "image" | "video",
+          input.inputType as "image" | "video" | "audio",
           getWorkflowInputValue(mediaInputs, input, workflowInputById),
         )
       ) {

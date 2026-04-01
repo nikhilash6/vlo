@@ -35,7 +35,7 @@ interface GenerationInputsProps {
   onExternalInputDrop: (inputId: string, file: File) => void | Promise<void>;
   onInputClear: (inputId: string) => void;
   onSwapMediaInputs: (sourceInputId: string, targetInputId: string) => void;
-  onClickSelect: (inputId: string, inputType: "image" | "video") => void;
+  onClickSelect: (inputId: string, inputType: "image" | "video" | "audio") => void;
   widgetInputs: WorkflowWidgetInput[];
   widgetValues: Record<string, Record<string, unknown>>;
   randomizeToggles: Record<string, boolean>;
@@ -72,10 +72,27 @@ function toSlotValue(
   }
 
   return {
-    type: "video",
+    type: value.mediaType,
     name: `Timeline selection (${value.timelineSelection.start}-${value.timelineSelection.end ?? value.timelineSelection.start})`,
-    thumbnail: value.thumbnailUrl,
+    ...(value.mediaType === "video"
+      ? { thumbnail: value.thumbnailUrl }
+      : {}),
   };
+}
+
+function resolveAcceptTypes(
+  inputType: WorkflowInput["inputType"],
+) {
+  switch (inputType) {
+    case "image":
+      return ["image" as const];
+    case "audio":
+      return ["audio" as const];
+    case "video":
+      return ["video" as const];
+    default:
+      return [];
+  }
 }
 
 function isUnsafeIntegerString(raw: string): boolean {
@@ -271,13 +288,13 @@ type RenderableInputBlock =
     }
   | {
       kind: "media";
-      input: WorkflowInput;
+      input: MediaWorkflowInput;
     }
   | {
       kind: "mediaGroup";
       id: string;
       title: string;
-      inputs: WorkflowInput[];
+      inputs: MediaWorkflowInput[];
     };
 
 function getRenderableInputBlockPriority(block: RenderableInputBlock): number {
@@ -292,7 +309,7 @@ function getRenderableInputBlockPriority(block: RenderableInputBlock): number {
 
 function buildRenderableInputBlocks(inputs: WorkflowInput[]): RenderableInputBlock[] {
   type GroupedInputEntry = {
-    input: WorkflowInput;
+    input: MediaWorkflowInput;
     index: number;
     order?: number;
   };
@@ -312,15 +329,21 @@ function buildRenderableInputBlocks(inputs: WorkflowInput[]): RenderableInputBlo
       continue;
     }
 
-    const group = input.presentation?.group;
+    if (!isMediaWorkflowInput(input)) {
+      continue;
+    }
+
+    const mediaInput = input;
+
+    const group = mediaInput.presentation?.group;
     if (!group?.id) {
-      blocks.push({ kind: "media", input });
+      blocks.push({ kind: "media", input: mediaInput });
       continue;
     }
 
     const existing = groupedEntries.get(group.id);
     if (existing) {
-      existing.entries.push({ input, index, order: group.order });
+      existing.entries.push({ input: mediaInput, index, order: group.order });
       if (!existing.title && group.title) {
         existing.title = group.title;
       }
@@ -328,13 +351,13 @@ function buildRenderableInputBlocks(inputs: WorkflowInput[]): RenderableInputBlo
     }
 
     groupedEntries.set(group.id, {
-      title: group.title ?? input.label,
-      entries: [{ input, index, order: group.order }],
+      title: group.title ?? mediaInput.label,
+      entries: [{ input: mediaInput, index, order: group.order }],
     });
     blocks.push({
       kind: "mediaGroup",
       id: group.id,
-      title: group.title ?? input.label,
+      title: group.title ?? mediaInput.label,
       inputs: [],
     });
   }
@@ -429,14 +452,26 @@ function TextInputSection({
 
 const MemoizedTextInputSection = memo(TextInputSection);
 
+type MediaWorkflowInput = WorkflowInput & {
+  inputType: "image" | "video" | "audio";
+};
+
+function isMediaWorkflowInput(input: WorkflowInput): input is MediaWorkflowInput {
+  return (
+    input.inputType === "image" ||
+    input.inputType === "video" ||
+    input.inputType === "audio"
+  );
+}
+
 interface MediaInputSectionProps {
-  input: WorkflowInput;
+  input: MediaWorkflowInput;
   bgColor: string;
   value: GenerationMediaInputValue | null | undefined;
   onInputDrop: (inputId: string, asset: Asset) => void;
   onExternalInputDrop: (inputId: string, file: File) => void | Promise<void>;
   onInputClear: (inputId: string) => void;
-  onClickSelect: (inputId: string, inputType: "image" | "video") => void;
+  onClickSelect: (inputId: string, inputType: "image" | "video" | "audio") => void;
 }
 
 function MediaInputSection({
@@ -449,10 +484,8 @@ function MediaInputSection({
   onClickSelect,
 }: MediaInputSectionProps) {
   const inputId = getWorkflowInputId(input);
-  const mediaInputType: "image" | "video" =
-    input.inputType === "image" ? "image" : "video";
-  const acceptTypes =
-    mediaInputType === "image" ? ["image" as const] : ["video" as const];
+  const mediaInputType = input.inputType;
+  const acceptTypes = resolveAcceptTypes(mediaInputType);
   const slotValue = useMemo(() => toSlotValue(value), [value]);
 
   return (
@@ -479,14 +512,14 @@ const MemoizedMediaInputSection = memo(MediaInputSection);
 
 interface MediaInputGroupSectionProps {
   title: string;
-  inputs: WorkflowInput[];
+  inputs: MediaWorkflowInput[];
   bgColor: string;
   mediaInputs: Record<string, GenerationMediaInputValue | null>;
   onInputDrop: (inputId: string, asset: Asset) => void;
   onExternalInputDrop: (inputId: string, file: File) => void | Promise<void>;
   onInputClear: (inputId: string) => void;
   onSwapMediaInputs: (sourceInputId: string, targetInputId: string) => void;
-  onClickSelect: (inputId: string, inputType: "image" | "video") => void;
+  onClickSelect: (inputId: string, inputType: "image" | "video" | "audio") => void;
 }
 
 function MediaInputGroupSection({
@@ -512,10 +545,8 @@ function MediaInputGroupSection({
       >
         {inputs.map((input) => {
           const inputId = getWorkflowInputId(input);
-          const mediaInputType: "image" | "video" =
-            input.inputType === "image" ? "image" : "video";
-          const acceptTypes =
-            mediaInputType === "image" ? ["image" as const] : ["video" as const];
+          const mediaInputType = input.inputType;
+          const acceptTypes = resolveAcceptTypes(mediaInputType);
           const value = getWorkflowInputValue(mediaInputs, input);
           const slotValue = toSlotValue(value);
 

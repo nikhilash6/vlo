@@ -301,8 +301,8 @@ class AuthoredWorkflowRuleNodeV2(WorkflowRuleNodeBase):
     @model_validator(mode="after")
     def validate_present_input_type(self) -> "AuthoredWorkflowRuleNodeV2":
         if self.present and self.present.input_type is not None:
-            if self.present.input_type not in {"text", "image", "video"}:
-                raise ValueError("present.input_type must be one of text|image|video")
+            if self.present.input_type not in {"text", "image", "video", "audio"}:
+                raise ValueError("present.input_type must be one of text|image|video|audio")
         return self
 
 

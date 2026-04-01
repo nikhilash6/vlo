@@ -40,7 +40,7 @@ export interface DerivedMaskMapping {
 
 export type SlotValue =
   | { type: "text"; value: string }
-  | { type: "image" | "video"; file: File }
+  | { type: "image" | "video" | "audio"; file: File }
   | {
       type: "video_selection";
       selection: TimelineSelection;
@@ -156,6 +156,7 @@ export interface FrontendPreprocessContext {
   targetAspectRatio: string;
   textInputs: Record<string, string>;
   imageInputs: Record<string, File>;
+  audioInputs: Record<string, File>;
   videoInputs: Record<string, File>;
 }
 
@@ -173,6 +174,7 @@ export interface GenerationRequest {
   textInputs: Record<string, string>;
   imageInputs: Record<string, File>;
   videoInputs: Record<string, File>;
+  audioInputs?: Record<string, File>;
   widgetInputs?: Record<string, string>;
   derivedWidgetInputs?: Record<string, string>;
   widgetModes?: Record<string, "fixed" | "randomize">;

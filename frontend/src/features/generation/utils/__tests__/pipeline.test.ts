@@ -170,6 +170,45 @@ describe("generation pipeline", () => {
     expect(request.targetResolution).toBe(720);
   });
 
+  it("routes audio workflow inputs without affecting visual aspect-ratio selection", async () => {
+    useProjectStore.setState((state) => ({
+      ...state,
+      config: {
+        ...state.config,
+        aspectRatio: "9:16",
+        fps: 24,
+      },
+    }));
+
+    const audioFile = new File(["audio"], "input.wav", { type: "audio/wav" });
+
+    const request = await frontendPreprocess(
+      {},
+      "workflow.json",
+      [
+        {
+          nodeId: "audio_input",
+          classType: "LoadAudio",
+          inputType: "audio",
+          param: "audio",
+          label: "Audio Input",
+          currentValue: null,
+          origin: "rule",
+        },
+      ],
+      {
+        audio_input: {
+          type: "audio",
+          file: audioFile,
+        },
+      },
+      "client-id",
+    );
+
+    expect(request.audioInputs).toEqual({ audio_input: audioFile });
+    expect(request.targetAspectRatio).toBe("9:16");
+  });
+
   it("normalizes off-grid input aspect ratios to the nearest supported ratio when exact matching is disabled", async () => {
     useProjectStore.setState((state) => ({
       ...state,

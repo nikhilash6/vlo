@@ -142,6 +142,7 @@ function cloneSlotValues(
     switch (value.type) {
       case "text":
       case "image":
+      case "audio":
       case "video":
         next[key] = { ...value };
         break;

@@ -7,6 +7,9 @@ function fallbackMimeTypeForAssetType(assetType: Asset["type"]): string {
   if (assetType === "image") {
     return "image/png";
   }
+  if (assetType === "audio") {
+    return "audio/wav";
+  }
   if (assetType === "video") {
     return "video/mp4";
   }
@@ -14,7 +17,7 @@ function fallbackMimeTypeForAssetType(assetType: Asset["type"]): string {
 }
 
 export function hasProvidedMediaInputValue(
-  inputType: "image" | "video",
+  inputType: "image" | "video" | "audio",
   value: GenerationMediaInputValue | null | undefined,
 ): boolean {
   if (!value) return false;
@@ -25,6 +28,14 @@ export function hasProvidedMediaInputValue(
 
   if (inputType === "image") {
     return value.kind === "frame";
+  }
+
+  if (inputType === "audio") {
+    return (
+      value.kind === "timelineSelection" &&
+      value.preparedAudioFile !== null &&
+      !value.isExtracting
+    );
   }
 
   return (

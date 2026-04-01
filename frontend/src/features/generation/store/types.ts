@@ -102,9 +102,11 @@ export interface GenerationWorkflowState {
     timelineSelection: TimelineSelection,
     thumbnailFile: File,
     options?: {
+      mediaType?: "video" | "audio";
       isExtracting?: boolean;
       extractionRequestId?: number;
       preparedVideoFile?: File | null;
+      preparedAudioFile?: File | null;
       preparedMaskFile?: File | null;
       preparedDerivedMaskVideoTreatment?: DerivedMaskSourceVideoTreatment | null;
       extractionError?: string | null;

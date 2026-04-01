@@ -182,6 +182,9 @@ class NodePolicy(TypedDict, total=False):
     has_video_input: bool
     """Node has at least one video-upload input."""
 
+    has_audio_input: bool
+    """Node has at least one audio-upload input."""
+
     has_text_input: bool
     """Node has at least one text-prompt input."""
 
@@ -261,6 +264,12 @@ DEFAULT_NODE_POLICY_RULES: list[NodePolicyRule] = [
     },
     {
         "constraint": {
+            "has_matching_param": {"flags": {"audio_upload": True}},
+        },
+        "policy": {"has_audio_input": True},
+    },
+    {
+        "constraint": {
             "has_matching_param": {
                 "flags": {"dynamicPrompts": True},
                 "type_spec_string": "STRING",
@@ -290,10 +299,11 @@ def resolve_node_policy(
 
 
 def has_any_input(policy: NodePolicy) -> bool:
-    """Return True if the policy indicates any input (image, video, or text)."""
+    """Return True if the policy indicates any input (image, video, audio, or text)."""
     return bool(
         policy.get("has_image_input")
         or policy.get("has_video_input")
+        or policy.get("has_audio_input")
         or policy.get("has_text_input")
     )
 

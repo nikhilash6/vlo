@@ -26,8 +26,15 @@ function isCompatibleMediaInput(
     );
   }
 
+  if (inputType === "audio") {
+    return (
+      (value.kind === "asset" && assetMatchesType(value.asset, "audio")) ||
+      (value.kind === "timelineSelection" && value.mediaType === "audio")
+    );
+  }
+
   return (
-    value.kind === "timelineSelection" ||
+    (value.kind === "timelineSelection" && value.mediaType === "video") ||
     (value.kind === "asset" && assetMatchesType(value.asset, "video"))
   );
 }

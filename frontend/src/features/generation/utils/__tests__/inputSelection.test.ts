@@ -13,6 +13,7 @@ describe("inputSelection", () => {
       config: {
         aspectRatio: "16:9",
         fps: 24,
+        fitMode: "cover",
         layoutMode: "compact",
         assetBrowserDisplay: "grouped",
       },

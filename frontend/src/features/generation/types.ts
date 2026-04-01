@@ -142,7 +142,7 @@ export interface WorkflowInput {
   id?: string;
   nodeId: string;
   classType: string;
-  inputType: "text" | "image" | "video";
+  inputType: "text" | "image" | "video" | "audio";
   param: string;
   label: string;
   description?: string | null;
@@ -171,12 +171,14 @@ export interface GenerationFrameInputValue {
 
 export interface GenerationTimelineSelectionInputValue {
   kind: "timelineSelection";
+  mediaType: "video" | "audio";
   timelineSelection: TimelineSelection;
   thumbnailFile: File;
   thumbnailUrl: string;
   isExtracting: boolean;
   extractionRequestId: number;
   preparedVideoFile: File | null;
+  preparedAudioFile: File | null;
   preparedMaskFile: File | null;
   preparedDerivedMaskVideoTreatment: DerivedMaskSourceVideoTreatment | null;
   extractionError: string | null;

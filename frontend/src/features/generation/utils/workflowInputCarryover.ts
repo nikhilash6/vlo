@@ -120,7 +120,12 @@ function buildCarryoverMatches<TInput extends WorkflowInput>(
     }
   }
 
-  const inputTypes: WorkflowInput["inputType"][] = ["text", "image", "video"];
+  const inputTypes: WorkflowInput["inputType"][] = [
+    "text",
+    "image",
+    "video",
+    "audio",
+  ];
   for (const inputType of inputTypes) {
     const remainingNextInputs = nextInputs.filter(
       (input) =>
@@ -162,9 +167,16 @@ function isDirectCompatibleMediaValue(
     );
   }
 
+  if (inputType === "audio") {
+    return (
+      (value.kind === "asset" && assetMatchesType(value.asset, "audio")) ||
+      (value.kind === "timelineSelection" && value.mediaType === "audio")
+    );
+  }
+
   return (
     (value.kind === "asset" && assetMatchesType(value.asset, "video")) ||
-    value.kind === "timelineSelection"
+    (value.kind === "timelineSelection" && value.mediaType === "video")
   );
 }
 
@@ -178,6 +190,10 @@ function isHeuristicCompatibleMediaValue(
 
   if (value.kind !== "timelineSelection") {
     return true;
+  }
+
+  if (inputType === "audio") {
+    return value.preparedAudioFile !== null && !value.isExtracting;
   }
 
   return value.preparedVideoFile !== null && !value.isExtracting;

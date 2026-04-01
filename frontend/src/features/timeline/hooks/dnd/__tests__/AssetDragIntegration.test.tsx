@@ -265,7 +265,7 @@ describe("Asset Drag Integration", () => {
             },
           },
         },
-      } as DragStartEvent);
+      } as unknown as DragStartEvent);
       latestAssetDragHandlers?.handleAssetDragEnd({
         active: {
           id: `asset_${mockAsset.id}`,
@@ -280,7 +280,7 @@ describe("Asset Drag Integration", () => {
         over: null,
         delta: { x: 0, y: 0 },
         activatorEvent: null,
-      } as DragEndEvent);
+      } as unknown as DragEndEvent);
     });
 
     await waitFor(() => {

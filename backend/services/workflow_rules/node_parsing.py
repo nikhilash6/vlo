@@ -23,6 +23,14 @@ from services.workflow_rules.node_introspection import iter_all_params
 
 
 _INPUT_NODE_FALLBACKS: dict[str, list[dict[str, Any]]] = {
+    "LoadAudio": [
+        {
+            "input_type": "audio",
+            "param": "audio",
+            "label": "Audio",
+            "description": None,
+        }
+    ],
     "VHS_LoadVideo": [
         {
             "input_type": "video",
@@ -43,6 +51,7 @@ _TEXT_PARAM_LABELS = {
     "llama": "LLaMA Prompt",
 }
 _MEDIA_PARAM_LABELS = {
+    "audio": "Audio",
     "image": "Image",
     "file": "Video",
     "video": "Video",
@@ -54,6 +63,7 @@ _TOKEN_LABELS = {
     "t5xxl": "T5XXL",
     "llama": "LLaMA",
     "image": "Image",
+    "audio": "Audio",
     "video": "Video",
     "mask": "Mask",
     "reference": "Reference",
@@ -86,12 +96,20 @@ def _build_input_label(input_type: str, param_name: str) -> str:
 
     alias = _MEDIA_PARAM_LABELS.get(lowered_param)
     if alias:
-        return alias if input_type == "video" else "Image"
+        if input_type == "video":
+            return "Video"
+        if input_type == "audio":
+            return "Audio"
+        return "Image"
 
     tokens = [token for token in lowered_param.replace("-", "_").split("_") if token]
     if tokens:
         return " ".join(_humanize_param_token(token) for token in tokens)
-    return "Video" if input_type == "video" else "Image"
+    if input_type == "video":
+        return "Video"
+    if input_type == "audio":
+        return "Audio"
+    return "Image"
 
 
 def _detect_input_param(
@@ -118,6 +136,15 @@ def _detect_input_param(
             "input_type": "video",
             "param": param_name,
             "label": _build_input_label("video", param_name),
+            "description": tooltip,
+        }
+
+    # audio_upload: true
+    if opts.get("audio_upload") is True:
+        return {
+            "input_type": "audio",
+            "param": param_name,
+            "label": _build_input_label("audio", param_name),
             "description": tooltip,
         }
 

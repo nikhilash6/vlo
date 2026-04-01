@@ -111,7 +111,11 @@ async function buildMediaInputDescriptor(
     };
   }
 
-  if (slotValue.type === "image" || slotValue.type === "video") {
+  if (
+    slotValue.type === "image" ||
+    slotValue.type === "video" ||
+    slotValue.type === "audio"
+  ) {
     return {
       key: getNodeInputRequestKey(workflowInput, workflowInputLookup),
       kind: slotValue.type,

@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   captureFramePngAtTick: vi.fn(),
   renderTimelineSelectionToWebm: vi.fn(),
   renderTimelineSelectionToWebmWithMask: vi.fn(),
+  extractAudioFromSelection: vi.fn(),
+  createAudioSelectionPlaceholderFile: vi.fn(),
   injectWorkflowAndRead: vi.fn(),
 }));
 
@@ -19,6 +21,11 @@ vi.mock("../utils/inputSelection", () => ({
     mocks.renderTimelineSelectionToWebmWithMask,
 }));
 
+vi.mock("../utils/manualSlotMedia", () => ({
+  extractAudioFromSelection: mocks.extractAudioFromSelection,
+  createAudioSelectionPlaceholderFile: mocks.createAudioSelectionPlaceholderFile,
+}));
+
 vi.mock("../services/workflowSyncController", () => ({
   injectWorkflowAndRead: mocks.injectWorkflowAndRead,
 }));
@@ -26,6 +33,12 @@ vi.mock("../services/workflowSyncController", () => ({
 describe("useGenerationStore metadata replay", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    mocks.captureFramePngAtTick.mockReset();
+    mocks.renderTimelineSelectionToWebm.mockReset();
+    mocks.renderTimelineSelectionToWebmWithMask.mockReset();
+    mocks.extractAudioFromSelection.mockReset();
+    mocks.createAudioSelectionPlaceholderFile.mockReset();
+    mocks.injectWorkflowAndRead.mockReset();
 
     useAssetStore.setState({ assets: [] });
     useGenerationStore.setState({
@@ -62,7 +75,17 @@ describe("useGenerationStore metadata replay", () => {
         type: "video/webm",
       }),
     });
-    mocks.injectWorkflowAndRead.mockReset();
+    mocks.extractAudioFromSelection.mockResolvedValue(
+      new File(["audio"], "selection.wav", { type: "audio/wav" }),
+    );
+    mocks.createAudioSelectionPlaceholderFile.mockImplementation(
+      () =>
+        new File(
+          ["audio-selection-thumbnail-placeholder"],
+          "generation-audio-selection-placeholder.txt",
+          { type: "text/plain" },
+        ),
+    );
   });
 
   it("matches sidecar presentation from saved workflow graph data and restores asset inputs", async () => {
@@ -720,6 +743,88 @@ describe("useGenerationStore metadata replay", () => {
         clips: [],
         fps: 24,
       },
+    });
+  });
+
+  it("restores audio timeline selections with extracted audio files", async () => {
+    const preparedAudioFile = new File(["audio"], "selection.wav", {
+      type: "audio/wav",
+    });
+    const placeholderFile = new File(
+      ["audio-selection-thumbnail-placeholder"],
+      "generation-audio-selection-placeholder.txt",
+      { type: "text/plain" },
+    );
+    const generatedAsset: Asset = {
+      id: "generated-audio",
+      hash: "hash-generated-audio",
+      name: "generated-audio.wav",
+      type: "audio",
+      src: "generated-audio.wav",
+      createdAt: Date.now(),
+      creationMetadata: {
+        source: "generated",
+        workflowName: "Original Workflow",
+        inputs: [
+          {
+            nodeId: "145",
+            kind: "timelineSelection",
+            timelineSelection: {
+              start: 10,
+              end: 40,
+              clips: [],
+            },
+          },
+        ],
+        replayState: {
+          version: 1,
+          workflowInputs: [
+            {
+              nodeId: "145",
+              classType: "LoadAudio",
+              inputType: "audio",
+              param: "audio",
+              label: "Audio Input",
+              origin: "rule",
+            },
+          ],
+        },
+        comfyuiPrompt: {
+          "145": {
+            class_type: "LoadAudio",
+            inputs: { audio: "selection.wav" },
+          },
+        },
+      },
+    };
+
+    mocks.createAudioSelectionPlaceholderFile.mockReturnValue(placeholderFile);
+    mocks.extractAudioFromSelection.mockResolvedValue(preparedAudioFile);
+    vi.spyOn(comfyApi, "listWorkflows").mockResolvedValue([]);
+
+    await useGenerationStore
+      .getState()
+      .loadWorkflowFromAssetMetadata(generatedAsset);
+
+    const restoredInput = Object.values(
+      useGenerationStore.getState().mediaInputs,
+    )[0];
+
+    expect(mocks.captureFramePngAtTick).not.toHaveBeenCalled();
+    expect(mocks.extractAudioFromSelection).toHaveBeenCalledWith(
+      {
+        start: 10,
+        end: 40,
+        clips: [],
+      },
+      { exportFps: undefined },
+    );
+    expect(restoredInput).toMatchObject({
+      kind: "timelineSelection",
+      mediaType: "audio",
+      isExtracting: false,
+      preparedAudioFile,
+      thumbnailFile: placeholderFile,
     });
   });
 

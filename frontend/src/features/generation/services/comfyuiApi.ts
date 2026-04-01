@@ -240,7 +240,7 @@ export function getOutputViewUrl(
 
 export async function generate(
   request: GenerationRequest,
-options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal } = {},
 ): Promise<PromptResponse> {
   const formData = new FormData();
   formData.append("client_id", request.clientId);
@@ -263,6 +263,9 @@ options: { signal?: AbortSignal } = {},
   }
   for (const [nodeId, file] of Object.entries(request.imageInputs)) {
     formData.append(`image_${nodeId}`, file);
+  }
+  for (const [nodeId, file] of Object.entries(request.audioInputs ?? {})) {
+    formData.append(`audio_${nodeId}`, file);
   }
   for (const [nodeId, file] of Object.entries(request.videoInputs)) {
     formData.append(`video_${nodeId}`, file);

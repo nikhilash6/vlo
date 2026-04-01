@@ -26,6 +26,7 @@ export type InputNodeMap = Record<string, InputNodeMapEntry[]>;
 export const INPUT_NODE_MAP: InputNodeMap = {
   LoadImage: [{ inputType: "image", param: "image", label: "Image" }],
   CLIPTextEncode: [{ inputType: "text", param: "text", label: "Prompt" }],
+  LoadAudio: [{ inputType: "audio", param: "audio", label: "Audio" }],
   LoadVideo: [{ inputType: "video", param: "file", label: "Video" }],
   VHS_LoadVideo: [{ inputType: "video", param: "video", label: "Video" }],
 };
@@ -46,6 +47,7 @@ export function mergeInputNodeMap(
       const inputType = entry.input_type as WorkflowInput["inputType"];
       if (
         inputType === "image" ||
+        inputType === "audio" ||
         inputType === "video" ||
         inputType === "text"
       ) {

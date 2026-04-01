@@ -93,6 +93,7 @@ export function toWorkflowInputType(
   const normalized = value.trim().toLowerCase();
   if (normalized === "text") return "text";
   if (normalized === "image") return "image";
+  if (normalized === "audio") return "audio";
   if (normalized === "video") return "video";
   return null;
 }

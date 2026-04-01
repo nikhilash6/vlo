@@ -27,11 +27,22 @@ DEFAULT_WORKFLOWS_DIR = Path(__file__).parent.parent / "assets" / ".config" / "d
 INPUT_NODE_MAP = {
     "LoadImage": {"input_type": "image", "param": "image"},
     "CLIPTextEncode": {"input_type": "text", "param": "text"},
+    "LoadAudio": {"input_type": "audio", "param": "audio"},
     "LoadVideo": {"input_type": "video", "param": "file"},
     "VHS_LoadVideo": {"input_type": "video", "param": "video"},
 }
 
 WIDGET_CONTROL_MODES = {"fixed", "randomize"}
+
+
+def _default_input_label(input_type: str) -> str:
+    if input_type == "text":
+        return "Prompt"
+    if input_type == "image":
+        return "Image"
+    if input_type == "audio":
+        return "Audio"
+    return "Video"
 
 
 @dataclass
@@ -268,7 +279,7 @@ async def run_backend_preprocess(ctx: BackendPipelineContext) -> None:
         existing[mapping["param"]] = {
             "input_type": mapping["input_type"],
             "param": mapping["param"],
-            "label": "Prompt" if mapping["input_type"] == "text" else "Video" if mapping["input_type"] == "video" else "Image",
+            "label": _default_input_label(mapping["input_type"]),
             "description": None,
         }
         dynamic_map[class_type] = list(existing.values())

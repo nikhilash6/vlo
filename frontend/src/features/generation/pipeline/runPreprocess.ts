@@ -56,6 +56,7 @@ export async function runFrontendPreprocess(
     targetAspectRatio: projectConfig.aspectRatio,
     textInputs: {},
     imageInputs: {},
+    audioInputs: {},
     videoInputs: {},
   };
 
@@ -73,6 +74,7 @@ export async function runFrontendPreprocess(
     textInputs: ctx.textInputs,
     imageInputs: ctx.imageInputs,
     videoInputs: ctx.videoInputs,
+    audioInputs: ctx.audioInputs,
     maskCropDilation:
       ctx.derivedMaskMappings.length > 0 && ctx.maskCropMode !== "full"
         ? ctx.maskCropDilation

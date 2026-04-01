@@ -44,7 +44,7 @@ export interface GeneratedCreationWorkflowInputSnapshot {
   id?: string;
   nodeId: string;
   classType: string;
-  inputType: "text" | "image" | "video";
+  inputType: "text" | "image" | "video" | "audio";
   param: string;
   label: string;
   description?: string | null;

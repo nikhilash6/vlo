@@ -75,6 +75,7 @@ describe("useGenerationStore workflow rules", () => {
       config: {
         aspectRatio: "16:9",
         fps: 30,
+        fitMode: "cover",
         layoutMode: "compact",
         assetBrowserDisplay: "grouped",
       },
@@ -468,6 +469,7 @@ describe("useGenerationStore workflow rules", () => {
       mediaInputs: {
         node_timeline: {
           kind: "timelineSelection",
+          mediaType: "video",
           timelineSelection,
           thumbnailFile: new File(["thumb"], "thumb.png", {
             type: "image/png",
@@ -476,6 +478,7 @@ describe("useGenerationStore workflow rules", () => {
           isExtracting: false,
           extractionRequestId: 0,
           preparedVideoFile: null,
+          preparedAudioFile: null,
           preparedMaskFile: null,
           preparedDerivedMaskVideoTreatment: null,
           extractionError: null,

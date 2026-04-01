@@ -48,6 +48,16 @@ DEFAULT_WORKFLOWS_DIR = Path(__file__).parent.parent / "assets" / ".config" / "d
 router = APIRouter(prefix="/comfy", tags=["comfyui"])
 
 
+def _default_input_label(input_type: str) -> str:
+    if input_type == "text":
+        return "Prompt"
+    if input_type == "image":
+        return "Image"
+    if input_type == "audio":
+        return "Audio"
+    return "Video"
+
+
 # ---------------------------------------------------------------------------
 # Health / Config
 # ---------------------------------------------------------------------------
@@ -288,7 +298,7 @@ def _resolve_input_node_map() -> dict[str, list[dict[str, Any]]]:
         static_entries = [{
             "input_type": mapping["input_type"],
             "param": mapping["param"],
-            "label": "Prompt" if mapping["input_type"] == "text" else "Video" if mapping["input_type"] == "video" else "Image",
+            "label": _default_input_label(mapping["input_type"]),
             "description": None,
         }]
         merged[class_type] = _merge_input_node_entries(
@@ -787,6 +797,44 @@ async def generate(request: Request):
                             "details": {
                                 "expected": mapping.get("input_type"),
                                 "received": "image",
+                            },
+                        }
+                    )
+
+        # audio_<nodeId>_<param> -> upload to ComfyUI immediately
+        elif key.startswith("audio_"):
+            node_id, explicit_param = _parse_node_input_form_key(key[6:])
+            upload_file = value
+            filename, upload_warning = await upload_form_media_to_comfy(
+                client,
+                upload_file,
+                "audio",
+            )
+            if upload_warning:
+                upload_warning["node_id"] = node_id
+                workflow_warnings.append(upload_warning)
+                continue
+            if not filename:
+                continue
+
+            node = workflow.get(node_id)
+            if node and isinstance(node, dict):
+                mapping = _find_node_input_mapping(
+                    node_map.get(node.get("class_type", "")),
+                    input_type="audio",
+                    param=explicit_param,
+                )
+                if mapping and mapping.get("input_type") == "audio":
+                    injections.setdefault(node_id, {})[mapping["param"]] = filename
+                elif mapping:
+                    workflow_warnings.append(
+                        {
+                            "code": "media_mapping_mismatch",
+                            "message": "Media input type does not match node mapping; default node value kept",
+                            "node_id": node_id,
+                            "details": {
+                                "expected": mapping.get("input_type"),
+                                "received": "audio",
                             },
                         }
                     )

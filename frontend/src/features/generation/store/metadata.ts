@@ -11,6 +11,10 @@ import {
   renderTimelineSelectionToWebmWithMask,
 } from "../utils/inputSelection";
 import {
+  createAudioSelectionPlaceholderFile,
+  extractAudioFromSelection,
+} from "../utils/manualSlotMedia";
+import {
   buildWorkflowInputLookup,
   getWorkflowInputId,
   getWorkflowInputValue,
@@ -218,19 +222,48 @@ export async function restoreMediaInputsFromMetadata(
       continue;
     }
 
-    const thumbnailFile = await captureFramePngAtTick(
-      input.timelineSelection.start,
-      "generation-selection-thumb",
-    );
+    const thumbnailFile =
+      workflowInput.inputType === "audio"
+        ? createAudioSelectionPlaceholderFile()
+        : await captureFramePngAtTick(
+            input.timelineSelection.start,
+            "generation-selection-thumb",
+          );
     actions.setMediaInputTimelineSelection(
       inputId,
       input.timelineSelection,
       thumbnailFile,
       {
+        mediaType: workflowInput.inputType === "audio" ? "audio" : "video",
         isExtracting: true,
         extractionRequestId: 1,
       },
     );
+
+    if (workflowInput.inputType === "audio") {
+      const preparedAudioFile = await extractAudioFromSelection(
+        input.timelineSelection,
+        {
+          exportFps: workflowInput.dispatch?.selectionConfig?.exportFps,
+        },
+      );
+      actions.setMediaInputTimelineSelection(
+        inputId,
+        input.timelineSelection,
+        thumbnailFile,
+        {
+          mediaType: "audio",
+          isExtracting: false,
+          extractionRequestId: 1,
+          preparedAudioFile,
+          extractionError:
+            preparedAudioFile === null
+              ? "No audio track was found in the selected timeline range"
+              : null,
+        },
+      );
+      continue;
+    }
 
     const derivedMaskMapping = derivedMaskMappings.find(
       (mapping) =>
@@ -252,6 +285,7 @@ export async function restoreMediaInputsFromMetadata(
         input.timelineSelection,
         thumbnailFile,
         {
+          mediaType: "video",
           isExtracting: false,
           extractionRequestId: 1,
           preparedVideoFile: video,
@@ -271,6 +305,7 @@ export async function restoreMediaInputsFromMetadata(
       input.timelineSelection,
       thumbnailFile,
       {
+        mediaType: "video",
         isExtracting: false,
         extractionRequestId: 1,
         preparedVideoFile,
@@ -597,6 +632,7 @@ function isWorkflowInputSnapshot(
     typeof candidate.classType === "string" &&
     (candidate.inputType === "text" ||
       candidate.inputType === "image" ||
+      candidate.inputType === "audio" ||
       candidate.inputType === "video") &&
     typeof candidate.param === "string" &&
     typeof candidate.label === "string" &&

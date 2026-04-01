@@ -21,6 +21,17 @@ function toPositiveInt(
   return Math.max(1, Math.round(value));
 }
 
+export function createAudioSelectionPlaceholderFile(): File {
+  return new File(
+    ["audio-selection-thumbnail-placeholder"],
+    "generation-audio-selection-placeholder.txt",
+    {
+      type: "text/plain",
+      lastModified: Date.now(),
+    },
+  );
+}
+
 export async function extractAudioFromVideo(
   file: File,
   options: { signal?: AbortSignal } = {},

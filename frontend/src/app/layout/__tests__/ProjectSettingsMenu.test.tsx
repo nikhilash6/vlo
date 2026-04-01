@@ -9,6 +9,7 @@ describe("ProjectSettingsMenu", () => {
       config: {
         aspectRatio: "16:9",
         fps: 30,
+        fitMode: "cover",
         layoutMode: "compact",
         assetBrowserDisplay: "grouped",
       },

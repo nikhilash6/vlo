@@ -92,12 +92,14 @@ export function buildMediaInputActions(
       set({
         mediaInputs: updateMediaInputs(get, inputId, {
           kind: "timelineSelection",
+          mediaType: options?.mediaType ?? "video",
           timelineSelection,
           thumbnailFile,
           thumbnailUrl: URL.createObjectURL(thumbnailFile),
           isExtracting: options?.isExtracting ?? false,
           extractionRequestId: options?.extractionRequestId ?? 0,
           preparedVideoFile: options?.preparedVideoFile ?? null,
+          preparedAudioFile: options?.preparedAudioFile ?? null,
           preparedMaskFile: options?.preparedMaskFile ?? null,
           preparedDerivedMaskVideoTreatment:
             options?.preparedDerivedMaskVideoTreatment ?? null,
