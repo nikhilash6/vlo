@@ -169,20 +169,33 @@ export interface GenerationFrameInputValue {
   timelineSelection?: TimelineSelection | null;
 }
 
-export interface GenerationTimelineSelectionInputValue {
+interface BaseGenerationTimelineSelectionInputValue {
   kind: "timelineSelection";
-  mediaType: "video" | "audio";
   timelineSelection: TimelineSelection;
   thumbnailFile: File;
   thumbnailUrl: string;
   isExtracting: boolean;
   extractionRequestId: number;
-  preparedVideoFile: File | null;
-  preparedAudioFile: File | null;
-  preparedMaskFile: File | null;
-  preparedDerivedMaskVideoTreatment: DerivedMaskSourceVideoTreatment | null;
   extractionError: string | null;
 }
+
+export interface GenerationAudioTimelineSelectionInputValue
+  extends BaseGenerationTimelineSelectionInputValue {
+  mediaType: "audio";
+  preparedAudioFile: File | null;
+}
+
+export interface GenerationVideoTimelineSelectionInputValue
+  extends BaseGenerationTimelineSelectionInputValue {
+  mediaType: "video";
+  preparedVideoFile: File | null;
+  preparedMaskFile: File | null;
+  preparedDerivedMaskVideoTreatment: DerivedMaskSourceVideoTreatment | null;
+}
+
+export type GenerationTimelineSelectionInputValue =
+  | GenerationAudioTimelineSelectionInputValue
+  | GenerationVideoTimelineSelectionInputValue;
 
 export type GenerationMediaInputValue =
   | GenerationAssetInputValue

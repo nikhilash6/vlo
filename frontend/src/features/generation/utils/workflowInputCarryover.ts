@@ -193,10 +193,18 @@ function isHeuristicCompatibleMediaValue(
   }
 
   if (inputType === "audio") {
-    return value.preparedAudioFile !== null && !value.isExtracting;
+    return (
+      value.mediaType === "audio" &&
+      value.preparedAudioFile !== null &&
+      !value.isExtracting
+    );
   }
 
-  return value.preparedVideoFile !== null && !value.isExtracting;
+  return (
+    value.mediaType === "video" &&
+    value.preparedVideoFile !== null &&
+    !value.isExtracting
+  );
 }
 
 export function carryOverTextValues(

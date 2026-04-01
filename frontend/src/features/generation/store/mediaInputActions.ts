@@ -90,21 +90,36 @@ export function buildMediaInputActions(
       options,
     ) =>
       set({
-        mediaInputs: updateMediaInputs(get, inputId, {
-          kind: "timelineSelection",
-          mediaType: options?.mediaType ?? "video",
-          timelineSelection,
-          thumbnailFile,
-          thumbnailUrl: URL.createObjectURL(thumbnailFile),
-          isExtracting: options?.isExtracting ?? false,
-          extractionRequestId: options?.extractionRequestId ?? 0,
-          preparedVideoFile: options?.preparedVideoFile ?? null,
-          preparedAudioFile: options?.preparedAudioFile ?? null,
-          preparedMaskFile: options?.preparedMaskFile ?? null,
-          preparedDerivedMaskVideoTreatment:
-            options?.preparedDerivedMaskVideoTreatment ?? null,
-          extractionError: options?.extractionError ?? null,
-        }),
+        mediaInputs: updateMediaInputs(
+          get,
+          inputId,
+          (options?.mediaType ?? "video") === "audio"
+            ? {
+                kind: "timelineSelection",
+                mediaType: "audio",
+                timelineSelection,
+                thumbnailFile,
+                thumbnailUrl: URL.createObjectURL(thumbnailFile),
+                isExtracting: options?.isExtracting ?? false,
+                extractionRequestId: options?.extractionRequestId ?? 0,
+                preparedAudioFile: options?.preparedAudioFile ?? null,
+                extractionError: options?.extractionError ?? null,
+              }
+            : {
+                kind: "timelineSelection",
+                mediaType: "video",
+                timelineSelection,
+                thumbnailFile,
+                thumbnailUrl: URL.createObjectURL(thumbnailFile),
+                isExtracting: options?.isExtracting ?? false,
+                extractionRequestId: options?.extractionRequestId ?? 0,
+                preparedVideoFile: options?.preparedVideoFile ?? null,
+                preparedMaskFile: options?.preparedMaskFile ?? null,
+                preparedDerivedMaskVideoTreatment:
+                  options?.preparedDerivedMaskVideoTreatment ?? null,
+                extractionError: options?.extractionError ?? null,
+              },
+        ),
       }),
 
     reassignMediaInput: (sourceInputId, targetInputId) =>

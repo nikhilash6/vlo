@@ -33,6 +33,7 @@ export function hasProvidedMediaInputValue(
   if (inputType === "audio") {
     return (
       value.kind === "timelineSelection" &&
+      value.mediaType === "audio" &&
       value.preparedAudioFile !== null &&
       !value.isExtracting
     );
@@ -40,6 +41,7 @@ export function hasProvidedMediaInputValue(
 
   return (
     value.kind === "timelineSelection" &&
+    value.mediaType === "video" &&
     value.preparedVideoFile !== null &&
     !value.isExtracting
   );

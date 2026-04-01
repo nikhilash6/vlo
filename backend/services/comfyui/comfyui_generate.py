@@ -17,6 +17,7 @@ from services.gen_pipeline.processors import (
 from services.gen_pipeline.processors.utils.video_crop import analyze_mask_video_bounds, crop_video, get_video_dimensions
 from services.workflow_rules.mask_pairs import MaskCroppingMode
 from services.workflow_rules.object_info import build_input_node_map
+from services.workflow_rules.input_labels import default_input_label
 
 logger = logging.getLogger(__name__)
 
@@ -33,16 +34,6 @@ INPUT_NODE_MAP = {
 }
 
 WIDGET_CONTROL_MODES = {"fixed", "randomize"}
-
-
-def _default_input_label(input_type: str) -> str:
-    if input_type == "text":
-        return "Prompt"
-    if input_type == "image":
-        return "Image"
-    if input_type == "audio":
-        return "Audio"
-    return "Video"
 
 
 @dataclass
@@ -279,7 +270,7 @@ async def run_backend_preprocess(ctx: BackendPipelineContext) -> None:
         existing[mapping["param"]] = {
             "input_type": mapping["input_type"],
             "param": mapping["param"],
-            "label": _default_input_label(mapping["input_type"]),
+            "label": default_input_label(mapping["input_type"]),
             "description": None,
         }
         dynamic_map[class_type] = list(existing.values())

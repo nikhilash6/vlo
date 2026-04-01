@@ -114,6 +114,123 @@ function parseStoredWidgetValue(
   return storedValue;
 }
 
+interface AudioSelectionExtractionOptions {
+  inputId: string;
+  timelineSelection: ReturnType<typeof createTimelineSelection>;
+  thumbnailFile: File;
+  extractionRequestId: number;
+  exportFps?: number;
+  setMediaInputTimelineSelection: ReturnType<
+    typeof useGenerationStore.getState
+  >["setMediaInputTimelineSelection"];
+  selectionExtractionRequestIdsRef: { current: Record<string, number> };
+}
+
+async function extractAudioTimelineSelection({
+  inputId,
+  timelineSelection,
+  thumbnailFile,
+  extractionRequestId,
+  exportFps,
+  setMediaInputTimelineSelection,
+  selectionExtractionRequestIdsRef,
+}: AudioSelectionExtractionOptions): Promise<void> {
+  const preparedAudioFile = await extractAudioFromSelection(timelineSelection, {
+    exportFps,
+  });
+  if (selectionExtractionRequestIdsRef.current[inputId] !== extractionRequestId) {
+    return;
+  }
+  setMediaInputTimelineSelection(inputId, timelineSelection, thumbnailFile, {
+    mediaType: "audio",
+    isExtracting: false,
+    extractionRequestId,
+    preparedAudioFile,
+    extractionError:
+      preparedAudioFile === null
+        ? "No audio track was found in the selected timeline range"
+        : null,
+  });
+}
+
+interface VideoSelectionExtractionOptions {
+  inputId: string;
+  inputNodeId?: string;
+  timelineSelection: ReturnType<typeof createTimelineSelection>;
+  thumbnailFile: File;
+  extractionRequestId: number;
+  mode: "smart" | "manual";
+  derivedMaskMappings: ReturnType<typeof useGenerationStore.getState>["derivedMaskMappings"];
+  derivedMaskVideoTreatmentBySourceNodeId: Record<
+    string,
+    import("../derivedMaskVideoTreatment").DerivedMaskSourceVideoTreatment
+  >;
+  setMediaInputTimelineSelection: ReturnType<
+    typeof useGenerationStore.getState
+  >["setMediaInputTimelineSelection"];
+  selectionExtractionRequestIdsRef: { current: Record<string, number> };
+}
+
+async function extractVideoTimelineSelection({
+  inputId,
+  inputNodeId,
+  timelineSelection,
+  thumbnailFile,
+  extractionRequestId,
+  mode,
+  derivedMaskMappings,
+  derivedMaskVideoTreatmentBySourceNodeId,
+  setMediaInputTimelineSelection,
+  selectionExtractionRequestIdsRef,
+}: VideoSelectionExtractionOptions): Promise<void> {
+  const nodeMasks =
+    mode === "manual"
+      ? []
+      : derivedMaskMappings.filter(
+          (mapping) =>
+            mapping.sourceInputId === inputId ||
+            (!mapping.sourceInputId && mapping.sourceNodeId === inputNodeId),
+        );
+
+  if (nodeMasks.length > 0) {
+    const videoTreatment =
+      derivedMaskVideoTreatmentBySourceNodeId[inputNodeId ?? inputId] ??
+      DEFAULT_DERIVED_MASK_SOURCE_VIDEO_TREATMENT;
+    const { video, mask } = await renderTimelineSelectionToWebmWithMask(
+      timelineSelection,
+      nodeMasks[0].maskType,
+      {
+        videoTreatment,
+      },
+    );
+    if (selectionExtractionRequestIdsRef.current[inputId] !== extractionRequestId) {
+      return;
+    }
+    setMediaInputTimelineSelection(inputId, timelineSelection, thumbnailFile, {
+      mediaType: "video",
+      isExtracting: false,
+      extractionRequestId,
+      preparedVideoFile: video,
+      preparedMaskFile: mask,
+      preparedDerivedMaskVideoTreatment: videoTreatment,
+    });
+    return;
+  }
+
+  const preparedVideoFile = await renderTimelineSelectionToWebm(
+    timelineSelection,
+  );
+  if (selectionExtractionRequestIdsRef.current[inputId] !== extractionRequestId) {
+    return;
+  }
+  setMediaInputTimelineSelection(inputId, timelineSelection, thumbnailFile, {
+    mediaType: "video",
+    isExtracting: false,
+    extractionRequestId,
+    preparedVideoFile,
+  });
+}
+
 export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
   const [editorOpen, setEditorOpen] = useState(false);
   const [urlAnchorEl, setUrlAnchorEl] = useState<null | HTMLElement>(null);
@@ -529,6 +646,7 @@ export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
             };
           } else if (
             value.kind === "timelineSelection" &&
+            value.mediaType === "audio" &&
             value.preparedAudioFile
           ) {
             slotValues[inputId] = {
@@ -551,7 +669,7 @@ export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
           continue;
         }
 
-        if (value.kind === "timelineSelection") {
+        if (value.kind === "timelineSelection" && value.mediaType === "video") {
           slotValues[inputId] = {
             type: "video_selection",
             selection: value.timelineSelection,
@@ -862,94 +980,30 @@ export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
             closeSelectionMode();
 
             if (inputType === "audio") {
-              const preparedAudioFile = await extractAudioFromSelection(
+              await extractAudioTimelineSelection({
+                inputId,
                 timelineSelection,
-                {
-                  exportFps: recommendedFps ?? undefined,
-                },
-              );
-              if (
-                selectionExtractionRequestIdsRef.current[inputId] ===
-                extractionRequestId
-              ) {
-                setMediaInputTimelineSelection(
-                  inputId,
-                  timelineSelection,
-                  thumbnailFile,
-                  {
-                    mediaType: "audio",
-                    isExtracting: false,
-                    extractionRequestId,
-                    preparedAudioFile,
-                    extractionError:
-                      preparedAudioFile === null
-                        ? "No audio track was found in the selected timeline range"
-                        : null,
-                  },
-                );
-              }
+                thumbnailFile,
+                extractionRequestId,
+                exportFps: recommendedFps ?? undefined,
+                setMediaInputTimelineSelection,
+                selectionExtractionRequestIdsRef,
+              });
               return;
             }
 
-            const nodeMasks =
-              mode === "manual"
-                ? []
-                : derivedMaskMappings.filter(
-                    (mapping) =>
-                      mapping.sourceInputId === inputId ||
-                      (!mapping.sourceInputId &&
-                        mapping.sourceNodeId === input?.nodeId),
-                  );
-
-            if (nodeMasks.length > 0) {
-              const videoTreatment =
-                derivedMaskVideoTreatmentBySourceNodeId[input?.nodeId ?? inputId] ??
-                DEFAULT_DERIVED_MASK_SOURCE_VIDEO_TREATMENT;
-              const { video, mask } = await renderTimelineSelectionToWebmWithMask(
-                timelineSelection,
-                nodeMasks[0].maskType,
-                {
-                  videoTreatment,
-                },
-              );
-              if (
-                selectionExtractionRequestIdsRef.current[inputId] ===
-                extractionRequestId
-              ) {
-                setMediaInputTimelineSelection(
-                  inputId,
-                  timelineSelection,
-                  thumbnailFile,
-                  {
-                    mediaType: "video",
-                    isExtracting: false,
-                    extractionRequestId,
-                    preparedVideoFile: video,
-                    preparedMaskFile: mask,
-                    preparedDerivedMaskVideoTreatment: videoTreatment,
-                  },
-                );
-              }
-            } else {
-              const preparedVideoFile =
-                await renderTimelineSelectionToWebm(timelineSelection);
-              if (
-                selectionExtractionRequestIdsRef.current[inputId] ===
-                extractionRequestId
-              ) {
-                setMediaInputTimelineSelection(
-                  inputId,
-                  timelineSelection,
-                  thumbnailFile,
-                  {
-                    mediaType: "video",
-                    isExtracting: false,
-                    extractionRequestId,
-                    preparedVideoFile,
-                  },
-                );
-              }
-            }
+            await extractVideoTimelineSelection({
+              inputId,
+              inputNodeId: input?.nodeId,
+              timelineSelection,
+              thumbnailFile,
+              extractionRequestId,
+              mode,
+              derivedMaskMappings,
+              derivedMaskVideoTreatmentBySourceNodeId,
+              setMediaInputTimelineSelection,
+              selectionExtractionRequestIdsRef,
+            });
           } catch (error) {
             const extractionRequestId =
               selectionExtractionRequestIdsRef.current[inputId] ?? 0;

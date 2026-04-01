@@ -478,7 +478,6 @@ describe("useGenerationStore workflow rules", () => {
           isExtracting: false,
           extractionRequestId: 0,
           preparedVideoFile: null,
-          preparedAudioFile: null,
           preparedMaskFile: null,
           preparedDerivedMaskVideoTreatment: null,
           extractionError: null,

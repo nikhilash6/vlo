@@ -310,6 +310,7 @@ describe("useGenerationStore pipeline phases", () => {
         targetResolution: 1080,
         textInputs: {},
         imageInputs: {},
+        audioInputs: {},
         videoInputs: {},
         clientId,
       }),
@@ -415,6 +416,7 @@ describe("useGenerationStore pipeline phases", () => {
       targetResolution: number;
       textInputs: Record<string, string>;
       imageInputs: Record<string, File>;
+      audioInputs: Record<string, File>;
       videoInputs: Record<string, File>;
       clientId: string;
     }>();
@@ -438,6 +440,7 @@ describe("useGenerationStore pipeline phases", () => {
       targetResolution: 1080,
       textInputs: {},
       imageInputs: {},
+      audioInputs: {},
       videoInputs: {},
       clientId: "client-id",
     });
@@ -524,6 +527,7 @@ describe("useGenerationStore pipeline phases", () => {
       targetResolution: number;
       textInputs: Record<string, string>;
       imageInputs: Record<string, File>;
+      audioInputs: Record<string, File>;
       videoInputs: Record<string, File>;
       clientId: string;
     }>();
@@ -544,6 +548,7 @@ describe("useGenerationStore pipeline phases", () => {
       targetResolution: 1080,
       textInputs: {},
       imageInputs: {},
+      audioInputs: {},
       videoInputs: {},
       clientId: "client-id",
     });

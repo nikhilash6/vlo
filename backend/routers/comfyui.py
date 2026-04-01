@@ -39,6 +39,7 @@ from services.workflow_rules import (
 )
 from services.workflow_rules.schema import dump_resolved_rules, dump_warning_models
 from services.workflow_rules.object_info import OBJECT_INFO_PATH, set_object_info_cache, build_input_node_map
+from services.workflow_rules.input_labels import default_input_label
 
 from routers.comfyui_compat import compat_router  # noqa: F401 -- re-exported for main.py
 
@@ -46,16 +47,6 @@ WORKFLOWS_DIR = Path(__file__).parent.parent / "assets" / "workflows"
 DEFAULT_WORKFLOWS_DIR = Path(__file__).parent.parent / "assets" / ".config" / "default_workflows"
 
 router = APIRouter(prefix="/comfy", tags=["comfyui"])
-
-
-def _default_input_label(input_type: str) -> str:
-    if input_type == "text":
-        return "Prompt"
-    if input_type == "image":
-        return "Image"
-    if input_type == "audio":
-        return "Audio"
-    return "Video"
 
 
 # ---------------------------------------------------------------------------
@@ -298,7 +289,7 @@ def _resolve_input_node_map() -> dict[str, list[dict[str, Any]]]:
         static_entries = [{
             "input_type": mapping["input_type"],
             "param": mapping["param"],
-            "label": _default_input_label(mapping["input_type"]),
+            "label": default_input_label(mapping["input_type"]),
             "description": None,
         }]
         merged[class_type] = _merge_input_node_entries(

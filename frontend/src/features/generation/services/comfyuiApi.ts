@@ -264,7 +264,7 @@ export async function generate(
   for (const [nodeId, file] of Object.entries(request.imageInputs)) {
     formData.append(`image_${nodeId}`, file);
   }
-  for (const [nodeId, file] of Object.entries(request.audioInputs ?? {})) {
+  for (const [nodeId, file] of Object.entries(request.audioInputs)) {
     formData.append(`audio_${nodeId}`, file);
   }
   for (const [nodeId, file] of Object.entries(request.videoInputs)) {
