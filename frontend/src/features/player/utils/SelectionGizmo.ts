@@ -11,6 +11,49 @@ export type GizmoTarget = Container & {
   anchor?: { x: number; y: number };
 };
 
+interface LocalBoundsRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function resolveGizmoLocalBounds(target: GizmoTarget): LocalBoundsRect {
+  const spriteLikeTarget = target as GizmoTarget & {
+    renderPipeId?: string;
+    visualBounds?: {
+      minX: number;
+      maxX: number;
+      minY: number;
+      maxY: number;
+    };
+  };
+
+  // Sprite masking is attached as a Pixi effect, and `getLocalBounds()` folds
+  // effect bounds back into the sprite. That makes the transform gizmo drift
+  // when an AlphaMask is active, so for sprites we stick to the intrinsic quad.
+  if (
+    spriteLikeTarget.renderPipeId === "sprite" &&
+    spriteLikeTarget.visualBounds
+  ) {
+    const { minX, maxX, minY, maxY } = spriteLikeTarget.visualBounds;
+    return {
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
+    };
+  }
+
+  const bounds = target.getLocalBounds();
+  return {
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+  };
+}
+
 export class SelectionGizmo extends Container {
   private border: Graphics;
   private handles: { [key: string]: Graphics };
@@ -88,7 +131,7 @@ export class SelectionGizmo extends Container {
       return;
     }
     const anchor = target.anchor;
-    const bounds = target.getLocalBounds();
+    const bounds = resolveGizmoLocalBounds(target);
     if (anchor) {
       this.pivot.set(
         bounds.x + bounds.width * anchor.x,
