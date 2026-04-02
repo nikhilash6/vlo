@@ -48,6 +48,34 @@ describe("workflowSyncController", () => {
     expect(result?.workflow).toEqual({});
   });
 
+  it("readWorkflowWithRetry skips stale workflows until an acceptable result appears", async () => {
+    vi.mocked(readWorkflowFromIframe)
+      .mockResolvedValueOnce({
+        workflow: { old: true },
+        graphData: { nodes: [{ id: 1, type: "OldWorkflow" }] },
+        inputs: [],
+        filename: "video_ltx2_3_i2v.json",
+      })
+      .mockResolvedValueOnce({
+        workflow: { fresh: true },
+        graphData: { nodes: [{ id: 98, type: "LoadVideo" }] },
+        inputs: [],
+        filename: "__temp__.json",
+      });
+
+    const result = await readWorkflowWithRetry(
+      iframe,
+      () => false,
+      300,
+      undefined,
+      (candidate) => candidate.filename === "__temp__.json",
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.filename).toBe("__temp__.json");
+    expect(readWorkflowFromIframe).toHaveBeenCalledTimes(2);
+  });
+
   it("injectWorkflowAndRead defers when app readiness fails", async () => {
     vi.mocked(isIframeAppReady).mockReturnValue(false);
     const result = await injectWorkflowAndRead(
@@ -86,5 +114,42 @@ describe("workflowSyncController", () => {
     expect(result.ok).toBe(true);
     expect(result.deferred).toBe(false);
     expect(result.workflowResult?.filename).toBe("wf.json");
+  });
+
+  it("injectWorkflowAndRead ignores stale iframe reads from the previously active workflow", async () => {
+    vi.mocked(isIframeAppReady).mockReturnValue(true);
+    vi.mocked(loadWorkflowIntoIframe).mockResolvedValue({
+      ok: true,
+      warnings: null,
+    });
+    vi.mocked(readWorkflowFromIframe)
+      .mockResolvedValueOnce({
+        workflow: {
+          "1": { class_type: "LoadImage", inputs: { image: "old.png" } },
+        },
+        graphData: { nodes: [{ id: 1, type: "LoadImage" }] },
+        inputs: [],
+        filename: "video_ltx2_3_i2v.json",
+      })
+      .mockResolvedValueOnce({
+        workflow: {
+          "98": { class_type: "LoadVideo", inputs: { file: "source.webm" } },
+        },
+        graphData: { nodes: [{ id: 98, type: "LoadVideo" }] },
+        inputs: [],
+        filename: "__temp__.json",
+      });
+
+    const result = await injectWorkflowAndRead(
+      iframe,
+      { nodes: [{ id: 98, type: "LoadVideo" }] },
+      "__temp__",
+      () => false,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.deferred).toBe(false);
+    expect(result.workflowResult?.filename).toBe("__temp__.json");
+    expect(readWorkflowFromIframe).toHaveBeenCalledTimes(2);
   });
 });

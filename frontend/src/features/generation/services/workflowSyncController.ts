@@ -5,6 +5,8 @@ import {
   readWorkflowFromIframe,
 } from "./workflowBridge";
 import type { InputNodeMap } from "../constants/inputNodeMap";
+import { normalizeWorkflowFilename } from "./workflowFilenames";
+import { haveMatchingWorkflowNodes } from "../utils/workflowNodeSignature";
 
 const APP_READY_POLL_MS = 100;
 const APP_READY_TIMEOUT_MS = 3000;
@@ -16,6 +18,37 @@ function sleep(ms: number): Promise<void> {
 }
 
 export type ShouldAbort = () => boolean;
+
+type WorkflowReadResult = Awaited<ReturnType<typeof readWorkflowFromIframe>>;
+
+function matchesExpectedWorkflowResult(
+  workflowResult: WorkflowReadResult,
+  expectedGraphData: Record<string, unknown>,
+  expectedWorkflowId: string,
+): boolean {
+  if (!workflowResult) {
+    return false;
+  }
+
+  const normalizedExpectedWorkflowId =
+    normalizeWorkflowFilename(expectedWorkflowId);
+  const normalizedActualWorkflowId = workflowResult.filename
+    ? normalizeWorkflowFilename(workflowResult.filename)
+    : null;
+
+  if (
+    normalizedExpectedWorkflowId &&
+    normalizedActualWorkflowId &&
+    normalizedExpectedWorkflowId === normalizedActualWorkflowId
+  ) {
+    return true;
+  }
+
+  return (
+    haveMatchingWorkflowNodes(expectedGraphData, workflowResult.graphData) ||
+    haveMatchingWorkflowNodes(expectedGraphData, workflowResult.workflow)
+  );
+}
 
 export async function waitForAppReady(
   iframe: HTMLIFrameElement,
@@ -36,12 +69,17 @@ export async function readWorkflowWithRetry(
   shouldAbort: ShouldAbort,
   timeoutMs = READ_RETRY_TIMEOUT_MS,
   inputNodeMap?: InputNodeMap | null,
-): Promise<Awaited<ReturnType<typeof readWorkflowFromIframe>>> {
+  isAcceptableResult?: (
+    result: NonNullable<WorkflowReadResult>,
+  ) => boolean,
+): Promise<WorkflowReadResult> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (shouldAbort()) return null;
     const result = await readWorkflowFromIframe(iframe, inputNodeMap);
-    if (result) return result;
+    if (result && (!isAcceptableResult || isAcceptableResult(result))) {
+      return result;
+    }
     await sleep(READ_RETRY_POLL_MS);
   }
   return null;
@@ -92,12 +130,14 @@ export async function injectWorkflowAndRead(
     shouldAbort,
     READ_RETRY_TIMEOUT_MS,
     inputNodeMap,
+    (result) =>
+      matchesExpectedWorkflowResult(result, graphData, workflowId),
   );
   if (!workflowResult) {
     return {
       ok: false,
       deferred: true,
-      reason: "inputs not found after injection",
+      reason: "loaded workflow did not become active",
       warnings: loadResult.warnings,
       workflowResult: null,
     };
