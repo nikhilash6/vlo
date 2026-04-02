@@ -97,4 +97,37 @@ describe("useTransformationController mask target", () => {
     const parentClip = state.clips.find((clip) => clip.id === clipId);
     expect(parentClip?.transformations).toEqual([]);
   });
+
+  it("commits shared mask edge edits to the parent clip", () => {
+    const { result } = renderHook(() =>
+      useTransformationController({ target: "maskComposite" }),
+    );
+
+    expect(result.current.activeTargetKind).toBe("maskComposite");
+
+    act(() => {
+      result.current.handleCommit("mask_grow", "amount", 18);
+    });
+
+    const state = useTimelineStore.getState();
+    const parentClip = state.clips.find((clip) => clip.id === clipId);
+    const maskClip = state.clips.find((clip) => clip.id === maskClipId);
+
+    expect(parentClip?.type).toBe("video");
+    expect(
+      parentClip?.type !== "mask"
+        ? parentClip.maskCompositeTransformations
+        : undefined,
+    ).toEqual([
+      expect.objectContaining({
+        type: "mask_grow",
+        parameters: {
+          amount: 18,
+        },
+      }),
+    ]);
+    expect(
+      maskClip?.transformations.some((transform) => transform.type === "mask_grow"),
+    ).toBe(false);
+  });
 });

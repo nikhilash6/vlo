@@ -1,0 +1,133 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import type {
+  MaskTimelineClip,
+  StandardTimelineClip,
+  TimelineTrack,
+} from "../../../types/TimelineTypes";
+import { useTimelineStore } from "../useTimelineStore";
+
+const createTrack = (id: string): TimelineTrack => ({
+  id,
+  label: id,
+  isVisible: true,
+  isLocked: false,
+  isMuted: false,
+  type: "visual",
+});
+
+function createParentClip(maskClipId: string): StandardTimelineClip {
+  return {
+    id: "clip_1",
+    trackId: "track_1",
+    type: "video",
+    name: "Parent clip",
+    assetId: "asset_1",
+    sourceDuration: 120,
+    start: 0,
+    timelineDuration: 120,
+    offset: 0,
+    transformedDuration: 120,
+    transformedOffset: 0,
+    croppedSourceDuration: 120,
+    transformations: [],
+    clipComponents: [
+      {
+        clipId: maskClipId,
+        componentType: "mask",
+      },
+    ],
+  };
+}
+
+function createLegacyMaskClip(): MaskTimelineClip {
+  return {
+    id: "clip_1::mask::mask_1",
+    trackId: "track_1",
+    type: "mask",
+    name: "Legacy mask",
+    sourceDuration: 120,
+    start: 0,
+    timelineDuration: 120,
+    offset: 0,
+    transformedDuration: 120,
+    transformedOffset: 0,
+    croppedSourceDuration: 120,
+    parentClipId: "clip_1",
+    maskType: "rectangle",
+    maskMode: "apply",
+    maskInverted: false,
+    maskParameters: {
+      baseWidth: 100,
+      baseHeight: 100,
+    },
+    transformations: [
+      {
+        id: "grow_1",
+        type: "mask_grow",
+        isEnabled: true,
+        parameters: {
+          amount: 18,
+        },
+      },
+      {
+        id: "feather_1",
+        type: "feather",
+        isEnabled: true,
+        parameters: {
+          mode: "hard_outer",
+          amount: 24,
+        },
+      },
+    ],
+  };
+}
+
+describe("useTimelineStore shared mask composite transforms", () => {
+  beforeEach(() => {
+    useTimelineStore.getState().replaceTimelineSnapshot({
+      tracks: [createTrack("track_1")],
+      clips: [],
+    });
+  });
+
+  it("migrates legacy per-mask edge transforms onto the parent clip", () => {
+    const legacyMask = createLegacyMaskClip();
+
+    useTimelineStore.getState().replaceTimelineSnapshot({
+      tracks: [createTrack("track_1")],
+      clips: [createParentClip(legacyMask.id), legacyMask],
+    });
+
+    const state = useTimelineStore.getState();
+    const parentClip = state.clips.find(
+      (clip): clip is StandardTimelineClip =>
+        clip.id === "clip_1" && clip.type !== "mask",
+    );
+    const maskClip = state.clips.find(
+      (clip): clip is MaskTimelineClip =>
+        clip.id === legacyMask.id && clip.type === "mask",
+    );
+
+    expect(parentClip?.maskCompositeTransformations).toEqual([
+      expect.objectContaining({
+        type: "mask_grow",
+        parameters: {
+          amount: 18,
+        },
+      }),
+      expect.objectContaining({
+        type: "feather",
+        parameters: {
+          mode: "hard_outer",
+          amount: 24,
+        },
+      }),
+    ]);
+    expect(
+      maskClip?.transformations.some(
+        (transform) =>
+          transform.type === "mask_grow" || transform.type === "feather",
+      ),
+    ).toBe(false);
+  });
+});

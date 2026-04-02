@@ -30,11 +30,11 @@ const INHERITED_TRANSFORM_TYPES = new Set(["speed"]);
 type EnableTarget = { transformId: string } | { transformType: string };
 
 interface UseTransformationControllerOptions {
-  target?: "clip" | "mask" | "auto";
+  target?: "clip" | "mask" | "maskComposite" | "auto";
 }
 
 interface ActiveTransformTarget {
-  kind: "clip" | "mask";
+  kind: "clip" | "mask" | "maskComposite";
   clipId: string;
   maskId?: string;
   contextId: string;
@@ -59,6 +59,7 @@ export function useTransformationController(
     updateClipTransform,
     removeClipTransform,
     setClipTransforms,
+    setClipMaskCompositeTransforms,
     updateClipShape,
     updateClipMask,
     activeClip,
@@ -73,6 +74,7 @@ export function useTransformationController(
         removeClipTransform: state.removeClipTransform,
         updateClipShape: state.updateClipShape,
         setClipTransforms: state.setClipTransforms,
+        setClipMaskCompositeTransforms: state.setClipMaskCompositeTransforms,
         updateClipMask: state.updateClipMask,
         activeClip: clip,
       };
@@ -81,7 +83,7 @@ export function useTransformationController(
 
   const selectedClipId = activeClip ? selectedClipIds[0] : undefined;
   const selectedMaskId = useMaskViewStore((state) =>
-    targetMode !== "clip" && selectedClipId
+    (targetMode === "mask" || targetMode === "auto") && selectedClipId
       ? (state.selectedMaskByClipId[selectedClipId] ?? null)
       : null,
   );
@@ -89,7 +91,10 @@ export function useTransformationController(
   // Resolve mask clip from the store
   const selectedMaskClip = useTimelineStore(
     useShallow((state) =>
-      targetMode === "clip" || !selectedClipId || !selectedMaskId
+      targetMode === "clip" ||
+      targetMode === "maskComposite" ||
+      !selectedClipId ||
+      !selectedMaskId
         ? undefined
         : selectMaskClipsForParent(state, selectedClipId).find(
             (c) => parseMaskClipId(c.id)?.maskId === selectedMaskId,
@@ -99,6 +104,18 @@ export function useTransformationController(
 
   const activeTarget = useMemo<ActiveTransformTarget | null>(() => {
     if (!activeClip) return null;
+
+    if (targetMode === "maskComposite") {
+      return {
+        kind: "maskComposite",
+        clipId: activeClip.id,
+        contextId: `${activeClip.id}::mask-composite`,
+        timelineClip: activeClip,
+        transforms: activeClip.type === "mask"
+          ? EMPTY_TRANSFORMS
+          : activeClip.maskCompositeTransformations ?? EMPTY_TRANSFORMS,
+      };
+    }
 
     if (targetMode !== "clip" && selectedMaskClip) {
       const parsed = parseMaskClipId(selectedMaskClip.id);
@@ -152,13 +169,18 @@ export function useTransformationController(
         return;
       }
 
+      if (currentTarget.kind === "maskComposite") {
+        setClipMaskCompositeTransforms(currentTarget.clipId, nextTransforms);
+        return;
+      }
+
       if (!currentTarget.maskId) return;
       // For mask targets, set the mask-local transforms via updateClipMask
       updateClipMask(currentTarget.clipId, currentTarget.maskId, {
         transformations: nextTransforms,
       });
     },
-    [setClipTransforms, updateClipMask],
+    [setClipMaskCompositeTransforms, setClipTransforms, updateClipMask],
   );
 
   const updateTargetTransform = useCallback(

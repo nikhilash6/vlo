@@ -176,44 +176,9 @@ const initPromises = new Map<string, Promise<void>>();
 let isRendering = false;
 let pendingRender: { time: number; clipId: string; transformTime?: TransformTime; strict?: boolean } | null = null;
 
-async function convertMaskBitmapToAlpha(bitmap: ImageBitmap): Promise<ImageBitmap> {
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-  const context = canvas.getContext("2d");
-  if (!context) {
-    bitmap.close();
-    throw new Error("Failed to create 2D context for mask conversion");
-  }
-
-  context.clearRect(0, 0, bitmap.width, bitmap.height);
-  context.drawImage(bitmap, 0, 0);
-  bitmap.close();
-
-  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
-  let hasUsefulAlpha = false;
-  for (let index = 0; index < data.length; index += 4) {
-    if (data[index + 3] < 255) {
-      hasUsefulAlpha = true;
-      break;
-    }
-  }
-
-  for (let index = 0; index < data.length; index += 4) {
-    const source = hasUsefulAlpha ? data[index + 3] : data[index];
-    const alpha = source >= 128 ? 255 : 0;
-    data[index] = 255;
-    data[index + 1] = 255;
-    data[index + 2] = 255;
-    data[index + 3] = alpha;
-  }
-  context.putImageData(imageData, 0, 0);
-  return canvas.transferToImageBitmap();
-}
-
 // --- Helper: Message Processing ---
 const processRender = async (time: number, clipId: string, transformTime?: TransformTime, strict?: boolean) => {
   const renderer = renderers.get(clipId);
-  const rendererKind = rendererKinds.get(clipId) ?? "video";
   const ctx = self as DedicatedWorkerGlobalScope;
 
   if (!renderer) {
@@ -229,10 +194,7 @@ const processRender = async (time: number, clipId: string, transformTime?: Trans
   }
 
   try {
-    let bitmap = await renderer.render(time);
-    if (bitmap && rendererKind === "mask_video") {
-      bitmap = await convertMaskBitmapToAlpha(bitmap);
-    }
+    const bitmap = await renderer.render(time);
     
     // FIX: Always reply, even if bitmap is null
     if (bitmap) {

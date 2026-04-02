@@ -1,26 +1,38 @@
 import {
   AlphaMask,
-  ColorMatrixFilter,
   Container,
+  type Filter,
   Graphics,
   Matrix,
   RenderTexture,
   Sprite,
   Texture,
 } from "pixi.js";
+import { KawaseBlurFilter } from "pixi-filters";
 import type { Renderer } from "pixi.js";
 import type {
   TimelineClip,
   MaskTimelineClip,
 } from "../../../types/TimelineTypes";
 import type { Asset } from "../../../types/Asset";
-import { applyClipTransforms } from "../../transformations";
+import {
+  applyClipTransforms,
+  calculateClipTime,
+} from "../../transformations";
+import { dispatchTransform } from "../../transformations/catalogue/TransformationRegistry";
+import type { TransformState } from "../../transformations/catalogue/types";
+import { createMaskBinaryThresholdFilter } from "../../transformations/catalogue/mask/maskBinaryThresholdFilter";
+import { createMaskRedInvertForMultiplyFilter } from "../../transformations/catalogue/mask/maskRedInvertForMultiplyFilter";
+import { createMaskRedToAlphaFilter } from "../../transformations/catalogue/mask/maskRedToAlphaFilter";
 import { drawMaskBaseShape } from "../model/maskFactory";
 import {
   calculatePlayerFrameTime,
   snapFrameTimeSeconds,
 } from "../../renderer";
 import { MaskVideoFramePlayer } from "./MaskVideoFramePlayer";
+
+const MASK_EDGE_BLUR_SCALE = 0.5;
+const MASK_EDGE_BLUR_QUALITY = 3;
 
 interface VectorMaskNode {
   root: Container;
@@ -39,9 +51,20 @@ interface AssetMaskNode {
   root: Container;
   player: MaskVideoFramePlayer;
   assetId: string;
+  thresholdFilter: Filter;
 }
 
 type MaskApplicationMode = "none" | "regular" | "alpha";
+
+interface ResolvedMaskCompositeState {
+  growAmount: number;
+  feather:
+    | {
+        amount: number;
+        mode: "hard_outer" | "soft_inner" | "two_way";
+      }
+    | null;
+}
 
 function getAssetBackedMaskId(maskClip: MaskTimelineClip): string | null {
   if (maskClip.maskType === "sam2") {
@@ -117,9 +140,14 @@ export class SpriteClipMaskController {
   private maskSprite: Sprite | null = null;
   private maskRenderTexture: RenderTexture | null = null;
   private perMaskRenderTexture: RenderTexture | null = null;
+  private effectMaskRenderTexture: RenderTexture | null = null;
+  private presentationMaskRenderTexture: RenderTexture | null = null;
   private perMaskSprite: Sprite | null = null;
   private solidMaskSprite: Sprite | null = null;
-  private alphaInvertFilter: ColorMatrixFilter | null = null;
+  private maskInvertFilter: Filter | null = null;
+  private maskBinaryThresholdFilter: Filter | null = null;
+  private maskRedToAlphaFilter: Filter | null = null;
+  private kawaseBlurFilter: KawaseBlurFilter | null = null;
 
   private alphaMaskEffect: AlphaMask | null = null;
   private currentMaskMode: MaskApplicationMode = "none";
@@ -226,8 +254,8 @@ export class SpriteClipMaskController {
       }
 
       if (this.shouldRasterizeVectorMask(maskClip)) {
-        // Feather/grow are implemented as sprite applicators, so vector masks
-        // with edge ops are rasterized into a local sprite before transforms run.
+        // Reserved for any future vector-mask path that truly needs a local
+        // raster sprite before entering the shared composite pipeline.
         this.setVectorMaskPresentation(node, "sprite");
         this.syncVectorMaskSprite(node, maskContentSize);
         applyClipTransforms(
@@ -304,27 +332,24 @@ export class SpriteClipMaskController {
     }
 
     const singleMask = effectiveMaskCount === 1 ? activeMaskClips[0] : null;
-    const shouldUseAlphaMask = activeAssetMasks.length > 0;
+    const sharedMaskCompositeState = this.resolveMaskCompositeState(
+      parentClip,
+      logicalDimensions,
+      clipContentSize,
+      rawTimeTicks,
+    );
+    const hasSharedEdgeOps =
+      sharedMaskCompositeState.growAmount > 0 ||
+      (sharedMaskCompositeState.feather?.amount ?? 0) > 0;
     const hasInvertedMask = activeMaskClips.some(
       (maskClip) => maskClip.maskInverted ?? false,
     );
-    // Temporary workaround: keep all inverted masks on the composited RTT path.
-    // This is more stable than applying Pixi inverse directly to vector masks.
-    const usePerMaskInversion = this.renderer !== null && hasInvertedMask;
-    const inverse =
-      !usePerMaskInversion && singleMask ? (singleMask.maskInverted ?? false) : false;
+    const shouldUseCompositedAlphaMask =
+      this.renderer !== null &&
+      (activeAssetMasks.length > 0 || hasInvertedMask || hasSharedEdgeOps);
     this.sanitizeAssetMaskSpriteVisibility();
 
-    if (this.maskSprite && this.renderer) {
-      // Renderer path: always composite masks into a RenderTexture and bind
-      // AlphaMask to maskSprite attached under the same mask target container.
-      // Keeping mask + renderable in one subtree avoids root-chain warnings.
-      if (usePerMaskInversion) {
-        this.renderMaskClipsToTexture(activeMaskClips, clipContentSize);
-      } else {
-        this.renderMasksToTexture(clipContentSize);
-      }
-
+    if (this.maskSprite && shouldUseCompositedAlphaMask) {
       const hasReadyAssetMask = activeAssetMasks.some((maskClip) => {
         const node = this.assetMaskNodes.get(maskClip.id);
         if (!node) return false;
@@ -339,15 +364,22 @@ export class SpriteClipMaskController {
         (activeVectorMasks.length > 0 || hasReadyAssetMask) &&
         this.hasRenderableContentTexture()
       ) {
-        this.applyAlphaMask(this.maskSprite, inverse);
+        this.renderMaskClipsToTexture(
+          activeMaskClips,
+          clipContentSize,
+          sharedMaskCompositeState,
+        );
+        this.applyAlphaMask(this.maskSprite, false);
       } else {
         this.removeMaskFromTarget();
       }
-    } else if (shouldUseAlphaMask) {
+    } else if (activeAssetMasks.length > 0 || hasInvertedMask || hasSharedEdgeOps) {
       // No renderer / no maskSprite (test fallback): Container-based AlphaMask
+      const inverse = singleMask ? (singleMask.maskInverted ?? false) : false;
       this.applyMaskEffect(this.maskContainer, inverse, true);
     } else {
       // Vector-only: stencil mask
+      const inverse = singleMask ? (singleMask.maskInverted ?? false) : false;
       this.applyMaskEffect(this.maskContainer, inverse, false);
     }
   }
@@ -417,6 +449,14 @@ export class SpriteClipMaskController {
       this.perMaskRenderTexture.destroy(true);
       this.perMaskRenderTexture = null;
     }
+    if (this.effectMaskRenderTexture) {
+      this.effectMaskRenderTexture.destroy(true);
+      this.effectMaskRenderTexture = null;
+    }
+    if (this.presentationMaskRenderTexture) {
+      this.presentationMaskRenderTexture.destroy(true);
+      this.presentationMaskRenderTexture = null;
+    }
 
     if (this.maskSprite) {
       if (this.maskSprite.parent) {
@@ -440,8 +480,14 @@ export class SpriteClipMaskController {
       }
       this.solidMaskSprite = null;
     }
-    this.alphaInvertFilter?.destroy();
-    this.alphaInvertFilter = null;
+    this.maskInvertFilter?.destroy();
+    this.maskInvertFilter = null;
+    this.maskBinaryThresholdFilter?.destroy();
+    this.maskBinaryThresholdFilter = null;
+    this.maskRedToAlphaFilter?.destroy();
+    this.maskRedToAlphaFilter = null;
+    this.kawaseBlurFilter?.destroy();
+    this.kawaseBlurFilter = null;
 
     if (this.maskContainer.parent) {
       this.maskContainer.removeFromParent();
@@ -508,6 +554,46 @@ export class SpriteClipMaskController {
     this.maskSprite.rotation = this.sprite.rotation;
   }
 
+  private resolveMaskCompositeState(
+    parentClip: TimelineClip,
+    logicalDimensions: { width: number; height: number },
+    contentSize: { width: number; height: number },
+    rawTimeTicks: number,
+  ): ResolvedMaskCompositeState {
+    if (parentClip.type === "mask") {
+      return { growAmount: 0, feather: null };
+    }
+
+    const transforms = parentClip.maskCompositeTransformations ?? [];
+    if (transforms.length === 0) {
+      return { growAmount: 0, feather: null };
+    }
+
+    const state: TransformState = {
+      x: 0,
+      y: 0,
+      scaleX: 1,
+      scaleY: 1,
+      rotation: 0,
+      filters: [],
+    };
+    const transformTime = calculateClipTime(parentClip, rawTimeTicks, true);
+
+    transforms.forEach((transform) => {
+      if (!transform.isEnabled) return;
+      dispatchTransform(state, transform, {
+        container: logicalDimensions,
+        content: contentSize,
+        time: transformTime,
+      });
+    });
+
+    return {
+      growAmount: state.maskGrow?.amount ?? 0,
+      feather: state.feather ?? null,
+    };
+  }
+
   /**
    * Render all mask children in `maskContainer` to the RenderTexture.
    * In renderer mode the maskContainer lives in the track container but stays
@@ -519,7 +605,7 @@ export class SpriteClipMaskController {
     width: number;
     height: number;
   }) {
-    if (!this.renderer || !this.maskSprite) return;
+    if (!this.renderer) return;
     const { width, height } = contentSize;
 
     this.ensureMaskRenderTexture(contentSize);
@@ -539,7 +625,6 @@ export class SpriteClipMaskController {
         clear: true,
         transform,
       });
-      this.maskSprite.visible = true;
     } finally {
       this.maskContainer.visible = previousMaskContainerVisibility;
     }
@@ -559,16 +644,21 @@ export class SpriteClipMaskController {
   private renderMaskClipsToTexture(
     maskClips: MaskTimelineClip[],
     contentSize: { width: number; height: number },
+    compositeState: ResolvedMaskCompositeState,
   ) {
     if (!this.renderer || !this.maskSprite) return;
 
     this.ensureMaskRenderTexture(contentSize);
     this.ensurePerMaskRenderTexture(contentSize);
+    this.ensureEffectMaskRenderTexture(contentSize);
+    this.ensurePresentationMaskRenderTexture(contentSize);
     this.ensureSolidMaskSprite(contentSize);
 
     if (
       !this.maskRenderTexture ||
       !this.perMaskRenderTexture ||
+      !this.effectMaskRenderTexture ||
+      !this.presentationMaskRenderTexture ||
       !this.perMaskSprite ||
       !this.solidMaskSprite
     ) {
@@ -611,19 +701,159 @@ export class SpriteClipMaskController {
         this.perMaskRenderTexture,
         transform,
       );
-      const previousBlendMode = this.perMaskSprite.blendMode;
-      this.perMaskSprite.filters = [this.getAlphaInvertFilter()];
-      this.perMaskSprite.blendMode = "multiply";
-      this.renderer.render({
-        container: this.perMaskSprite,
-        target: this.maskRenderTexture,
+      this.renderTextureToTarget(this.perMaskRenderTexture, this.maskRenderTexture, {
         clear: false,
+        blendMode: "multiply",
+        filters: [this.getMaskInvertFilter()],
       });
-      this.perMaskSprite.filters = null;
-      this.perMaskSprite.blendMode = previousBlendMode;
     }
 
+    const effectTexture = this.renderCompositeMaskEdgeTexture(
+      this.maskRenderTexture,
+      compositeState,
+    );
+    this.renderPresentedMaskTexture(effectTexture, contentSize);
     this.maskSprite.visible = true;
+  }
+
+  private renderCompositeMaskEdgeTexture(
+    sourceTexture: Texture,
+    compositeState: ResolvedMaskCompositeState,
+  ): Texture {
+    if (
+      !this.effectMaskRenderTexture ||
+      !this.perMaskRenderTexture ||
+      !this.maskRenderTexture
+    ) {
+      return sourceTexture;
+    }
+
+    let currentTexture = sourceTexture;
+    if (compositeState.growAmount > 0) {
+      this.renderBlurPass(
+        currentTexture,
+        this.perMaskRenderTexture,
+        compositeState.growAmount,
+      );
+      this.renderThresholdPass(
+        this.perMaskRenderTexture,
+        this.effectMaskRenderTexture,
+      );
+      currentTexture = this.effectMaskRenderTexture;
+    }
+
+    const feather = compositeState.feather;
+    if (!feather || feather.amount <= 0) {
+      return currentTexture;
+    }
+
+    const outputTarget =
+      currentTexture === this.effectMaskRenderTexture
+        ? this.maskRenderTexture
+        : this.effectMaskRenderTexture;
+
+    if (feather.mode === "two_way") {
+      this.renderBlurPass(
+        currentTexture,
+        outputTarget,
+        feather.amount,
+      );
+      return outputTarget;
+    }
+
+    this.renderBlurPass(
+      currentTexture,
+      this.perMaskRenderTexture,
+      feather.amount,
+    );
+
+    if (feather.mode === "soft_inner") {
+      this.renderTextureToTarget(currentTexture, outputTarget, {
+        clear: true,
+      });
+      this.renderTextureToTarget(
+        this.perMaskRenderTexture,
+        outputTarget,
+        {
+          clear: false,
+          blendMode: "multiply",
+        },
+      );
+      return outputTarget;
+    }
+
+    this.renderTextureToTarget(this.perMaskRenderTexture, outputTarget, {
+      clear: true,
+    });
+    this.renderTextureToTarget(currentTexture, outputTarget, {
+      clear: false,
+    });
+
+    return outputTarget;
+  }
+
+  private renderPresentedMaskTexture(
+    sourceTexture: Texture,
+    contentSize: { width: number; height: number },
+  ) {
+    if (!this.maskSprite) {
+      return;
+    }
+
+    this.ensurePresentationMaskRenderTexture(contentSize);
+    if (!this.presentationMaskRenderTexture) {
+      return;
+    }
+
+    this.renderTextureToTarget(sourceTexture, this.presentationMaskRenderTexture, {
+      clear: true,
+      filters: [this.getMaskRedToAlphaFilter()],
+    });
+    this.maskSprite.texture = this.presentationMaskRenderTexture;
+  }
+
+  private renderBlurPass(
+    sourceTexture: Texture,
+    target: RenderTexture,
+    amount: number,
+  ) {
+    this.renderTextureToTarget(sourceTexture, target, {
+      clear: true,
+      filters: [this.getKawaseBlurFilter(amount)],
+    });
+  }
+
+  private renderThresholdPass(sourceTexture: Texture, target: RenderTexture) {
+    this.renderTextureToTarget(sourceTexture, target, {
+      clear: true,
+      filters: [this.getMaskBinaryThresholdFilter()],
+    });
+  }
+
+  private renderTextureToTarget(
+    sourceTexture: Texture,
+    target: RenderTexture,
+    options: {
+      clear?: boolean;
+      blendMode?: Sprite["blendMode"];
+      filters?: Filter[] | null;
+    } = {},
+  ) {
+    if (!this.renderer || !this.perMaskSprite) return;
+
+    this.perMaskSprite.texture = sourceTexture;
+    this.perMaskSprite.filters = options.filters ?? null;
+    this.perMaskSprite.blendMode = options.blendMode ?? "normal";
+    this.perMaskSprite.visible = true;
+
+    this.renderer.render({
+      container: this.perMaskSprite,
+      target,
+      clear: options.clear ?? true,
+    });
+
+    this.perMaskSprite.filters = null;
+    this.perMaskSprite.blendMode = "normal";
   }
 
   /**
@@ -735,13 +965,8 @@ export class SpriteClipMaskController {
   }
 
   private shouldRasterizeVectorMask(maskClip: MaskTimelineClip): boolean {
-    if (!this.renderer) return false;
-
-    return maskClip.transformations.some(
-      (transform) =>
-        transform.isEnabled &&
-        (transform.type === "mask_grow" || transform.type === "feather"),
-    );
+    void maskClip;
+    return false;
   }
 
   private setVectorMaskPresentation(
@@ -876,6 +1101,7 @@ export class SpriteClipMaskController {
       if (node.root.parent) {
         node.root.removeFromParent();
       }
+      node.thresholdFilter.destroy();
       node.player.dispose();
       if (!node.root.destroyed) {
         node.root.destroy({ children: false });
@@ -888,12 +1114,15 @@ export class SpriteClipMaskController {
       if (existing) return;
       const root = new Container();
       const player = new MaskVideoFramePlayer(entry.maskId);
+      const thresholdFilter = createMaskBinaryThresholdFilter();
+      player.sprite.filters = [thresholdFilter];
       root.addChild(player.sprite);
       this.maskContainer.addChild(root);
       this.assetMaskNodes.set(entry.maskId, {
         root,
         player,
         assetId: entry.assetId,
+        thresholdFilter,
       });
     });
   }
@@ -918,7 +1147,6 @@ export class SpriteClipMaskController {
   }
 
   private ensureMaskRenderTexture(contentSize: { width: number; height: number }) {
-    if (!this.maskSprite) return;
     const { width, height } = contentSize;
     if (
       !this.maskRenderTexture ||
@@ -934,7 +1162,6 @@ export class SpriteClipMaskController {
           dynamic: true,
         });
       }
-      this.maskSprite.texture = this.maskRenderTexture;
       this.lastContentWidth = width;
       this.lastContentHeight = height;
     }
@@ -983,7 +1210,47 @@ export class SpriteClipMaskController {
       this.perMaskSprite = new Sprite();
       this.perMaskSprite.anchor.set(0);
     }
-    this.perMaskSprite.texture = this.perMaskRenderTexture;
+  }
+
+  private ensureEffectMaskRenderTexture(contentSize: {
+    width: number;
+    height: number;
+  }) {
+    const { width, height } = contentSize;
+    if (!this.effectMaskRenderTexture) {
+      this.effectMaskRenderTexture = RenderTexture.create({
+        width,
+        height,
+        dynamic: true,
+      });
+    } else if (
+      this.effectMaskRenderTexture.width !== width ||
+      this.effectMaskRenderTexture.height !== height
+    ) {
+      this.effectMaskRenderTexture.resize(width, height);
+    }
+  }
+
+  private ensurePresentationMaskRenderTexture(contentSize: {
+    width: number;
+    height: number;
+  }) {
+    if (!this.maskSprite) return;
+    const { width, height } = contentSize;
+    if (!this.presentationMaskRenderTexture) {
+      this.presentationMaskRenderTexture = RenderTexture.create({
+        width,
+        height,
+        dynamic: true,
+      });
+    } else if (
+      this.presentationMaskRenderTexture.width !== width ||
+      this.presentationMaskRenderTexture.height !== height
+    ) {
+      this.presentationMaskRenderTexture.resize(width, height);
+    }
+
+    this.maskSprite.texture = this.presentationMaskRenderTexture;
   }
 
   private ensureSolidMaskSprite(contentSize: { width: number; height: number }) {
@@ -995,20 +1262,37 @@ export class SpriteClipMaskController {
     this.solidMaskSprite.height = contentSize.height;
   }
 
-  private getAlphaInvertFilter(): ColorMatrixFilter {
-    if (!this.alphaInvertFilter) {
-      const filter = new ColorMatrixFilter();
-      // For multiply compositing we invert the red channel and force alpha to 1,
-      // so the multiply pass is applied everywhere (inside=0, outside=1).
-      filter.matrix = [
-        -1, 0, 0, 0, 1,
-        0, 1, 0, 0, 0,
-        0, 0, 1, 0, 0,
-        0, 0, 0, 0, 1,
-      ];
-      this.alphaInvertFilter = filter;
+  private getMaskInvertFilter(): Filter {
+    if (!this.maskInvertFilter) {
+      this.maskInvertFilter = createMaskRedInvertForMultiplyFilter();
     }
-    return this.alphaInvertFilter;
+    return this.maskInvertFilter;
+  }
+
+  private getMaskBinaryThresholdFilter(): Filter {
+    if (!this.maskBinaryThresholdFilter) {
+      this.maskBinaryThresholdFilter = createMaskBinaryThresholdFilter();
+    }
+    return this.maskBinaryThresholdFilter;
+  }
+
+  private getMaskRedToAlphaFilter(): Filter {
+    if (!this.maskRedToAlphaFilter) {
+      this.maskRedToAlphaFilter = createMaskRedToAlphaFilter();
+    }
+    return this.maskRedToAlphaFilter;
+  }
+
+  private getKawaseBlurFilter(amount: number): KawaseBlurFilter {
+    if (!this.kawaseBlurFilter) {
+      this.kawaseBlurFilter = new KawaseBlurFilter({
+        strength: 0,
+        quality: MASK_EDGE_BLUR_QUALITY,
+        clamp: true,
+      });
+    }
+    this.kawaseBlurFilter.strength = amount * MASK_EDGE_BLUR_SCALE;
+    return this.kawaseBlurFilter;
   }
 
   private renderMaskSubsetToTexture(

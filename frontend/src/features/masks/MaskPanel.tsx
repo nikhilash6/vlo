@@ -85,13 +85,22 @@ export const MaskPanel = memo(function MaskPanel() {
     deleteSelectedMask,
   } = useMaskPanel();
   const {
-    activeContextId,
-    activeTransforms,
-    activeTimelineClip,
-    setActiveTransforms,
-    updateActiveTransform,
-    handleSetDefaultGroupsEnabled,
-    handleCommit,
+    activeContextId: sharedMaskContextId,
+    activeTransforms: sharedMaskTransforms,
+    activeTimelineClip: sharedMaskTimelineClip,
+    setActiveTransforms: setSharedMaskTransforms,
+    updateActiveTransform: updateSharedMaskTransform,
+    handleSetDefaultGroupsEnabled: handleSetSharedMaskGroupsEnabled,
+    handleCommit: handleSharedMaskCommit,
+  } = useTransformationController({ target: "maskComposite" });
+  const {
+    activeContextId: selectedMaskContextId,
+    activeTransforms: selectedMaskTransforms,
+    activeTimelineClip: selectedMaskTimelineClip,
+    setActiveTransforms: setSelectedMaskTransforms,
+    updateActiveTransform: updateSelectedMaskTransform,
+    handleSetDefaultGroupsEnabled: handleSetSelectedMaskGroupsEnabled,
+    handleCommit: handleSelectedMaskCommit,
   } = useTransformationController({ target: "mask" });
 
   const layoutDefinitions = useMemo(
@@ -109,13 +118,9 @@ export const MaskPanel = memo(function MaskPanel() {
     const feather = getEntryByType("feather");
     return feather ? [feather] : [];
   }, []);
-  const maskOperationDefinitions = useMemo(
+  const sharedMaskOperationDefinitions = useMemo(
     () => [...growDefinitions, ...featherDefinitions],
     [growDefinitions, featherDefinitions],
-  );
-  const maskDefinitions = useMemo(
-    () => [...layoutDefinitions, ...maskOperationDefinitions],
-    [layoutDefinitions, maskOperationDefinitions],
   );
 
   // SAM2 masks are point-based and don't use shape transformation sections.
@@ -123,15 +128,36 @@ export const MaskPanel = memo(function MaskPanel() {
   const selectedMaskIsSam2 =
     selectedMask?.type === "mask" && selectedMask.maskType === "sam2";
 
-  // SAM2 masks still get mask operations, just not layout.
-  const sectionOrder = useMemo(() => {
-    const defs = selectedMaskIsSam2 ? maskOperationDefinitions : maskDefinitions;
-    return defs.map((definition) => getDefaultSectionId(definition.type));
-  }, [selectedMaskIsSam2, maskOperationDefinitions, maskDefinitions]);
+  const sharedSectionOrder = useMemo(
+    () =>
+      sharedMaskOperationDefinitions.map((definition) =>
+        getDefaultSectionId(definition.type),
+      ),
+    [sharedMaskOperationDefinitions],
+  );
+  const selectedMaskSectionOrder = useMemo(
+    () =>
+      selectedMaskIsSam2
+        ? []
+        : layoutDefinitions.map((definition) =>
+            getDefaultSectionId(definition.type),
+          ),
+    [layoutDefinitions, selectedMaskIsSam2],
+  );
 
-  const { activeSectionId, activateSection } = useActiveTransformationSection(
-    activeContextId,
-    selectedMask ? sectionOrder : [],
+  const {
+    activeSectionId: activeSharedSectionId,
+    activateSection: activateSharedSection,
+  } = useActiveTransformationSection(
+    sharedMaskContextId,
+    selectedClipId ? sharedSectionOrder : [],
+  );
+  const {
+    activeSectionId: activeSelectedMaskSectionId,
+    activateSection: activateSelectedMaskSection,
+  } = useActiveTransformationSection(
+    selectedMaskContextId,
+    selectedMask ? selectedMaskSectionOrder : [],
   );
 
   const handleModelsInstalled = useCallback(() => {
@@ -237,6 +263,29 @@ export const MaskPanel = memo(function MaskPanel() {
         )}
       </Box>
 
+      {sharedMaskContextId && sharedMaskOperationDefinitions.length > 0 && (
+        <Box sx={{ px: 2, pb: 1 }}>
+          <Typography
+            variant="caption"
+            sx={{ color: "text.secondary", display: "block", mb: 1 }}
+          >
+            Shared Mask Edges
+          </Typography>
+          <DefaultTransformationSections
+            definitions={sharedMaskOperationDefinitions}
+            activeTransforms={sharedMaskTransforms}
+            activeContextId={sharedMaskContextId}
+            activeSectionId={activeSharedSectionId}
+            timelineClip={sharedMaskTimelineClip}
+            onCommit={handleSharedMaskCommit}
+            onSetDefaultGroupsEnabled={handleSetSharedMaskGroupsEnabled}
+            onUpdateTransform={updateSharedMaskTransform}
+            onSetTransforms={setSharedMaskTransforms}
+            onActivateSection={activateSharedSection}
+          />
+        </Box>
+      )}
+
       {selectedMask ? (
         isSam2Mask ? (
           showSam2DownloadOverlay ? (
@@ -266,18 +315,6 @@ export const MaskPanel = memo(function MaskPanel() {
                 onSetMaskMode={setMaskMode}
                 onSetMaskInverted={setMaskInverted}
                 onSetSam2PointMode={setSam2PointMode}
-              />
-              <DefaultTransformationSections
-                definitions={maskOperationDefinitions}
-                activeTransforms={activeTransforms}
-                activeContextId={activeContextId}
-                activeSectionId={activeSectionId}
-                timelineClip={activeTimelineClip}
-                onCommit={handleCommit}
-                onSetDefaultGroupsEnabled={handleSetDefaultGroupsEnabled}
-                onUpdateTransform={updateActiveTransform}
-                onSetTransforms={setActiveTransforms}
-                onActivateSection={activateSection}
               />
               <Box sx={{ px: 2, pb: 2 }}>
                 <Divider sx={{ borderColor: "#2a2d33", mb: 2 }} />
@@ -312,16 +349,16 @@ export const MaskPanel = memo(function MaskPanel() {
             </Box>
 
             <DefaultTransformationSections
-              definitions={maskDefinitions}
-              activeTransforms={activeTransforms}
-              activeContextId={activeContextId}
-              activeSectionId={activeSectionId}
-              timelineClip={activeTimelineClip}
-              onCommit={handleCommit}
-              onSetDefaultGroupsEnabled={handleSetDefaultGroupsEnabled}
-              onUpdateTransform={updateActiveTransform}
-              onSetTransforms={setActiveTransforms}
-              onActivateSection={activateSection}
+              definitions={layoutDefinitions}
+              activeTransforms={selectedMaskTransforms}
+              activeContextId={selectedMaskContextId}
+              activeSectionId={activeSelectedMaskSectionId}
+              timelineClip={selectedMaskTimelineClip}
+              onCommit={handleSelectedMaskCommit}
+              onSetDefaultGroupsEnabled={handleSetSelectedMaskGroupsEnabled}
+              onUpdateTransform={updateSelectedMaskTransform}
+              onSetTransforms={setSelectedMaskTransforms}
+              onActivateSection={activateSelectedMaskSection}
             />
 
             <Box sx={{ px: 2, pb: 2 }}>

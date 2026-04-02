@@ -97,7 +97,7 @@ function createMaskAsset(id: string): Asset {
 }
 
 describe("SpriteClipMaskController mask composition", () => {
-  it("rasterizes vector masks with edge transforms into sprite-backed nodes", async () => {
+  it("applies shared parent feathering as a post-composite pass", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const renderSpy = vi.fn();
     const renderer = {
@@ -107,9 +107,9 @@ describe("SpriteClipMaskController mask composition", () => {
     const root = new Container();
     const controller = new SpriteClipMaskController(sprite, renderer, root);
 
-    const parent = createParentClip();
-    const featheredMask = createMaskClip("mask_feathered", {
-      transformations: [
+    const parent = {
+      ...createParentClip(),
+      maskCompositeTransformations: [
         {
           id: "feather_1",
           type: "feather",
@@ -120,7 +120,8 @@ describe("SpriteClipMaskController mask composition", () => {
           },
         },
       ],
-    });
+    } as TimelineClip;
+    const featheredMask = createMaskClip("mask_feathered");
 
     await controller.syncMaskClips(
       [featheredMask],
@@ -148,11 +149,11 @@ describe("SpriteClipMaskController mask composition", () => {
     ).vectorMaskNodes.get(featheredMask.id);
 
     expect(alphaMaskEffect).not.toBeNull();
-    expect(renderSpy).toHaveBeenCalledTimes(2);
-    expect(node?.presentation).toBe("sprite");
-    expect(node?.graphics.visible).toBe(false);
-    expect(node?.spriteHost.visible).toBe(true);
-    expect(node?.sprite.visible).toBe(true);
+    expect(renderSpy).toHaveBeenCalledTimes(5);
+    expect(node?.presentation).toBe("graphics");
+    expect(node?.graphics.visible).toBe(true);
+    expect(node?.spriteHost.visible).toBe(false);
+    expect(node?.sprite.visible).toBe(false);
 
     controller.dispose();
     warnSpy.mockRestore();
@@ -188,8 +189,8 @@ describe("SpriteClipMaskController mask composition", () => {
 
     expect(alphaMaskEffect).not.toBeNull();
     expect(alphaMaskEffect?.inverse).toBe(false);
-    // Fill full mask + render inverted union + erase union.
-    expect(renderSpy).toHaveBeenCalledTimes(3);
+    // Fill full mask + render inverted union + erase union + present red->alpha.
+    expect(renderSpy).toHaveBeenCalledTimes(4);
 
     controller.dispose();
     warnSpy.mockRestore();
@@ -243,8 +244,8 @@ describe("SpriteClipMaskController mask composition", () => {
     expect(alphaMaskEffect).not.toBeNull();
     expect(alphaMaskEffect?.inverse).toBe(false);
 
-    // Non-inverted union + inverted union + erase compositing pass.
-    expect(renderSpy).toHaveBeenCalledTimes(3);
+    // Non-inverted union + inverted union + erase pass + present red->alpha.
+    expect(renderSpy).toHaveBeenCalledTimes(4);
 
     const compositingCall = renderSnapshots.find((call) => {
       return (
@@ -303,8 +304,8 @@ describe("SpriteClipMaskController mask composition", () => {
       new Map<string, Asset>(),
     );
 
-    // Fill full mask + render inverted union + erase union.
-    expect(renderSpy).toHaveBeenCalledTimes(3);
+    // Fill full mask + render inverted union + erase union + present red->alpha.
+    expect(renderSpy).toHaveBeenCalledTimes(4);
     expect(
       renderSnapshots.filter((call) => call.transform !== undefined).length,
     ).toBe(1);
@@ -374,7 +375,7 @@ describe("SpriteClipMaskController mask composition", () => {
     expect(
       node.assetMaskNodes.get(generationMask.id)?.player.renderAt,
     ).toHaveBeenCalledWith(expect.any(Number), { strict: true });
-    expect(renderSpy).toHaveBeenCalledTimes(1);
+    expect(renderSpy).toHaveBeenCalledTimes(2);
 
     controller.dispose();
     warnSpy.mockRestore();

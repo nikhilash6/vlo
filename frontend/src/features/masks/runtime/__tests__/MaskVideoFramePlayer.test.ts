@@ -2,6 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Asset } from "../../../../types/Asset";
 
 const { mockWorkers, mockWorkerPlans } = vi.hoisted(() => {
+  type MockRenderStep =
+    | "error"
+    | "frame"
+    | "hang"
+    | {
+        bitmap: { width?: number; height?: number };
+      };
   const workers: Array<{
     onmessage: ((event: MessageEvent) => void) | null;
     postMessage: ReturnType<typeof vi.fn>;
@@ -9,7 +16,7 @@ const { mockWorkers, mockWorkerPlans } = vi.hoisted(() => {
   }> = [];
   const plans: Array<{
     prepare?: "error" | "hang" | "ready";
-    render?: Array<"error" | "frame" | "hang">;
+    render?: MockRenderStep[];
   }> = [];
 
   return {
@@ -79,7 +86,8 @@ vi.mock("../../../renderer", () => ({
             data: {
               type: "frame",
               clipId: message.clipId,
-              bitmap: null,
+              bitmap:
+                renderBehavior === "frame" ? null : renderBehavior.bitmap,
             },
           } as MessageEvent);
         }, 0);
@@ -88,7 +96,7 @@ vi.mock("../../../renderer", () => ({
     readonly terminate = vi.fn();
     private readonly plan: {
       prepare?: "error" | "hang" | "ready";
-      render: Array<"error" | "frame" | "hang">;
+      render: MockRenderStep[];
     };
 
     constructor() {
@@ -273,6 +281,32 @@ describe("MaskVideoFramePlayer", () => {
     );
 
     warnSpy.mockRestore();
+    player.dispose();
+  });
+
+  it("swaps the worker bitmap directly into a Pixi texture", async () => {
+    const decodedBitmap = { width: 9, height: 7 };
+    const { Texture } = await import("pixi.js");
+
+    mockWorkerPlans.push({
+      prepare: "ready",
+      render: [{ bitmap: decodedBitmap }],
+    });
+
+    const player = new MaskVideoFramePlayer("clip_1");
+    const setSourcePromise = player.setSource(createMaskAsset("mask_asset"));
+    await vi.runAllTimersAsync();
+    await setSourcePromise;
+
+    const renderPromise = player.renderAt(0.25, { strict: true });
+    await vi.runAllTimersAsync();
+    await renderPromise;
+
+    expect(Texture.from).toHaveBeenCalledWith(decodedBitmap);
+    expect(player.sprite.visible).toBe(true);
+    expect(player.sprite.texture.width).toBe(9);
+    expect(player.sprite.texture.height).toBe(7);
+
     player.dispose();
   });
 });

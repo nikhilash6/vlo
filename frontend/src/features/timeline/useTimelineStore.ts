@@ -37,6 +37,7 @@ enablePatches();
 
 const MASK_CONTEXT_SEPARATOR = "::mask::";
 const INHERITED_TRANSFORM_TYPES = new Set(["speed"]);
+const MASK_EDGE_TRANSFORM_TYPES = new Set(["mask_grow", "feather"]);
 const TIMELINE_HISTORY_LIMIT = 100;
 const TIMELINE_PERSIST_DEBOUNCE_MS = 250;
 
@@ -81,22 +82,40 @@ function createDefaultFitModeTransform(): ClipTransform {
 }
 
 function withTimelineClipDefaults(clip: TimelineClip): TimelineClip {
-  if (clip.type !== "video" && clip.type !== "image") {
+  if (clip.type === "mask") {
     return clip;
   }
 
-  const hasFitModeTransform = clip.transformations.some(
+  const normalizedMaskCompositeTransforms = normalizeMaskCompositeTransformations(
+    clip.maskCompositeTransformations,
+  );
+  const baseClip = normalizedMaskCompositeTransforms
+    ? {
+        ...clip,
+        maskCompositeTransformations: normalizedMaskCompositeTransforms,
+      }
+    : (() => {
+        const { maskCompositeTransformations, ...rest } = clip as StandardTimelineClip;
+        void maskCompositeTransformations;
+        return rest as StandardTimelineClip;
+      })();
+
+  if (clip.type !== "video" && clip.type !== "image") {
+    return baseClip;
+  }
+
+  const hasFitModeTransform = baseClip.transformations.some(
     (transform) => transform.type === "fitMode",
   );
   if (hasFitModeTransform) {
-    return clip;
+    return baseClip;
   }
 
   return {
-    ...clip,
+    ...baseClip,
     transformations: [
       createDefaultFitModeTransform(),
-      ...structuredClone(clip.transformations || []),
+      ...structuredClone(baseClip.transformations || []),
     ],
   };
 }
@@ -104,11 +123,11 @@ function withTimelineClipDefaults(clip: TimelineClip): TimelineClip {
 const cloneTimelineClip = (
   clip: TimelineClip,
   id: string = clip.id,
-): TimelineClip => ({
-  ...clip,
-  id,
-  transformations: structuredClone(clip.transformations || []),
-});
+): TimelineClip => {
+  const cloned = structuredClone(clip);
+  cloned.id = id;
+  return cloned;
+};
 
 function getCurrentModelState(state: TimelineState): TimelineModelState {
   return {
@@ -266,13 +285,37 @@ function getInheritedSpeedTransforms(
   );
 }
 
+function isMaskEdgeTransform(transform: ClipTransform): boolean {
+  return MASK_EDGE_TRANSFORM_TYPES.has(transform.type);
+}
+
+function getMaskEdgeTransforms(
+  transforms: readonly ClipTransform[] | undefined,
+): ClipTransform[] {
+  return (transforms || []).filter((transform) => isMaskEdgeTransform(transform));
+}
+
+function stripMaskEdgeTransforms(
+  transforms: readonly ClipTransform[] | undefined,
+): ClipTransform[] {
+  return (transforms || []).filter((transform) => !isMaskEdgeTransform(transform));
+}
+
+function normalizeMaskCompositeTransformations(
+  transforms: readonly ClipTransform[] | undefined,
+): ClipTransform[] | undefined {
+  const normalized = getMaskEdgeTransforms(transforms);
+  return normalized.length > 0 ? structuredClone(normalized) : undefined;
+}
+
 function buildMaskClipTransformations(
   maskTransforms: ClipTransform[],
   parentClip: TimelineClip,
 ): ClipTransform[] {
+  const localTransforms = stripMaskEdgeTransforms(maskTransforms);
   const inherited = getInheritedSpeedTransforms(parentClip);
-  if (inherited.length === 0) return maskTransforms;
-  return [...maskTransforms, ...inherited];
+  if (inherited.length === 0) return localTransforms;
+  return [...localTransforms, ...inherited];
 }
 
 /**
@@ -380,8 +423,66 @@ function syncMaskTiming(
 /** Strip inherited speed transforms, leaving only mask-local transforms. */
 function getMaskLocalTransforms(maskClip: TimelineClip): ClipTransform[] {
   return (maskClip.transformations || []).filter(
-    (transform) => !INHERITED_TRANSFORM_TYPES.has(transform.type),
+    (transform) =>
+      !INHERITED_TRANSFORM_TYPES.has(transform.type) &&
+      !isMaskEdgeTransform(transform),
   );
+}
+
+function migrateLegacyMaskEdgeTransforms(clips: TimelineClip[]): TimelineClip[] {
+  const normalizedClips = clips.map((clip) => withTimelineClipDefaults(cloneTimelineClip(clip)));
+  const clipById = new Map(normalizedClips.map((clip) => [clip.id, clip] as const));
+
+  normalizedClips.forEach((clip) => {
+    if (clip.type === "mask") {
+      const parent = clip.parentClipId ? clipById.get(clip.parentClipId) : null;
+      clip.transformations = parent
+        ? buildMaskClipTransformations(getMaskLocalTransforms(clip), parent)
+        : getMaskLocalTransforms(clip);
+      return;
+    }
+
+    const parentClip = clip as StandardTimelineClip;
+    const childMaskIds = [
+      ...new Set([
+        ...getChildMaskClipIds(parentClip),
+        ...normalizedClips
+          .filter(
+            (candidate): candidate is MaskTimelineClip =>
+              candidate.type === "mask" && candidate.parentClipId === parentClip.id,
+          )
+          .map((candidate) => candidate.id),
+      ]),
+    ];
+    const childMasks = childMaskIds
+      .map((maskId) => clipById.get(maskId))
+      .filter((mask): mask is MaskTimelineClip => !!mask && mask.type === "mask");
+
+    const existingSharedTransforms = normalizeMaskCompositeTransformations(
+      parentClip.maskCompositeTransformations,
+    );
+
+    const migratedSharedTransforms =
+      existingSharedTransforms ??
+      childMasks
+        .map((maskClip) => normalizeMaskCompositeTransformations(maskClip.transformations))
+        .find((transforms): transforms is ClipTransform[] => !!transforms?.length);
+
+    if (migratedSharedTransforms) {
+      parentClip.maskCompositeTransformations = migratedSharedTransforms;
+    } else {
+      delete parentClip.maskCompositeTransformations;
+    }
+
+    childMasks.forEach((maskClip) => {
+      maskClip.transformations = buildMaskClipTransformations(
+        getMaskLocalTransforms(maskClip),
+        parentClip,
+      );
+    });
+  });
+
+  return normalizedClips;
 }
 
 /**
@@ -658,6 +759,10 @@ interface TimelineState {
   ) => void;
 
   setClipTransforms: (clipId: string, transforms: ClipTransform[]) => void;
+  setClipMaskCompositeTransforms: (
+    clipId: string,
+    transforms: ClipTransform[],
+  ) => void;
 
   removeClipTransform: (clipId: string, effectId: string) => void;
 
@@ -858,7 +963,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
     const next = snapshot
       ? {
           tracks: structuredClone(snapshot.tracks),
-          clips: structuredClone(snapshot.clips),
+          clips: migrateLegacyMaskEdgeTransforms(structuredClone(snapshot.clips)),
         }
       : createDefaultTimelineSnapshot();
 
@@ -1378,6 +1483,30 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
         if (parent && parent.type !== "mask") {
           draft.clips = propagateParentToMasks(draft.clips, parent);
         }
+      });
+    },
+
+    setClipMaskCompositeTransforms: (clipId, transforms) => {
+      commitModelMutation((draft) => {
+        draft.clips = draft.clips.map((clip) => {
+          if (clip.id !== clipId || clip.type === "mask") {
+            return clip;
+          }
+
+          const nextTransforms = normalizeMaskCompositeTransformations(transforms);
+
+          if (!nextTransforms) {
+            const { maskCompositeTransformations, ...rest } =
+              clip as StandardTimelineClip;
+            void maskCompositeTransformations;
+            return rest as StandardTimelineClip;
+          }
+
+          return {
+            ...clip,
+            maskCompositeTransformations: nextTransforms,
+          };
+        });
       });
     },
 

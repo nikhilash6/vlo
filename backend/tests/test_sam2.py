@@ -857,7 +857,7 @@ def test_generate_mask_video_passes_visible_source_window_to_propagation(
     )
     monkeypatch.setattr(
         sam2_service,
-        "encode_binary_masks_to_transparent_webm",
+        "encode_binary_masks_to_red_webm",
         lambda _frames, _fps: b"webm",
     )
 

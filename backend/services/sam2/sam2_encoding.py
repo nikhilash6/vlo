@@ -32,13 +32,14 @@ def _validate_mask_frames(mask_frames: np.ndarray) -> tuple[int, int, int]:
     return frame_count, height, width
 
 
-def encode_binary_masks_to_transparent_webm(mask_frames: np.ndarray, fps: float) -> bytes:
+def encode_binary_masks_to_red_webm(mask_frames: np.ndarray, fps: float) -> bytes:
     """
-    Encodes binary mask frames (0/255) into a VP9 WebM with alpha.
+    Encode binary mask frames into a VP9 WebM without alpha.
 
-    Each frame is stored as black/white in RGB plus matching alpha:
-    - RGB: 0 for background, 255 for mask
-    - A:   0 for background, 255 for mask
+    Each frame stores mask coverage in the red channel only:
+    - R: 0 for background, 255 for mask
+    - G: 0
+    - B: 0
     """
     frame_count, height, width = _validate_mask_frames(mask_frames)
 
@@ -55,7 +56,7 @@ def encode_binary_masks_to_transparent_webm(mask_frames: np.ndarray, fps: float)
         stream = cast(VideoStream, output.add_stream("libvpx-vp9", rate=av_rate))
         stream.width = width
         stream.height = height
-        stream.pix_fmt = "yuva420p"
+        stream.pix_fmt = "yuv420p"
         stream.options = {
             "lossless": "1",
             "row-mt": "1",
@@ -64,14 +65,9 @@ def encode_binary_masks_to_transparent_webm(mask_frames: np.ndarray, fps: float)
 
         for i in range(frame_count):
             mask = mask_frames[i]
-            # Build YUVA420p frame: Y=mask value, U/V=128 (neutral), A=mask value
-            # Using rgb24 intermediate and letting PyAV convert is simpler and reliable
-            rgba = np.zeros((height, width, 4), dtype=np.uint8)
-            rgba[..., 0] = mask  # R
-            rgba[..., 1] = mask  # G
-            rgba[..., 2] = mask  # B
-            rgba[..., 3] = mask  # A
-            frame = av.VideoFrame.from_ndarray(rgba, format="rgba")
+            rgb = np.zeros((height, width, 3), dtype=np.uint8)
+            rgb[..., 0] = mask
+            frame = av.VideoFrame.from_ndarray(rgb, format="rgb24")
             frame.pts = i
             for packet in stream.encode(frame):
                 output.mux(packet)
@@ -84,3 +80,8 @@ def encode_binary_masks_to_transparent_webm(mask_frames: np.ndarray, fps: float)
         raise Sam2EncodingError(f"PyAV encoding failed: {exc}") from exc
 
     return buf.getvalue()
+
+
+def encode_binary_masks_to_transparent_webm(mask_frames: np.ndarray, fps: float) -> bytes:
+    """Backward-compatible wrapper for older call sites."""
+    return encode_binary_masks_to_red_webm(mask_frames, fps)

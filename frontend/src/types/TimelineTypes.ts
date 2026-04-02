@@ -106,6 +106,11 @@ export interface TimelineClipComponentRef {
 export interface StandardTimelineClip extends TimelineClipBase {
   type: Exclude<ClipType, "mask">;
   /**
+   * Shared mask edge operations applied after all child masks are composited.
+   * Stores only local mask composite transforms such as grow/feather.
+   */
+  maskCompositeTransformations?: ClipTransform[];
+  /**
    * Clip components (masks, motion encodings, etc.) owned by this clip.
    * Each component points to a subordinate clip and declares its component type.
    */

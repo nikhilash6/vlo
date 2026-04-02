@@ -46,7 +46,6 @@ import { zoomBlurFilterDefinition } from "./filters/zoomBlur";
 import { featherDefinition } from "./mask/feather";
 import { maskGrowDefinition } from "./mask/grow";
 import { filterApplicator } from "./filterFactory";
-import { featherApplicator } from "./mask/featherApplicator";
 import { colorMatrixDefinition } from "./filters/colorMatrix";
 
 // =============================================================================
@@ -266,7 +265,6 @@ export const TransformationSystem = {
   applicators: [
     layoutApplicator,
     filterApplicator,
-    featherApplicator,
   ] as StateApplicator[],
 
   getDefaults: (): Partial<TransformState> => ({

@@ -24,7 +24,8 @@ function createDefaultGeneratedMaskTransforms(): ClipTransform[] {
 }
 
 /**
- * If the asset has a linked generation mask, attach it as a child mask clip.
+ * If the asset has a linked generation mask, attach it as a child mask clip
+ * and seed shared mask feathering on the parent when unset.
  */
 export function attachGenerationMask(
   clipId: string,
@@ -42,8 +43,24 @@ export function attachGenerationMask(
     inverted: false,
     parameters: { baseWidth: 1, baseHeight: 1 },
     generationMaskAssetId: meta.generationMaskAssetId,
-    transformations: createDefaultGeneratedMaskTransforms(),
+    transformations: [],
   });
+
+  const parentClip = store.clips.find(
+    (clip): clip is Extract<TimelineClip, { type: Exclude<TimelineClip["type"], "mask"> }> =>
+      clip.id === clipId && clip.type !== "mask",
+  );
+
+  if (
+    parentClip &&
+    (!parentClip.maskCompositeTransformations ||
+      parentClip.maskCompositeTransformations.length === 0)
+  ) {
+    store.setClipMaskCompositeTransforms(
+      clipId,
+      createDefaultGeneratedMaskTransforms(),
+    );
+  }
 }
 
 /**

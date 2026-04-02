@@ -67,14 +67,14 @@ def _make_webm(
 def _mask_frame_fn(x1, y1, x2, y2):
     """Return a frame function matching the frontend binary mask format.
 
-    Foreground (mask content) = white (R=G=B=255), alpha=255.
-    Background = black (R=G=B=0), alpha=255.
+    Foreground (mask content) = red (R=255, G=B=0).
+    Background = black (R=G=B=0).
     """
 
     def fn(i, w, h):
-        arr = np.zeros((h, w, 4), dtype=np.uint8)  # black + opaque
-        arr[..., 3] = 255
-        arr[y1:y2, x1:x2, :3] = 255  # foreground = white
+        del i
+        arr = np.zeros((h, w, 3), dtype=np.uint8)
+        arr[y1:y2, x1:x2, 0] = 255
         return arr
 
     return fn
@@ -96,8 +96,7 @@ def _decode_frame_dimensions(video_bytes: bytes) -> tuple[int, int]:
 
 class TestAnalyzeMaskVideoBounds:
     def test_empty_mask_returns_none(self):
-        # All-transparent mask
-        webm = _make_webm(320, 180, 3, has_alpha=True)
+        webm = _make_webm(320, 180, 3, has_alpha=False)
         result = analyze_mask_video_bounds(webm, target_ar=16 / 9, dilation=0.1)
         assert result is None
 
@@ -105,7 +104,7 @@ class TestAnalyzeMaskVideoBounds:
         # Mask with a small rectangle in the center
         webm = _make_webm(
             320, 180, 3,
-            has_alpha=True,
+            has_alpha=False,
             frame_fn=_mask_frame_fn(100, 60, 200, 120),
         )
         result = analyze_mask_video_bounds(webm, target_ar=16 / 9, dilation=0.1)
@@ -126,16 +125,15 @@ class TestAnalyzeMaskVideoBounds:
         # ignoring the dark background.
         def video_range_mask(i, w, h):
             del i
-            arr = np.full((h, w, 4), 16, dtype=np.uint8)
-            arr[..., 3] = 255
-            arr[60:120, 100:200, :3] = 235
+            arr = np.zeros((h, w, 3), dtype=np.uint8)
+            arr[60:120, 100:200, 0] = 235
             return arr
 
         webm = _make_webm(
             320,
             180,
             3,
-            has_alpha=True,
+            has_alpha=False,
             frame_fn=video_range_mask,
         )
         result = analyze_mask_video_bounds(webm, target_ar=16 / 9, dilation=0.1)
@@ -149,11 +147,12 @@ class TestAnalyzeMaskVideoBounds:
     def test_full_mask_returns_none(self):
         # Mask covering entire frame (all white = all foreground) → crop == container → None
         def full_mask(i, w, h):
-            arr = np.full((h, w, 4), 255, dtype=np.uint8)
-            arr[..., 3] = 255  # opaque
+            del i
+            arr = np.zeros((h, w, 3), dtype=np.uint8)
+            arr[..., 0] = 255
             return arr
 
-        webm = _make_webm(320, 180, 2, has_alpha=True, frame_fn=full_mask)
+        webm = _make_webm(320, 180, 2, has_alpha=False, frame_fn=full_mask)
         result = analyze_mask_video_bounds(webm, target_ar=16 / 9, dilation=0.0)
         assert result is None
 

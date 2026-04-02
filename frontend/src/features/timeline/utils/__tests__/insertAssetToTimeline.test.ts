@@ -38,7 +38,7 @@ describe("insertAssetToTimeline", () => {
     });
   });
 
-  it("attaches generated masks with default hard outer feathering", () => {
+  it("attaches generated masks and seeds shared hard outer feathering", () => {
     const asset: Asset = {
       id: "generated_asset",
       hash: "hash-generated",
@@ -60,9 +60,18 @@ describe("insertAssetToTimeline", () => {
       .getState()
       .clips.find((clip) => clip.type === "mask");
 
+    const parentClip = useTimelineStore
+      .getState()
+      .clips.find((clip) => clip.id === "clip_1");
+
     expect(maskClip?.type).toBe("mask");
     expect(maskClip?.generationMaskAssetId).toBe("generation-mask-asset");
-    expect(maskClip?.transformations).toEqual([
+    expect(maskClip?.transformations).toEqual([]);
+    expect(
+      parentClip?.type !== "mask"
+        ? parentClip.maskCompositeTransformations
+        : undefined,
+    ).toEqual([
       expect.objectContaining({
         type: "feather",
         isEnabled: true,

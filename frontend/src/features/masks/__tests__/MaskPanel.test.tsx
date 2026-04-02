@@ -6,8 +6,13 @@ import type { TimelineClip } from "../../../types/TimelineTypes";
 
 vi.mock("../hooks/useMaskPanel");
 vi.mock("../../transformations", () => ({
-  useTransformationController: () => ({
-    activeContextId: "mask-context",
+  useTransformationController: (
+    options?: { target?: "clip" | "mask" | "maskComposite" | "auto" },
+  ) => ({
+    activeContextId:
+      options?.target === "maskComposite"
+        ? "mask-composite-context"
+        : "mask-context",
     activeTransforms: [],
     activeTimelineClip: null,
     setActiveTransforms: vi.fn(),
@@ -21,8 +26,9 @@ vi.mock("../../transformations", () => ({
   }),
   DefaultTransformationSections: (props: {
     definitions: Array<{ type: string }>;
+    activeContextId?: string;
   }) => (
-    <div data-testid="default-sections-order">
+    <div data-testid={`default-sections-order-${props.activeContextId ?? "unknown"}`}>
       {props.definitions.map((definition) => definition.type).join(">")}
     </div>
   ),
@@ -275,8 +281,11 @@ describe("MaskPanel", () => {
 
     render(<MaskPanel />);
 
-    expect(screen.getByTestId("default-sections-order")).toHaveTextContent(
-      "layout>mask_grow>feather",
+    expect(
+      screen.getByTestId("default-sections-order-mask-composite-context"),
+    ).toHaveTextContent("mask_grow>feather");
+    expect(screen.getByTestId("default-sections-order-mask-context")).toHaveTextContent(
+      "layout",
     );
   });
 
@@ -301,10 +310,18 @@ describe("MaskPanel", () => {
       screen.queryByRole("button", { name: "Apply" }),
     ).not.toBeInTheDocument();
 
-    expect(screen.getByTestId("default-sections-order")).toHaveTextContent(
+    expect(
+      screen.getByTestId("default-sections-order-mask-composite-context"),
+    ).toHaveTextContent(
       "mask_grow>feather",
     );
-    const defaultSections = screen.getByTestId("default-sections-order");
+    expect(
+      screen.queryByTestId("default-sections-order-mask-context"),
+    ).not.toBeInTheDocument();
+
+    const defaultSections = screen.getByTestId(
+      "default-sections-order-mask-composite-context",
+    );
     const deleteButton = screen.getByRole("button", { name: "Delete Mask" });
     expect(
       defaultSections.compareDocumentPosition(deleteButton) &

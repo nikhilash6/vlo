@@ -36,11 +36,11 @@ class VideoCropError(RuntimeError):
     """Raised when video cropping fails."""
 
 
-# Frontend mask WebMs are analyzed as bright-on-dark RGB video where the white
-# region is the ComfyUI replace area. After VP9/YUV roundtrips, nominal white
-# often decodes near studio-range 235 instead of 255, while black backgrounds
-# can lift slightly above 0. Use a modest cutoff so bright mask content stays
-# positive without letting dark background noise dominate the bounds.
+# Frontend/runtime mask WebMs are analyzed as bright-on-dark red-channel video.
+# After VP9/YUV roundtrips, nominal white often decodes near studio-range 235
+# instead of 255, while black backgrounds can lift slightly above 0. Use a
+# modest cutoff so bright mask content stays positive without letting dark
+# background noise dominate the bounds.
 MASK_VIDEO_WHITE_THRESHOLD = 32
 
 
@@ -79,9 +79,9 @@ def analyze_mask_video_bounds(
         accumulated: tuple[int, int, int, int] | None = None
 
         for frame in container.decode(video=0):
-            rgba = frame.to_ndarray(format="rgba")
+            rgb = frame.to_ndarray(format="rgb24")
             bounds = get_mask_bounds_from_frame(
-                rgba[:, :, 0],
+                rgb[:, :, 0],
                 threshold=MASK_VIDEO_WHITE_THRESHOLD,
             )
             accumulated = union_bounds(accumulated, bounds)

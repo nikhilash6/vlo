@@ -23,8 +23,9 @@ def get_mask_bounds_from_frame(
 ) -> tuple[int, int, int, int] | None:
     """Return (x1, y1, x2, y2) of non-zero mask pixels, or *None* if empty.
 
-    *frame* is a 2-D array (H, W) — typically the alpha channel of an RGBA
-    frame.  Pixels whose value exceeds *threshold* (~0.05 * 255) are
+    *frame* is a 2-D array (H, W) containing mask coverage values, typically
+    decoded from the red channel of a mask video. Pixels whose value exceeds
+    *threshold* (~0.05 * 255) are
     considered mask-positive.
     """
     mask = frame > threshold
