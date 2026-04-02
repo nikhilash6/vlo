@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
@@ -17,7 +17,6 @@ import {
   getDefaultTransforms,
   getEntryByType,
   getDefaultSectionId,
-  useActiveTransformationSection,
   useTransformationController,
 } from "../transformations";
 import { parseMaskClipId } from "../timeline";
@@ -48,6 +47,40 @@ const selectedConnectedButtonSx = {
     bgcolor: "#7a8292",
   },
 };
+
+function useLocalActiveSection(
+  activeContextId: string | undefined,
+  sectionOrder: string[],
+) {
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeContextId || sectionOrder.length === 0) {
+      setActiveSectionId(null);
+      return;
+    }
+
+    setActiveSectionId((currentSectionId) => {
+      if (currentSectionId && sectionOrder.includes(currentSectionId)) {
+        return currentSectionId;
+      }
+      return sectionOrder[0] ?? null;
+    });
+  }, [activeContextId, sectionOrder]);
+
+  const activateSection = useCallback(
+    (sectionId: string) => {
+      if (!activeContextId) return;
+      setActiveSectionId(sectionId);
+    },
+    [activeContextId],
+  );
+
+  return {
+    activeSectionId,
+    activateSection,
+  };
+}
 
 export const MaskPanel = memo(function MaskPanel() {
   const {
@@ -148,14 +181,14 @@ export const MaskPanel = memo(function MaskPanel() {
   const {
     activeSectionId: activeSharedSectionId,
     activateSection: activateSharedSection,
-  } = useActiveTransformationSection(
+  } = useLocalActiveSection(
     sharedMaskContextId,
     selectedClipId ? sharedSectionOrder : [],
   );
   const {
     activeSectionId: activeSelectedMaskSectionId,
     activateSection: activateSelectedMaskSection,
-  } = useActiveTransformationSection(
+  } = useLocalActiveSection(
     selectedMaskContextId,
     selectedMask ? selectedMaskSectionOrder : [],
   );
