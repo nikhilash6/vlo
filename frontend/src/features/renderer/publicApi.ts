@@ -10,4 +10,5 @@ export {
   createNonBinaryMaskOutputColorMatrixFilter,
   createTransparentAreaNeutralGrayOutputColorMatrixFilter,
 } from "./utils/outputTransformStack";
+export type { MaskOutputSource } from "./utils/outputTransformStack";
 export { default as DecoderWorker } from "./workers/decoder.worker?worker";

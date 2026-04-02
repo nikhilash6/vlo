@@ -23,3 +23,4 @@ export {
   createTransparentAreaNeutralGrayOutputColorMatrixFilter,
   DecoderWorker,
 } from "./publicApi";
+export type { MaskOutputSource } from "./publicApi";

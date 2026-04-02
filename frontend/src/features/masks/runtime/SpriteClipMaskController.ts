@@ -154,6 +154,7 @@ export class SpriteClipMaskController {
   private currentInverse = false;
   private lastContentWidth = 0;
   private lastContentHeight = 0;
+  private outputMode: "scene" | "mask" = "scene";
 
   constructor(
     sprite: Sprite,
@@ -181,6 +182,13 @@ export class SpriteClipMaskController {
     }
 
     this.ensureMaskSceneNodesAttached();
+    this.syncOutputModeVisibility();
+  }
+
+  public setOutputMode(mode: "scene" | "mask") {
+    if (this.outputMode === mode) return;
+    this.outputMode = mode;
+    this.syncOutputModeVisibility();
   }
 
   /**
@@ -408,6 +416,7 @@ export class SpriteClipMaskController {
       this.perMaskSprite.blendMode = "normal";
       this.perMaskSprite.filters = null;
     }
+    this.syncOutputModeVisibility();
   }
 
   public dispose() {
@@ -714,7 +723,7 @@ export class SpriteClipMaskController {
       compositeState,
     );
     this.renderPresentedMaskTexture(effectTexture, contentSize);
-    this.maskSprite.visible = true;
+    this.syncOutputModeVisibility();
   }
 
   private renderCompositeMaskEdgeTexture(
@@ -864,9 +873,6 @@ export class SpriteClipMaskController {
    * rounding by AlphaMaskPipe.
    */
   private applyAlphaMask(target: Sprite, inverse: boolean) {
-    if (this.renderer) {
-      this.maskContainer.visible = false;
-    }
     const previousMode = this.currentMaskMode;
 
     if (previousMode === "regular") {
@@ -896,6 +902,7 @@ export class SpriteClipMaskController {
       this.currentMaskMode = "alpha";
       this.currentInverse = inverse;
     }
+    this.syncOutputModeVisibility();
   }
 
   // ── Private: fallback mask application (no renderer) ───────────────
@@ -929,9 +936,7 @@ export class SpriteClipMaskController {
     }
 
     if (nextMode === "regular") {
-      if (this.renderer) {
-        this.maskContainer.visible = true;
-      }
+      this.syncOutputModeVisibility();
       this.setMaskOnTarget(mask, inverse);
       return;
     }
@@ -947,6 +952,7 @@ export class SpriteClipMaskController {
       }
       this.alphaMaskEffect.inverse = inverse;
       this.attachAlphaMaskEffect();
+      this.syncOutputModeVisibility();
     }
   }
 
@@ -1376,15 +1382,13 @@ export class SpriteClipMaskController {
   private removeMaskFromTarget() {
     this.currentMaskMode = "none";
     this.currentInverse = false;
-    if (this.renderer) {
-      this.maskContainer.visible = false;
-    }
     if (this.perMaskSprite) {
       this.perMaskSprite.blendMode = "normal";
       this.perMaskSprite.filters = null;
     }
     this.detachAlphaMaskEffect();
     this.setMaskOnTarget(null, false);
+    this.syncOutputModeVisibility();
   }
 
   private setMaskOnTarget(mask: Container | null, inverse: boolean) {
@@ -1423,5 +1427,23 @@ export class SpriteClipMaskController {
       texture.source &&
       !(texture.source as { destroyed?: boolean }).destroyed
     );
+  }
+
+  private syncOutputModeVisibility() {
+    if (this.renderer) {
+      this.maskContainer.visible = this.currentMaskMode === "regular";
+    }
+
+    if (!this.maskSprite) {
+      return;
+    }
+
+    const showMaskSprite =
+      this.outputMode === "mask" &&
+      this.currentMaskMode === "alpha" &&
+      this.hasUsableTexture(this.maskSprite);
+
+    this.maskSprite.visible = showMaskSprite;
+    this.maskSprite.renderable = showMaskSprite;
   }
 }
