@@ -163,7 +163,7 @@ export class SpriteClipMaskController {
     this.sprite = sprite;
     this.renderer = renderer ?? null;
     this.maskRootContainer = maskRootContainer ?? null;
-    this.maskTarget = this.maskRootContainer ?? (sprite as unknown as Container);
+    this.maskTarget = sprite as unknown as Container;
     this.maskContainer = new Container();
 
     // Keep mask nodes as siblings under a Container host (never under Sprite),
@@ -500,8 +500,9 @@ export class SpriteClipMaskController {
   // ── Private: mask compositing ──────────────────────────────────────
 
   private resolveMaskHostContainer(): Container | null {
-    if (this.maskTarget && typeof this.maskTarget.addChild === "function") {
-      return this.maskTarget;
+    const host = this.maskRootContainer ?? this.maskTarget;
+    if (host && typeof host.addChild === "function") {
+      return host;
     }
     return null;
   }

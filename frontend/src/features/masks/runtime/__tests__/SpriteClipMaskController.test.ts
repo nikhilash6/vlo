@@ -131,7 +131,7 @@ describe("SpriteClipMaskController mask composition", () => {
       new Map<string, Asset>(),
     );
 
-    const alphaMaskEffect = (root.effects?.find(
+    const alphaMaskEffect = (sprite.effects?.find(
       (effect) => effect instanceof AlphaMask,
     ) ?? null) as AlphaMask | null;
     const node = (
@@ -183,7 +183,7 @@ describe("SpriteClipMaskController mask composition", () => {
       new Map<string, Asset>(),
     );
 
-    const alphaMaskEffect = (root.effects?.find(
+    const alphaMaskEffect = (sprite.effects?.find(
       (effect) => effect instanceof AlphaMask,
     ) ?? null) as AlphaMask | null;
 
@@ -237,7 +237,7 @@ describe("SpriteClipMaskController mask composition", () => {
       new Map<string, Asset>(),
     );
 
-    const alphaMaskEffect = (root.effects?.find(
+    const alphaMaskEffect = (sprite.effects?.find(
       (effect) => effect instanceof AlphaMask,
     ) ?? null) as AlphaMask | null;
 
@@ -348,7 +348,7 @@ describe("SpriteClipMaskController mask composition", () => {
       { waitForSam2: true },
     );
 
-    const alphaMaskEffect = (root.effects?.find(
+    const alphaMaskEffect = (sprite.effects?.find(
       (effect) => effect instanceof AlphaMask,
     ) ?? null) as AlphaMask | null;
     const node = (

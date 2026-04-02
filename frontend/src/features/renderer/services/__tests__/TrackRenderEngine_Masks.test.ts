@@ -207,7 +207,8 @@ describe("TrackRenderEngine masks", () => {
 
   it("applies only masks in apply mode", () => {
     const engine = new TrackRenderEngine(1);
-    const setMaskSpy = vi.spyOn(engine.container, "setMask");
+    const sprite = (engine as unknown as { sprite: { setMask: () => void } }).sprite;
+    const setMaskSpy = vi.spyOn(sprite, "setMask");
 
     const clip = createParentClip();
     const maskApply = createMaskClip("mask_apply", "apply");
@@ -254,8 +255,13 @@ describe("TrackRenderEngine masks", () => {
 
   it("composites multiple SAM2 mask assets and requests strict frames in export mode", async () => {
     const engine = new TrackRenderEngine(1);
-    const setMaskSpy = vi.spyOn(engine.container, "setMask");
-    const addEffectSpy = vi.spyOn(engine.container, "addEffect");
+    const sprite = (
+      engine as unknown as {
+        sprite: { setMask: () => void; addEffect: () => void };
+      }
+    ).sprite;
+    const setMaskSpy = vi.spyOn(sprite, "setMask");
+    const addEffectSpy = vi.spyOn(sprite, "addEffect");
 
     const clip = createParentClip();
     const sam2MaskA = createSam2MaskClip("mask_sam2_a", "sam2_asset_a");
