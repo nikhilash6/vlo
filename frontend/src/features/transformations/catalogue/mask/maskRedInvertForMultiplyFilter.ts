@@ -38,15 +38,15 @@ uniform sampler2D uTexture;
 void main(void)
 {
     vec4 color = texture(uTexture, vTextureCoord);
-    float coverage = max(color.r, color.a);
+    float coverage = color.r;
     float inverted = 1.0 - coverage;
     finalColor = vec4(inverted, inverted, inverted, 1.0);
 }
 `;
 
 /**
- * Produces an opaque inverted coverage texture that can be multiplied into an
- * existing binary mask texture to subtract inverted mask unions.
+ * Produces an opaque inverted red-coverage texture that can be multiplied into
+ * an existing binary mask texture to subtract inverted mask unions.
  */
 export function createMaskRedInvertForMultiplyFilter(): Filter {
   return Filter.from({

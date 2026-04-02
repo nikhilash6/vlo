@@ -38,16 +38,16 @@ uniform sampler2D uTexture;
 void main(void)
 {
     vec4 color = texture(uTexture, vTextureCoord);
-    float coverage = max(color.r, color.a);
+    float coverage = color.r;
     float value = coverage >= 0.2 ? 1.0 : 0.0;
     finalColor = vec4(value, value, value, value);
 }
 `;
 
 /**
- * Hard-thresholds mask coverage into a binary white/transparent mask.
- * Coverage is derived from whichever channel carries the mask most strongly,
- * which lets the same filter handle red-coded mask videos and alpha masks.
+ * Hard-thresholds red-channel mask coverage into a binary white mask texture.
+ * Red is the canonical runtime mask channel; relying on sampled alpha breaks
+ * for non-alpha video textures because Pixi reports alpha as 1.0 everywhere.
  */
 export function createMaskBinaryThresholdFilter(): Filter {
   return Filter.from({
