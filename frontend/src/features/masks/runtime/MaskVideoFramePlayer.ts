@@ -35,15 +35,39 @@ function createMaskRenderAbortError(
   return error;
 }
 
+function createMaskSourcePrepareTimeoutError(timeoutMs: number): Error {
+  const error = new Error(
+    `Timed out waiting ${timeoutMs}ms to prepare mask video source`,
+  );
+  error.name = "TimeoutError";
+  return error;
+}
+
+function createMaskFrameTimeoutError(timeoutMs: number): Error {
+  const error = new Error(
+    `Timed out waiting ${timeoutMs}ms for strict mask frame`,
+  );
+  error.name = "TimeoutError";
+  return error;
+}
+
 export class MaskVideoFramePlayer {
+  private static readonly SOURCE_PREPARE_TIMEOUT_MS = 1500;
+  private static readonly SOURCE_PREPARE_RECOVERY_ATTEMPTS = 1;
+  private static readonly STRICT_FRAME_TIMEOUT_MS = 1500;
+  private static readonly STRICT_FRAME_RECOVERY_ATTEMPTS = 1;
+
   public readonly sprite: Sprite;
 
   private readonly clipId: string;
   private worker: Worker | null = null;
+  private sourceAsset: Asset | null = null;
   private sourceAssetId: string | null = null;
+  private sourcePrepared = false;
   private preparePromise: Promise<void> | null = null;
   private resolvePrepare: (() => void) | null = null;
   private rejectPrepare: ((error: Error) => void) | null = null;
+  private prepareTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
   private pendingStrictFrame: PendingStrictFrame | null = null;
   private strictRenderChain: Promise<void> = Promise.resolve();
   private readonly retiredTextures = new Set<Texture>();
@@ -65,63 +89,26 @@ export class MaskVideoFramePlayer {
   public async setSource(asset: Asset): Promise<void> {
     if (this.disposed) return;
 
-    if (this.sourceAssetId === asset.id && this.worker) {
-      if (this.preparePromise) {
-        await this.preparePromise;
-      }
+    if (this.sourceAssetId !== asset.id) {
+      this.disposeWorker({ abortReason: "Mask source switched" });
+      this.resetSpriteFrameState();
+      this.sourceAssetId = asset.id;
+      this.sourceAsset = null;
+    }
+
+    if (this.sourcePrepared && this.worker) {
       return;
     }
 
-    this.disposeWorker();
-    this.resetSpriteFrameState();
-    this.sourceAssetId = asset.id;
-
-    let preparedAsset = asset;
-    const needsSourceHydration =
-      !asset.file &&
-      !asset.src.startsWith("blob:") &&
-      !asset.src.startsWith("http://") &&
-      !asset.src.startsWith("https://");
-    if (needsSourceHydration) {
-      const hydratedAsset = await ensureAssetSourceLoaded(asset.id);
-      if (!hydratedAsset) {
-        throw new Error("Failed to hydrate mask video source");
+    if (!this.sourceAsset) {
+      const hydratedAsset = await this.hydrateSourceAsset(asset);
+      if (this.disposed || this.sourceAssetId !== asset.id) {
+        return;
       }
-      preparedAsset = hydratedAsset;
+      this.sourceAsset = hydratedAsset;
     }
 
-    const worker = new DecoderWorker();
-    this.worker = worker;
-    worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
-      this.handleWorkerMessage(worker, event);
-    };
-
-    this.preparePromise = new Promise<void>((resolve, reject) => {
-      this.resolvePrepare = resolve;
-      this.rejectPrepare = reject;
-    });
-
-    worker.postMessage({
-      type: "prepare",
-      url: preparedAsset.src,
-      clipId: this.clipId,
-      kind: "mask_video",
-      file: preparedAsset.file,
-    });
-
-    const timeoutId = setTimeout(() => {
-      this.rejectPrepare?.(
-        new Error("Timed out while preparing mask video source"),
-      );
-      this.resolvePrepare = null;
-      this.rejectPrepare = null;
-    }, 20_000);
-
-    try {
-      await this.preparePromise;
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    await this.ensureSourcePrepared();
   }
 
   public async renderAt(
@@ -147,6 +134,13 @@ export class MaskVideoFramePlayer {
       await this.preparePromise;
     }
 
+    if (!this.sourcePrepared) {
+      if (strict) {
+        throw createMaskRenderAbortError("Mask player has no prepared source");
+      }
+      return;
+    }
+
     if (!strict) {
       this.worker.postMessage({
         type: "render",
@@ -158,7 +152,7 @@ export class MaskVideoFramePlayer {
 
     const previousStrictRender = this.strictRenderChain.catch(() => undefined);
     const nextStrictRender = previousStrictRender.then(() =>
-      this.requestStrictFrame(timeSeconds),
+      this.renderStrictFrameWithRecovery(timeSeconds),
     );
     this.strictRenderChain = nextStrictRender.catch(() => undefined);
     await nextStrictRender;
@@ -187,9 +181,7 @@ export class MaskVideoFramePlayer {
     const message = event.data;
 
     if (message.type === "ready" && message.clipId === this.clipId) {
-      this.resolvePrepare?.();
-      this.resolvePrepare = null;
-      this.rejectPrepare = null;
+      this.resolvePendingPrepare();
       return;
     }
 
@@ -221,35 +213,178 @@ export class MaskVideoFramePlayer {
       const error = new Error(
         message.message || "Mask video decode worker error",
       );
-      this.rejectPrepare?.(error);
-      this.resolvePrepare = null;
-      this.rejectPrepare = null;
-      if (this.pendingStrictFrame) {
-        this.pendingStrictFrame.reject(error);
-        this.pendingStrictFrame = null;
+      this.rejectPendingPrepare(error);
+      this.rejectPendingStrictFrame(error);
+    }
+  }
+
+  private async hydrateSourceAsset(asset: Asset): Promise<Asset> {
+    const needsSourceHydration =
+      !asset.file &&
+      !asset.src.startsWith("blob:") &&
+      !asset.src.startsWith("http://") &&
+      !asset.src.startsWith("https://");
+    if (!needsSourceHydration) {
+      return asset;
+    }
+
+    const hydratedAsset = await ensureAssetSourceLoaded(asset.id);
+    if (!hydratedAsset) {
+      throw new Error("Failed to hydrate mask video source");
+    }
+    return hydratedAsset;
+  }
+
+  private async ensureSourcePrepared(): Promise<void> {
+    if (this.disposed || this.sourcePrepared) {
+      return;
+    }
+
+    if (!this.sourceAsset || !this.sourceAssetId) {
+      throw createMaskRenderAbortError("Mask player has no source");
+    }
+
+    for (
+      let attempt = 0;
+      attempt <= MaskVideoFramePlayer.SOURCE_PREPARE_RECOVERY_ATTEMPTS;
+      attempt += 1
+    ) {
+      if (!this.preparePromise) {
+        this.beginPreparingSource(this.sourceAsset);
+      }
+
+      try {
+        await this.preparePromise;
+        return;
+      } catch (error) {
+        if (this.disposed) {
+          return;
+        }
+
+        if (
+          error instanceof Error &&
+          error.name === "TimeoutError" &&
+          attempt < MaskVideoFramePlayer.SOURCE_PREPARE_RECOVERY_ATTEMPTS
+        ) {
+          console.warn(
+            "Mask decoder worker stalled while preparing source; recreating worker",
+            error,
+          );
+          this.resetStalledDecoderWorker();
+          continue;
+        }
+
+        throw error;
       }
     }
   }
 
-  private disposeWorker(): void {
-    if (this.pendingStrictFrame) {
-      this.pendingStrictFrame.reject(
-        createMaskRenderAbortError(
-          "Mask player disposed during strict render",
+  private beginPreparingSource(asset: Asset): void {
+    if (!this.worker) {
+      this.worker = this.createWorker();
+    }
+
+    this.sourcePrepared = false;
+    this.preparePromise = new Promise<void>((resolve, reject) => {
+      this.resolvePrepare = resolve;
+      this.rejectPrepare = reject;
+    });
+
+    this.prepareTimeoutHandle = setTimeout(() => {
+      this.rejectPendingPrepare(
+        createMaskSourcePrepareTimeoutError(
+          MaskVideoFramePlayer.SOURCE_PREPARE_TIMEOUT_MS,
         ),
       );
-      this.pendingStrictFrame = null;
+    }, MaskVideoFramePlayer.SOURCE_PREPARE_TIMEOUT_MS);
+
+    this.worker.postMessage({
+      type: "prepare",
+      url: asset.src,
+      clipId: this.clipId,
+      kind: "mask_video",
+      file: asset.file,
+    });
+  }
+
+  private resolvePendingPrepare(): void {
+    const resolvePrepare = this.resolvePrepare;
+    this.clearPrepareState();
+    this.sourcePrepared = true;
+    resolvePrepare?.();
+  }
+
+  private rejectPendingPrepare(error: Error): void {
+    const rejectPrepare = this.rejectPrepare;
+    this.clearPrepareState();
+    this.sourcePrepared = false;
+    rejectPrepare?.(error);
+  }
+
+  private clearPrepareState(): void {
+    if (this.prepareTimeoutHandle !== null) {
+      clearTimeout(this.prepareTimeoutHandle);
+      this.prepareTimeoutHandle = null;
     }
+    this.preparePromise = null;
     this.resolvePrepare = null;
     this.rejectPrepare = null;
-    this.preparePromise = null;
+  }
+
+  private rejectPendingStrictFrame(error: Error): void {
+    if (!this.pendingStrictFrame) {
+      return;
+    }
+
+    const pendingStrictFrame = this.pendingStrictFrame;
+    this.pendingStrictFrame = null;
+    pendingStrictFrame.reject(error);
+  }
+
+  private createWorker(): Worker {
+    const worker = new DecoderWorker();
+    worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+      this.handleWorkerMessage(worker, event);
+    };
+    return worker;
+  }
+
+  private disposeWorker(
+    options: {
+      abortReason?: string;
+      preserveSource?: boolean;
+    } = {},
+  ): void {
+    const {
+      abortReason = "Mask player disposed",
+      preserveSource = false,
+    } = options;
+    this.rejectPendingStrictFrame(
+      createMaskRenderAbortError(`${abortReason} during strict render`),
+    );
+    this.rejectPendingPrepare(
+      createMaskRenderAbortError(`${abortReason} during source prepare`),
+    );
 
     if (this.worker) {
       this.worker.onmessage = null;
       this.worker.terminate();
       this.worker = null;
     }
-    this.sourceAssetId = null;
+    this.sourcePrepared = false;
+
+    if (!preserveSource) {
+      this.sourceAsset = null;
+      this.sourceAssetId = null;
+    }
+  }
+
+  private resetStalledDecoderWorker(): void {
+    this.disposeWorker({
+      abortReason: "Mask decoder worker reset",
+      preserveSource: true,
+    });
+    this.worker = this.createWorker();
   }
 
   private resetSpriteFrameState(): void {
@@ -299,7 +434,47 @@ export class MaskVideoFramePlayer {
     }, 0);
   }
 
-  private async requestStrictFrame(timeSeconds: number): Promise<void> {
+  private async renderStrictFrameWithRecovery(
+    timeSeconds: number,
+  ): Promise<void> {
+    for (
+      let attempt = 0;
+      attempt <= MaskVideoFramePlayer.STRICT_FRAME_RECOVERY_ATTEMPTS;
+      attempt += 1
+    ) {
+      try {
+        await this.requestStrictFrame(timeSeconds, {
+          timeoutMs: MaskVideoFramePlayer.STRICT_FRAME_TIMEOUT_MS,
+        });
+        return;
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          throw error;
+        }
+
+        if (
+          error instanceof Error &&
+          error.name === "TimeoutError" &&
+          attempt < MaskVideoFramePlayer.STRICT_FRAME_RECOVERY_ATTEMPTS
+        ) {
+          console.warn(
+            "Mask decoder worker stalled while rendering strict frame; recreating worker",
+            error,
+          );
+          this.resetStalledDecoderWorker();
+          await this.ensureSourcePrepared();
+          continue;
+        }
+
+        throw error;
+      }
+    }
+  }
+
+  private async requestStrictFrame(
+    timeSeconds: number,
+    options: { timeoutMs?: number } = {},
+  ): Promise<void> {
     if (this.disposed) {
       throw createMaskRenderAbortError("Mask player has been disposed");
     }
@@ -316,15 +491,48 @@ export class MaskVideoFramePlayer {
       throw createMaskRenderAbortError("Mask player has been disposed");
     }
 
-    if (!this.worker || !this.sourceAssetId) {
-      throw createMaskRenderAbortError("Mask player has no source");
+    if (!this.worker || !this.sourceAssetId || !this.sourcePrepared) {
+      throw createMaskRenderAbortError("Mask player has no prepared source");
     }
 
     const promise = new Promise<void>((resolve, reject) => {
-      this.pendingStrictFrame = {
-        resolve,
-        reject,
+      const { timeoutMs } = options;
+      let isSettled = false;
+      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+      const settleResolve = () => {
+        if (isSettled) return;
+        isSettled = true;
+        if (timeoutHandle !== null) {
+          clearTimeout(timeoutHandle);
+        }
+        if (this.pendingStrictFrame === pendingStrictFrame) {
+          this.pendingStrictFrame = null;
+        }
+        resolve();
       };
+      const settleReject = (error: Error) => {
+        if (isSettled) return;
+        isSettled = true;
+        if (timeoutHandle !== null) {
+          clearTimeout(timeoutHandle);
+        }
+        if (this.pendingStrictFrame === pendingStrictFrame) {
+          this.pendingStrictFrame = null;
+        }
+        reject(error);
+      };
+
+      const pendingStrictFrame: PendingStrictFrame = {
+        resolve: settleResolve,
+        reject: settleReject,
+      };
+
+      this.pendingStrictFrame = pendingStrictFrame;
+      if (typeof timeoutMs === "number" && timeoutMs > 0) {
+        timeoutHandle = setTimeout(() => {
+          settleReject(createMaskFrameTimeoutError(timeoutMs));
+        }, timeoutMs);
+      }
       this.worker?.postMessage({
         type: "render",
         clipId: this.clipId,

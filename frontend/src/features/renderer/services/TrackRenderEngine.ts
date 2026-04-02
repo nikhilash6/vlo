@@ -22,6 +22,17 @@ function createRenderAbortError(): Error {
   return error;
 }
 
+function createLiveFrameTimeoutError(
+  timeoutMs: number,
+  clipId: string,
+): Error {
+  const error = new Error(
+    `Timed out waiting ${timeoutMs}ms for live frame ${clipId}`,
+  );
+  error.name = "TimeoutError";
+  return error;
+}
+
 interface LiveRenderRequest {
   clip: TimelineClip;
   maskClips: MaskTimelineClip[];
@@ -41,6 +52,15 @@ interface PendingLiveFrame {
   reject: (error: Error) => void;
 }
 
+interface InFlightSynchronizedRender {
+  activeClip: TimelineClip;
+  assets: Asset[];
+  currentTime: number;
+  fps: number;
+  maskClips: MaskTimelineClip[];
+  promise: Promise<void>;
+}
+
 /**
  * Encapsulates the rendering logic for a single track.
  * Manages the WebWorker, PIXI.Sprite, and frame synchronization.
@@ -52,6 +72,8 @@ interface PendingLiveFrame {
 export class TrackRenderEngine {
   private static readonly MAX_LIVE_RENDER_QUEUE = 4;
   private static readonly MAX_LIVE_REQUEST_AGE_MS = 180;
+  private static readonly LIVE_FRAME_TIMEOUT_MS = 1500;
+  private static readonly SYNCHRONIZED_RECOVERY_ATTEMPTS = 1;
 
   public readonly sprite: Sprite;
   public readonly container: Container;
@@ -81,6 +103,7 @@ export class TrackRenderEngine {
   private liveRenderQueue: LiveRenderRequest[] = [];
   private pendingAssetHydrations = new Set<string>();
   private livePipelineBusy = false;
+  private inFlightSynchronizedRender: InFlightSynchronizedRender | null = null;
 
   // Deferred texture cleanup to avoid null-source races during hot swaps
   private readonly retiredTextures = new Set<Texture>();
@@ -105,8 +128,7 @@ export class TrackRenderEngine {
     onFrameReady?: (clipId: string, transformTime: number) => void,
     renderer?: Renderer | null,
   ) {
-    this.worker = new DecoderWorker();
-    this.worker.onmessage = this.handleWorkerMessage.bind(this);
+    this.worker = this.createWorker();
     this.onFrameReady = onFrameReady;
 
     this.sprite = new Sprite();
@@ -199,10 +221,11 @@ export class TrackRenderEngine {
     const currentFrameIndex = this.getFrameIndex(renderTimeSeconds, fps);
 
     const shouldSend =
-      !this.lastRenderRequest ||
-      this.lastRenderRequest.frameIndex !== currentFrameIndex ||
-      this.lastRenderRequest.clipId !== activeClip.id ||
-      this.lastRenderRequest.assetId !== activeClip.assetId ||
+      this.shouldRequestFrame(
+        activeClip,
+        currentFrameIndex,
+        renderTimeSeconds,
+      ) ||
       this.pendingResolve !== null; // Always send if strictly awaiting (Export)
 
     if (shouldSend && shouldRender) {
@@ -269,19 +292,9 @@ export class TrackRenderEngine {
     options: { fps?: number } = {},
   ): Promise<void> {
     const { fps = 30 } = options;
-    const nowMs = performance.now();
-    const assetById = this.syncPreparedClips(
-      currentTime,
-      trackClips,
-      assets,
-      nowMs,
-      false,
-    );
-
-    this.invalidateLivePipeline();
-
     const activeClip = findActiveClipAtTicks(trackClips, currentTime);
     if (!activeClip) {
+      this.invalidateLivePipeline();
       this.sprite.visible = false;
       this.currentTextureClipId = null;
       this.maskController.clear();
@@ -296,76 +309,177 @@ export class TrackRenderEngine {
     }
 
     const maskClips = maskClipsByParent.get(activeClip.id) ?? [];
+    const inFlightSynchronizedRender = this.inFlightSynchronizedRender;
+    if (
+      inFlightSynchronizedRender &&
+      inFlightSynchronizedRender.currentTime === currentTime &&
+      inFlightSynchronizedRender.fps === fps &&
+      inFlightSynchronizedRender.activeClip === activeClip &&
+      this.areSameMaskClipList(
+        inFlightSynchronizedRender.maskClips,
+        maskClips,
+      ) &&
+      inFlightSynchronizedRender.assets === assets
+    ) {
+      return inFlightSynchronizedRender.promise;
+    }
+
+    const renderPromise = this.renderSynchronizedPlaybackFrameInternal(
+      currentTime,
+      trackClips,
+      assets,
+      logicalDimensions,
+      {
+        activeClip,
+        fps,
+        localTimeSeconds,
+        maskClips,
+        rawTimeSeconds,
+      },
+    );
+
+    this.inFlightSynchronizedRender = {
+      activeClip,
+      assets,
+      currentTime,
+      fps,
+      maskClips,
+      promise: renderPromise,
+    };
+
+    try {
+      await renderPromise;
+    } finally {
+      if (this.inFlightSynchronizedRender?.promise === renderPromise) {
+        this.inFlightSynchronizedRender = null;
+      }
+    }
+  }
+
+  private async renderSynchronizedPlaybackFrameInternal(
+    currentTime: number,
+    trackClips: TimelineClip[],
+    assets: Asset[],
+    logicalDimensions: { width: number; height: number },
+    request: {
+      activeClip: TimelineClip;
+      fps: number;
+      localTimeSeconds: number;
+      maskClips: MaskTimelineClip[];
+      rawTimeSeconds: number;
+    },
+  ): Promise<void> {
+    const {
+      activeClip,
+      fps,
+      localTimeSeconds,
+      maskClips,
+      rawTimeSeconds,
+    } = request;
     const renderTimeSeconds = snapFrameTimeSeconds(localTimeSeconds, fps);
     const currentFrameIndex = this.getFrameIndex(renderTimeSeconds, fps);
-    const shouldSend =
-      !this.lastRenderRequest ||
-      this.lastRenderRequest.frameIndex !== currentFrameIndex ||
-      this.lastRenderRequest.clipId !== activeClip.id ||
-      this.lastRenderRequest.assetId !== activeClip.assetId;
+    for (
+      let attempt = 0;
+      attempt <= TrackRenderEngine.SYNCHRONIZED_RECOVERY_ATTEMPTS;
+      attempt += 1
+    ) {
+      const nowMs = performance.now();
+      const assetById = this.syncPreparedClips(
+        currentTime,
+        trackClips,
+        assets,
+        nowMs,
+        false,
+      );
 
-    if (shouldSend) {
-      this.lastRenderRequest = {
-        time: renderTimeSeconds,
-        clipId: activeClip.id,
-        assetId: activeClip.assetId,
-        frameIndex: currentFrameIndex,
-      };
+      this.invalidateLivePipeline();
 
-      try {
-        const [frame] = await Promise.all([
-          this.requestStrictLiveFrame(
-            renderTimeSeconds,
-            activeClip.id,
-            rawTimeSeconds,
-          ),
-          this.maskController.syncMaskClips(
+      const shouldSend = this.shouldRequestFrame(
+        activeClip,
+        currentFrameIndex,
+        renderTimeSeconds,
+      );
+
+      if (shouldSend) {
+        this.lastRenderRequest = {
+          time: renderTimeSeconds,
+          clipId: activeClip.id,
+          assetId: activeClip.assetId,
+          frameIndex: currentFrameIndex,
+        };
+
+        try {
+          const [frame] = await Promise.all([
+            this.requestStrictLiveFrame(
+              renderTimeSeconds,
+              activeClip.id,
+              rawTimeSeconds,
+              { timeoutMs: TrackRenderEngine.LIVE_FRAME_TIMEOUT_MS },
+            ),
+            this.maskController.syncMaskClips(
+              maskClips,
+              activeClip,
+              logicalDimensions,
+              rawTimeSeconds,
+              assetById,
+              { fps, waitForSam2: true },
+            ),
+          ]);
+
+          if (frame.bitmap) {
+            const texture = Texture.from(frame.bitmap);
+            this.applyTexture(texture, activeClip.id);
+          } else if (this.currentTextureClipId !== activeClip.id) {
+            this.sprite.visible = false;
+            this.currentTextureClipId = null;
+          }
+        } catch (error) {
+          if (error instanceof Error && error.name === "AbortError") {
+            return;
+          }
+
+          if (
+            error instanceof Error &&
+            error.name === "TimeoutError" &&
+            attempt < TrackRenderEngine.SYNCHRONIZED_RECOVERY_ATTEMPTS
+          ) {
+            console.warn(
+              "Live decoder worker stalled during synchronized playback; recreating worker",
+              error,
+            );
+            this.resetStalledLiveDecoderWorker();
+            continue;
+          }
+
+          console.warn("Failed to prepare synchronized playback frame", error);
+          return;
+        }
+      } else {
+        try {
+          await this.maskController.syncMaskClips(
             maskClips,
             activeClip,
             logicalDimensions,
             rawTimeSeconds,
             assetById,
-            { fps, waitForSam2: true },
-          ),
-        ]);
-
-        if (frame.bitmap) {
-          const texture = Texture.from(frame.bitmap);
-          this.applyTexture(texture, activeClip.id);
-        } else if (this.currentTextureClipId !== activeClip.id) {
-          this.sprite.visible = false;
-          this.currentTextureClipId = null;
+            { fps, skipSam2FrameRender: true },
+          );
+        } catch (error) {
+          console.warn("Failed to sync synchronized playback masks", error);
         }
-      } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          return;
-        }
-        console.warn("Failed to prepare synchronized playback frame", error);
-        return;
       }
-    } else {
-      try {
-        await this.maskController.syncMaskClips(
-          maskClips,
+
+      if (this.sprite.visible && this.currentTextureClipId === activeClip.id) {
+        applyClipTransforms(
+          this.sprite,
           activeClip,
           logicalDimensions,
           rawTimeSeconds,
-          assetById,
-          { fps, skipSam2FrameRender: true },
         );
-      } catch (error) {
-        console.warn("Failed to sync synchronized playback masks", error);
+        this.maskController.syncMaskSpriteTransform();
       }
-    }
 
-    if (this.sprite.visible && this.currentTextureClipId === activeClip.id) {
-      applyClipTransforms(
-        this.sprite,
-        activeClip,
-        logicalDimensions,
-        rawTimeSeconds,
-      );
-      this.maskController.syncMaskSpriteTransform();
+      return;
     }
   }
 
@@ -498,6 +612,12 @@ export class TrackRenderEngine {
     void this.runLiveRenderPipeline();
   }
 
+  private createWorker(): Worker {
+    const worker = new DecoderWorker();
+    worker.onmessage = this.handleWorkerMessage.bind(this);
+    return worker;
+  }
+
   private syncPreparedClips(
     currentTime: number,
     trackClips: TimelineClip[],
@@ -626,6 +746,54 @@ export class TrackRenderEngine {
     return Math.floor((localTimeSeconds + frameEpsilonSeconds) * safeFps);
   }
 
+  private hasRenderableTextureForClip(clipId: string): boolean {
+    const texture = this.sprite.texture;
+    return (
+      this.currentTextureClipId === clipId &&
+      this.sprite.visible &&
+      texture !== null &&
+      texture !== undefined &&
+      texture !== Texture.EMPTY &&
+      texture.width > 1 &&
+      texture.height > 1
+    );
+  }
+
+  private shouldRequestFrame(
+    activeClip: TimelineClip,
+    currentFrameIndex: number,
+    renderTimeSeconds: number,
+  ): boolean {
+    return (
+      !this.lastRenderRequest ||
+      this.lastRenderRequest.frameIndex !== currentFrameIndex ||
+      this.lastRenderRequest.clipId !== activeClip.id ||
+      this.lastRenderRequest.assetId !== activeClip.assetId ||
+      this.lastRenderRequest.time !== renderTimeSeconds ||
+      !this.hasRenderableTextureForClip(activeClip.id)
+    );
+  }
+
+  private areSameMaskClipList(
+    left: readonly MaskTimelineClip[],
+    right: readonly MaskTimelineClip[],
+  ): boolean {
+    if (left === right) {
+      return true;
+    }
+    if (left.length !== right.length) {
+      return false;
+    }
+
+    for (let index = 0; index < left.length; index += 1) {
+      if (left[index] !== right[index]) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   private async runLiveRenderPipeline(): Promise<void> {
     if (this.livePipelineBusy || this.disposed) return;
     this.livePipelineBusy = true;
@@ -690,6 +858,7 @@ export class TrackRenderEngine {
     localTimeSeconds: number,
     clipId: string,
     transformTime: number,
+    options: { timeoutMs?: number } = {},
   ): Promise<{
     bitmap: ImageBitmap | null;
     clipId: string;
@@ -698,7 +867,47 @@ export class TrackRenderEngine {
     this.rejectPendingLiveFrame(createRenderAbortError());
 
     return new Promise((resolve, reject) => {
-      this.pendingLiveFrame = { resolve, reject };
+      const { timeoutMs } = options;
+      let isSettled = false;
+      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+      const settleResolve = (payload: {
+        bitmap: ImageBitmap | null;
+        clipId: string;
+        transformTime: number | undefined;
+      }) => {
+        if (isSettled) return;
+        isSettled = true;
+        if (timeoutHandle !== null) {
+          clearTimeout(timeoutHandle);
+        }
+        if (this.pendingLiveFrame === pendingLiveFrame) {
+          this.pendingLiveFrame = null;
+        }
+        resolve(payload);
+      };
+      const settleReject = (error: Error) => {
+        if (isSettled) return;
+        isSettled = true;
+        if (timeoutHandle !== null) {
+          clearTimeout(timeoutHandle);
+        }
+        if (this.pendingLiveFrame === pendingLiveFrame) {
+          this.pendingLiveFrame = null;
+        }
+        reject(error);
+      };
+
+      const pendingLiveFrame: PendingLiveFrame = {
+        resolve: (payload) => settleResolve(payload),
+        reject: (error) => settleReject(error),
+      };
+
+      this.pendingLiveFrame = pendingLiveFrame;
+      if (typeof timeoutMs === "number" && timeoutMs > 0) {
+        timeoutHandle = setTimeout(() => {
+          settleReject(createLiveFrameTimeoutError(timeoutMs, clipId));
+        }, timeoutMs);
+      }
       this.worker.postMessage({
         type: "render",
         time: localTimeSeconds,
@@ -712,6 +921,17 @@ export class TrackRenderEngine {
   private invalidateLivePipeline() {
     this.liveRenderQueue.length = 0;
     this.rejectPendingLiveFrame(createRenderAbortError());
+  }
+
+  private resetStalledLiveDecoderWorker() {
+    this.rejectPendingLiveFrame(createRenderAbortError());
+    this.liveRenderQueue.length = 0;
+    this.lastRenderRequest = null;
+    this.preparedClips.clear();
+    this.preparedClipTouchedAtMs.clear();
+
+    this.worker.terminate();
+    this.worker = this.createWorker();
   }
 
   private pruneLiveRenderQueue(nowMs: number) {
@@ -795,6 +1015,7 @@ export class TrackRenderEngine {
   public dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.inFlightSynchronizedRender = null;
 
     this.rejectPendingFrame(createRenderAbortError());
     this.rejectPendingLiveFrame(createRenderAbortError());

@@ -1,34 +1,142 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Asset } from "../../../../types/Asset";
 
-const mockWorkers: Array<{
-  onmessage: ((event: MessageEvent) => void) | null;
-  postMessage: ReturnType<typeof vi.fn>;
-  terminate: ReturnType<typeof vi.fn>;
-}> = [];
+const { mockWorkers, mockWorkerPlans } = vi.hoisted(() => {
+  const workers: Array<{
+    onmessage: ((event: MessageEvent) => void) | null;
+    postMessage: ReturnType<typeof vi.fn>;
+    terminate: ReturnType<typeof vi.fn>;
+  }> = [];
+  const plans: Array<{
+    prepare?: "error" | "hang" | "ready";
+    render?: Array<"error" | "frame" | "hang">;
+  }> = [];
 
-vi.mock("../../../renderer/workers/decoder.worker?worker", () => ({
-  default: class {
+  return {
+    mockWorkers: workers,
+    mockWorkerPlans: plans,
+  };
+});
+
+vi.mock("../../../renderer", () => ({
+  DecoderWorker: class MockWorker {
     onmessage: ((event: MessageEvent) => void) | null = null;
-    postMessage = vi.fn(
-      (message: { type: "prepare" | "render"; clipId: string }) => {
+    readonly postMessage = vi.fn(
+      (message: {
+        clipId: string;
+        strict?: boolean;
+        time?: number;
+        type: "prepare" | "render";
+      }) => {
+        if (!this.onmessage) {
+          return;
+        }
+
         if (message.type === "prepare") {
+          const prepareBehavior = this.plan.prepare ?? "ready";
+          if (prepareBehavior === "hang") {
+            return;
+          }
+
+          setTimeout(() => {
+            if (prepareBehavior === "error") {
+              this.onmessage?.({
+                data: {
+                  type: "error",
+                  message: "prepare failed",
+                },
+              } as MessageEvent);
+              return;
+            }
+
+            this.onmessage?.({
+              data: {
+                type: "ready",
+                clipId: message.clipId,
+              },
+            } as MessageEvent);
+          }, 0);
+          return;
+        }
+
+        const renderBehavior = this.plan.render.shift() ?? "frame";
+        if (renderBehavior === "hang") {
+          return;
+        }
+
+        setTimeout(() => {
+          if (renderBehavior === "error") {
+            this.onmessage?.({
+              data: {
+                type: "error",
+                message: "render failed",
+              },
+            } as MessageEvent);
+            return;
+          }
+
           this.onmessage?.({
             data: {
-              type: "ready",
+              type: "frame",
               clipId: message.clipId,
+              bitmap: null,
             },
           } as MessageEvent);
-        }
+        }, 0);
       },
     );
-    terminate = vi.fn();
+    readonly terminate = vi.fn();
+    private readonly plan: {
+      prepare?: "error" | "hang" | "ready";
+      render: Array<"error" | "frame" | "hang">;
+    };
 
     constructor() {
+      const nextPlan = mockWorkerPlans.shift() ?? {};
+      this.plan = {
+        prepare: nextPlan.prepare,
+        render: [...(nextPlan.render ?? [])],
+      };
       mockWorkers.push(this);
     }
   },
 }));
+
+vi.mock("../../../userAssets", () => ({
+  ensureAssetSourceLoaded: vi.fn(async () => null),
+}));
+
+vi.mock("pixi.js", () => {
+  const textureEmpty = {
+    width: 1,
+    height: 1,
+    destroyed: false,
+    destroy: vi.fn(),
+  };
+
+  class MockSprite {
+    anchor = { set: vi.fn() };
+    texture = textureEmpty;
+    visible = true;
+    destroyed = false;
+    destroy = vi.fn(() => {
+      this.destroyed = true;
+    });
+  }
+
+  return {
+    Sprite: MockSprite,
+    Texture: {
+      from: vi.fn((bitmap?: { width?: number; height?: number }) => ({
+        width: bitmap?.width ?? 1,
+        height: bitmap?.height ?? 1,
+        destroyed: false,
+        destroy: vi.fn(),
+      })),
+      EMPTY: textureEmpty,
+    },
+  };
+});
 
 import { MaskVideoFramePlayer } from "../MaskVideoFramePlayer";
 
@@ -45,25 +153,33 @@ function createMaskAsset(id: string): Asset {
 
 describe("MaskVideoFramePlayer", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     mockWorkers.length = 0;
+    mockWorkerPlans.length = 0;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("serializes overlapping strict frame requests", async () => {
+    mockWorkerPlans.push({
+      prepare: "ready",
+      render: ["frame", "frame"],
+    });
+
     const player = new MaskVideoFramePlayer("clip_1");
-    await player.setSource(createMaskAsset("mask_asset"));
+    const setSourcePromise = player.setSource(createMaskAsset("mask_asset"));
+    await vi.runAllTimersAsync();
+    await setSourcePromise;
 
     const worker = mockWorkers[0];
     expect(worker).toBeDefined();
 
     const firstRender = player.renderAt(0, { strict: true });
     const secondRender = player.renderAt(1, { strict: true });
-
-    await vi.waitFor(() => {
-      const renderMessages = worker.postMessage.mock.calls
-        .map((call) => call[0])
-        .filter((message) => message.type === "render");
-      expect(renderMessages).toHaveLength(1);
-    });
+    await Promise.resolve();
+    await Promise.resolve();
 
     const renderMessagesBeforeResolve = worker.postMessage.mock.calls
       .map((call) => call[0])
@@ -71,28 +187,8 @@ describe("MaskVideoFramePlayer", () => {
     expect(renderMessagesBeforeResolve).toHaveLength(1);
     expect(renderMessagesBeforeResolve[0]?.time).toBe(0);
 
-    let secondSettled = false;
-    void secondRender.then(() => {
-      secondSettled = true;
-    });
-    await Promise.resolve();
-    expect(secondSettled).toBe(false);
-
-    worker.onmessage?.({
-      data: {
-        type: "frame",
-        clipId: "mask_video_clip_1",
-        bitmap: null,
-      },
-    } as MessageEvent);
-
-    await firstRender;
-    await vi.waitFor(() => {
-      const renderMessages = worker.postMessage.mock.calls
-        .map((call) => call[0])
-        .filter((message) => message.type === "render");
-      expect(renderMessages).toHaveLength(2);
-    });
+    await vi.runAllTimersAsync();
+    await Promise.all([firstRender, secondRender]);
 
     const renderMessagesAfterResolve = worker.postMessage.mock.calls
       .map((call) => call[0])
@@ -100,15 +196,83 @@ describe("MaskVideoFramePlayer", () => {
     expect(renderMessagesAfterResolve).toHaveLength(2);
     expect(renderMessagesAfterResolve[1]?.time).toBe(1);
 
-    worker.onmessage?.({
-      data: {
-        type: "frame",
-        clipId: "mask_video_clip_1",
-        bitmap: null,
-      },
-    } as MessageEvent);
+    player.dispose();
+  });
 
-    await expect(secondRender).resolves.toBeUndefined();
+  it("recreates the stalled worker and retries source preparation after a timeout", async () => {
+    mockWorkerPlans.push({ prepare: "hang" }, { prepare: "ready" });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const player = new MaskVideoFramePlayer("clip_1");
+    const setSourcePromise = player.setSource(createMaskAsset("mask_asset"));
+
+    const timeoutMs = (
+      MaskVideoFramePlayer as unknown as Record<string, number>
+    )["SOURCE_PREPARE_TIMEOUT_MS"];
+    await vi.advanceTimersByTimeAsync(timeoutMs + 20);
+    await vi.runAllTimersAsync();
+    await setSourcePromise;
+
+    expect(mockWorkers).toHaveLength(2);
+    expect(mockWorkers[0]?.terminate).toHaveBeenCalledTimes(1);
+    expect(mockWorkers[1]?.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "prepare",
+        clipId: "mask_video_clip_1",
+      }),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Mask decoder worker stalled while preparing source; recreating worker",
+      expect.any(Error),
+    );
+
+    warnSpy.mockRestore();
+    player.dispose();
+  });
+
+  it("recreates the stalled worker and retries a strict frame after a timeout", async () => {
+    mockWorkerPlans.push(
+      { prepare: "ready", render: ["hang"] },
+      { prepare: "ready", render: ["frame"] },
+    );
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const player = new MaskVideoFramePlayer("clip_1");
+    const setSourcePromise = player.setSource(createMaskAsset("mask_asset"));
+    await vi.runAllTimersAsync();
+    await setSourcePromise;
+
+    const renderPromise = player.renderAt(1, { strict: true });
+
+    const timeoutMs = (
+      MaskVideoFramePlayer as unknown as Record<string, number>
+    )["STRICT_FRAME_TIMEOUT_MS"];
+    await vi.advanceTimersByTimeAsync(timeoutMs + 20);
+    await vi.runAllTimersAsync();
+    await renderPromise;
+
+    expect(mockWorkers).toHaveLength(2);
+    expect(mockWorkers[0]?.terminate).toHaveBeenCalledTimes(1);
+    expect(mockWorkers[1]?.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "prepare",
+        clipId: "mask_video_clip_1",
+      }),
+    );
+    expect(mockWorkers[1]?.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "render",
+        clipId: "mask_video_clip_1",
+        strict: true,
+        time: 1,
+      }),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Mask decoder worker stalled while rendering strict frame; recreating worker",
+      expect.any(Error),
+    );
+
+    warnSpy.mockRestore();
     player.dispose();
   });
 });
