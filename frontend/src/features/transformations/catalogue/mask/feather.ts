@@ -29,6 +29,7 @@ export const featherDefinition: TransformationDefinition = {
     state.feather = {
       amount,
       mode,
+      invert: transform.parameters.invert === true,
     };
   },
   uiConfig: {
@@ -58,6 +59,13 @@ export const featherDefinition: TransformationDefinition = {
             max: 100,
             step: 1,
             supportsSpline: true,
+          },
+          {
+            type: "checkbox",
+            label: "Apply To Inverse",
+            name: "invert",
+            hidden: true,
+            defaultValue: false,
           },
         ],
       },

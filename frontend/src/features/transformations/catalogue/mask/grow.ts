@@ -20,7 +20,10 @@ export const maskGrowDefinition: TransformationDefinition = {
       amount = resolveScalar(amountParam, context.time ?? 0, 0);
     }
 
-    state.maskGrow = { amount };
+    state.maskGrow = {
+      amount,
+      invert: transform.parameters.invert === true,
+    };
   },
   uiConfig: {
     groups: [
@@ -38,6 +41,13 @@ export const maskGrowDefinition: TransformationDefinition = {
             max: 100,
             step: 1,
             supportsSpline: true,
+          },
+          {
+            type: "checkbox",
+            label: "Apply To Inverse",
+            name: "invert",
+            hidden: true,
+            defaultValue: false,
           },
         ],
       },

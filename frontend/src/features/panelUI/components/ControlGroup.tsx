@@ -104,7 +104,7 @@ export const ControlGroup = memo(function ControlGroup({
           alignItems: "center",
         }}
       >
-        {group.controls.map((control) => (
+        {group.controls.filter((control) => !control.hidden).map((control) => (
           <React.Fragment key={control.name}>
             {renderControl({
               control,

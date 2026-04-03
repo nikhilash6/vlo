@@ -36,7 +36,7 @@ describe("maskGrowDefinition handler", () => {
 
     maskGrowDefinition.handler(state, transform, context);
 
-    expect(state.maskGrow).toEqual({ amount: 12 });
+    expect(state.maskGrow).toEqual({ amount: 12, invert: false });
   });
 
   it("resolves spline amount at current time", () => {
@@ -54,5 +54,14 @@ describe("maskGrowDefinition handler", () => {
     maskGrowDefinition.handler(state, transform, { ...context, time: 5 });
 
     expect(state.maskGrow?.amount).toBeCloseTo(10);
+  });
+
+  it("reads the invert flag", () => {
+    const state = createBaseState();
+    const transform = createTransform({ amount: 12, invert: true });
+
+    maskGrowDefinition.handler(state, transform, context);
+
+    expect(state.maskGrow?.invert).toBe(true);
   });
 });

@@ -123,6 +123,7 @@ describe("useTransformationController mask target", () => {
         type: "mask_grow",
         parameters: {
           amount: 18,
+          invert: false,
         },
       }),
     ]);

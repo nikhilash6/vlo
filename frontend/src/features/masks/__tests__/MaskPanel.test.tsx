@@ -2,9 +2,11 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { MaskPanel } from "../MaskPanel";
 import { useMaskPanel } from "../hooks/useMaskPanel";
-import type { TimelineClip } from "../../../types/TimelineTypes";
+import type { ClipTransform, TimelineClip } from "../../../types/TimelineTypes";
 
 vi.mock("../hooks/useMaskPanel");
+const mockSetSharedMaskTransforms = vi.fn();
+let mockSharedMaskTransforms: ClipTransform[] = [];
 vi.mock("../../transformations", () => ({
   useTransformationController: (
     options?: { target?: "clip" | "mask" | "maskComposite" | "auto" },
@@ -13,9 +15,13 @@ vi.mock("../../transformations", () => ({
       options?.target === "maskComposite"
         ? "mask-composite-context"
         : "mask-context",
-    activeTransforms: [],
+    activeTransforms:
+      options?.target === "maskComposite" ? mockSharedMaskTransforms : [],
     activeTimelineClip: null,
-    setActiveTransforms: vi.fn(),
+    setActiveTransforms:
+      options?.target === "maskComposite"
+        ? mockSetSharedMaskTransforms
+        : vi.fn(),
     updateActiveTransform: vi.fn(),
     handleSetDefaultGroupsEnabled: vi.fn(),
     handleCommit: vi.fn(),
@@ -36,6 +42,19 @@ vi.mock("../../transformations", () => ({
   getDefaultTransforms: () => [
     { type: "layout", label: "Layout", uiConfig: { groups: [] } },
   ],
+  createAddTransform: (type: string) => ({
+    id: `${type}_created`,
+    type,
+    isEnabled: true,
+    parameters:
+      type === "feather"
+        ? { mode: "hard_outer", amount: 0, invert: false }
+        : { amount: 0, invert: false },
+  }),
+  insertTransformRespectingDefaultOrder: (
+    transforms: ClipTransform[],
+    transform: ClipTransform,
+  ) => [...transforms, transform],
   getEntryByType: (type: string) =>
     type === "mask_grow"
       ? { type: "mask_grow", label: "Grow", uiConfig: { groups: [] } }
@@ -100,6 +119,7 @@ describe("MaskPanel", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSharedMaskTransforms = [];
     baseHookValue = {
       selectedClipId: "clip_1",
       masks: [],
@@ -285,6 +305,87 @@ describe("MaskPanel", () => {
     expect(screen.getByTestId("default-sections-order-mask-context")).toHaveTextContent(
       "layout",
     );
+  });
+
+  it("shares one inverse toggle across grow and feather", () => {
+    mockSharedMaskTransforms = [
+      {
+        id: "grow_1",
+        type: "mask_grow",
+        isEnabled: true,
+        parameters: {
+          amount: 18,
+          invert: false,
+        },
+      },
+      {
+        id: "feather_1",
+        type: "feather",
+        isEnabled: true,
+        parameters: {
+          mode: "hard_outer",
+          amount: 24,
+          invert: false,
+        },
+      },
+    ];
+    vi.mocked(useMaskPanel).mockReturnValue({
+      ...baseHookValue,
+      masks: [createMaskClip("clip_1", "mask_1", "triangle")],
+      selectedMaskId: "mask_1",
+      selectedMask: createMaskClip("clip_1", "mask_1", "triangle"),
+    });
+
+    render(<MaskPanel />);
+
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Apply To Inverse" }),
+    );
+
+    expect(mockSetSharedMaskTransforms).toHaveBeenCalledWith([
+      expect.objectContaining({
+        type: "mask_grow",
+        parameters: expect.objectContaining({
+          invert: true,
+        }),
+      }),
+      expect.objectContaining({
+        type: "feather",
+        parameters: expect.objectContaining({
+          invert: true,
+        }),
+      }),
+    ]);
+  });
+
+  it("materializes both shared edge transforms when toggling inverse with none present", () => {
+    vi.mocked(useMaskPanel).mockReturnValue({
+      ...baseHookValue,
+      masks: [createMaskClip("clip_1", "mask_1", "triangle")],
+      selectedMaskId: "mask_1",
+      selectedMask: createMaskClip("clip_1", "mask_1", "triangle"),
+    });
+
+    render(<MaskPanel />);
+
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Apply To Inverse" }),
+    );
+
+    expect(mockSetSharedMaskTransforms).toHaveBeenCalledWith([
+      expect.objectContaining({
+        type: "mask_grow",
+        parameters: expect.objectContaining({
+          invert: true,
+        }),
+      }),
+      expect.objectContaining({
+        type: "feather",
+        parameters: expect.objectContaining({
+          invert: true,
+        }),
+      }),
+    ]);
   });
 
   it("renders Sam2MaskPanel when a SAM2 mask is selected", () => {

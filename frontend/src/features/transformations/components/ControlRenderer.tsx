@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, memo, useMemo } from "react";
 import {
   Box,
+  Checkbox,
+  FormControlLabel,
   IconButton,
 } from "@mui/material";
 import type { ControlDefinition } from "../../panelUI/types";
@@ -374,6 +376,21 @@ export const ControlRenderer = memo(function ControlRenderer({
   if (control.type === "select") {
     return (
       <SelectControl control={control} value={value} onCommit={onCommit} />
+    );
+  }
+
+  if (control.type === "checkbox") {
+    return (
+      <FormControlLabel
+        control={
+          <Checkbox
+            size="small"
+            checked={value === true}
+            onChange={(_, checked) => onCommit(checked)}
+          />
+        }
+        label={control.label}
+      />
     );
   }
 

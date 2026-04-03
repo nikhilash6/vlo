@@ -130,4 +130,67 @@ describe("useTimelineStore shared mask composite transforms", () => {
       ),
     ).toBe(false);
   });
+
+  it("auto-syncs shared edge inversion when a mask inversion changes", () => {
+    const legacyMask = createLegacyMaskClip();
+
+    useTimelineStore.getState().replaceTimelineSnapshot({
+      tracks: [createTrack("track_1")],
+      clips: [createParentClip(legacyMask.id), legacyMask],
+    });
+
+    useTimelineStore
+      .getState()
+      .updateClipMask("clip_1", "mask_1", { maskInverted: true });
+
+    let parentClip = useTimelineStore.getState().clips.find(
+      (clip): clip is StandardTimelineClip =>
+        clip.id === "clip_1" && clip.type !== "mask",
+    );
+
+    expect(parentClip?.maskCompositeTransformations).toEqual([
+      expect.objectContaining({
+        type: "mask_grow",
+        parameters: expect.objectContaining({
+          amount: 18,
+          invert: true,
+        }),
+      }),
+      expect.objectContaining({
+        type: "feather",
+        parameters: expect.objectContaining({
+          mode: "hard_outer",
+          amount: 24,
+          invert: true,
+        }),
+      }),
+    ]);
+
+    useTimelineStore
+      .getState()
+      .updateClipMask("clip_1", "mask_1", { maskInverted: false });
+
+    parentClip = useTimelineStore.getState().clips.find(
+      (clip): clip is StandardTimelineClip =>
+        clip.id === "clip_1" && clip.type !== "mask",
+    );
+
+    expect(parentClip?.maskCompositeTransformations).toEqual([
+      expect.objectContaining({
+        type: "mask_grow",
+        parameters: expect.objectContaining({
+          amount: 18,
+          invert: false,
+        }),
+      }),
+      expect.objectContaining({
+        type: "feather",
+        parameters: expect.objectContaining({
+          mode: "hard_outer",
+          amount: 24,
+          invert: false,
+        }),
+      }),
+    ]);
+  });
 });

@@ -3,25 +3,30 @@ import {
   Box,
   Button,
   ButtonGroup,
+  Checkbox,
   Menu,
   MenuItem,
   Typography,
   Divider,
   Chip,
+  FormControlLabel,
 } from "@mui/material";
 import { DeleteOutline, Add } from "@mui/icons-material";
 import { MASK_TYPES } from "./model/maskFactory";
 import { useMaskPanel } from "./hooks/useMaskPanel";
 import {
   DefaultTransformationSections,
+  createAddTransform,
   getDefaultTransforms,
   getEntryByType,
   getDefaultSectionId,
+  insertTransformRespectingDefaultOrder,
   useTransformationController,
 } from "../transformations";
 import { parseMaskClipId } from "../timeline";
 import { Sam2MaskPanel } from "./components/Sam2MaskPanel";
 import { Sam2ModelDownloadOverlay } from "./components/Sam2ModelDownloadOverlay";
+import type { ClipTransform } from "../../types/TimelineTypes";
 
 const connectedButtonSx = {
   textTransform: "none",
@@ -47,6 +52,96 @@ const selectedConnectedButtonSx = {
     bgcolor: "#7a8292",
   },
 };
+
+const SHARED_MASK_EDGE_TRANSFORM_TYPES = ["mask_grow", "feather"] as const;
+
+function isSharedMaskEdgeTransform(transform: ClipTransform): boolean {
+  return SHARED_MASK_EDGE_TRANSFORM_TYPES.includes(
+    transform.type as (typeof SHARED_MASK_EDGE_TRANSFORM_TYPES)[number],
+  );
+}
+
+function getSharedMaskEdgeInvertState(
+  transforms: ClipTransform[],
+  fallbackValue: boolean,
+) {
+  const edgeTransforms = transforms.filter(isSharedMaskEdgeTransform);
+  if (edgeTransforms.length === 0) {
+    return {
+      checked: fallbackValue,
+      indeterminate: false,
+    };
+  }
+
+  const hasInvertedEdge = edgeTransforms.some(
+    (transform) => transform.parameters.invert === true,
+  );
+  const hasNormalEdge = edgeTransforms.some(
+    (transform) => transform.parameters.invert !== true,
+  );
+
+  return {
+    checked: hasInvertedEdge,
+    indeterminate: hasInvertedEdge && hasNormalEdge,
+  };
+}
+
+function setSharedMaskEdgeInvert(
+  transforms: ClipTransform[],
+  invert: boolean,
+): ClipTransform[] {
+  let nextTransforms = transforms.map((transform) =>
+    isSharedMaskEdgeTransform(transform)
+      ? {
+          ...transform,
+          parameters: {
+            ...transform.parameters,
+            invert,
+          },
+        }
+      : transform,
+  );
+
+  SHARED_MASK_EDGE_TRANSFORM_TYPES.forEach((type) => {
+    if (nextTransforms.some((transform) => transform.type === type)) {
+      return;
+    }
+
+    const createdTransform = createAddTransform(type);
+    if (!createdTransform) {
+      return;
+    }
+
+    createdTransform.parameters = {
+      ...createdTransform.parameters,
+      invert,
+    };
+    nextTransforms = insertTransformRespectingDefaultOrder(
+      nextTransforms,
+      createdTransform,
+    );
+  });
+
+  return nextTransforms.sort((left, right) => {
+    const leftIndex = SHARED_MASK_EDGE_TRANSFORM_TYPES.indexOf(
+      left.type as (typeof SHARED_MASK_EDGE_TRANSFORM_TYPES)[number],
+    );
+    const rightIndex = SHARED_MASK_EDGE_TRANSFORM_TYPES.indexOf(
+      right.type as (typeof SHARED_MASK_EDGE_TRANSFORM_TYPES)[number],
+    );
+
+    if (leftIndex === -1 && rightIndex === -1) {
+      return 0;
+    }
+    if (leftIndex === -1) {
+      return -1;
+    }
+    if (rightIndex === -1) {
+      return 1;
+    }
+    return leftIndex - rightIndex;
+  });
+}
 
 function useLocalActiveSection(
   activeContextId: string | undefined,
@@ -155,6 +250,10 @@ export const MaskPanel = memo(function MaskPanel() {
     () => [...growDefinitions, ...featherDefinitions],
     [growDefinitions, featherDefinitions],
   );
+  const sharedMaskEdgeInvertState = useMemo(
+    () => getSharedMaskEdgeInvertState(sharedMaskTransforms, maskInverted),
+    [maskInverted, sharedMaskTransforms],
+  );
 
   // SAM2 masks are point-based and don't use shape transformation sections.
   // Compute this before the section hook to pass an empty sectionOrder.
@@ -196,6 +295,13 @@ export const MaskPanel = memo(function MaskPanel() {
   const handleModelsInstalled = useCallback(() => {
     void ensureSam2Available();
   }, [ensureSam2Available]);
+
+  const handleSharedMaskEdgeInvertChange = useCallback(
+    (_event: React.ChangeEvent<HTMLInputElement>, checked: boolean) => {
+      setSharedMaskTransforms(setSharedMaskEdgeInvert(sharedMaskTransforms, checked));
+    },
+    [setSharedMaskTransforms, sharedMaskTransforms],
+  );
 
   if (!selectedClipId) return null;
 
@@ -304,6 +410,18 @@ export const MaskPanel = memo(function MaskPanel() {
           >
             Shared Mask Edges
           </Typography>
+          <FormControlLabel
+            sx={{ mb: 1 }}
+            control={
+              <Checkbox
+                size="small"
+                checked={sharedMaskEdgeInvertState.checked}
+                indeterminate={sharedMaskEdgeInvertState.indeterminate}
+                onChange={handleSharedMaskEdgeInvertChange}
+              />
+            }
+            label="Apply To Inverse"
+          />
           <DefaultTransformationSections
             definitions={sharedMaskOperationDefinitions}
             activeTransforms={sharedMaskTransforms}

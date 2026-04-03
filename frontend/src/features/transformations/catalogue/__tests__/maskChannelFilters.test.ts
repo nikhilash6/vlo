@@ -12,6 +12,7 @@ vi.mock("pixi.js", () => ({
 
 import { createMaskBinaryThresholdFilter } from "../mask/maskBinaryThresholdFilter";
 import { createMaskCoverageBoostFilter } from "../mask/maskCoverageBoostFilter";
+import { createMaskCoverageInvertFilter } from "../mask/maskCoverageInvertFilter";
 import { createMaskRedToAlphaFilter } from "../mask/maskRedToAlphaFilter";
 
 describe("mask channel filters", () => {
@@ -51,6 +52,17 @@ describe("mask channel filters", () => {
       | undefined;
 
     expect(fragment).toContain("color.r * 3.0");
+    expect(fragment).toContain("vec4(coverage, coverage, coverage, coverage)");
+  });
+
+  it("inverts red coverage while preserving alpha alignment", () => {
+    createMaskCoverageInvertFilter();
+
+    const fragment = filterFromSpy.mock.calls[0]?.[0]?.gl?.fragment as
+      | string
+      | undefined;
+
+    expect(fragment).toContain("1.0 - color.r");
     expect(fragment).toContain("vec4(coverage, coverage, coverage, coverage)");
   });
 });

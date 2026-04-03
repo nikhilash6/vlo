@@ -21,6 +21,11 @@ import {
 } from "../../utils/splineKeyframeUtils";
 import { createCommittedTransform } from "./transformFactory";
 
+const SHARED_MASK_EDGE_SIBLING_TYPES: Record<string, string> = {
+  mask_grow: "feather",
+  feather: "mask_grow",
+};
+
 function areTimeArraysEqual(
   left: number[] | undefined,
   right: number[],
@@ -29,6 +34,25 @@ function areTimeArraysEqual(
   const leftSafe = left ?? [];
   if (leftSafe.length !== right.length) return false;
   return leftSafe.every((time, index) => Math.abs(time - right[index]) <= epsilon);
+}
+
+function getInheritedMaskEdgeInvert(
+  groupId: string,
+  transforms: ClipTransform[],
+): boolean | undefined {
+  const siblingType = SHARED_MASK_EDGE_SIBLING_TYPES[groupId];
+  if (!siblingType) {
+    return undefined;
+  }
+
+  const siblingTransform = transforms.find(
+    (transform) => transform.type === siblingType,
+  );
+  if (!siblingTransform) {
+    return undefined;
+  }
+
+  return siblingTransform.parameters.invert === true;
 }
 
 export interface CommitComputationInput {
@@ -102,6 +126,11 @@ export function computeCommitMutation({
     groupConfig.controls.forEach((control) => {
       finalParams[control.name] = control.defaultValue;
     });
+
+    const inheritedInvert = getInheritedMaskEdgeInvert(groupId, transforms);
+    if (inheritedInvert !== undefined) {
+      finalParams.invert = inheritedInvert;
+    }
   }
 
   // 3. Process value

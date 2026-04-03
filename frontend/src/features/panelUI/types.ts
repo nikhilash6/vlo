@@ -3,6 +3,7 @@
 export type ControlType =
   | "number"
   | "select"
+  | "checkbox"
   | "text"
   | "color"
   | "link"
@@ -18,6 +19,7 @@ export interface ControlDefinition {
   type: ControlType;
   label: string;
   name: string; // Key in the parameters object
+  hidden?: boolean;
   defaultValue?: unknown;
   step?: number;
   options?: ControlOption[]; // For select type

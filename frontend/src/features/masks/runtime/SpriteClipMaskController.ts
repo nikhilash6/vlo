@@ -24,6 +24,7 @@ import type { TransformState } from "../../transformations/catalogue/types";
 import { createMaskBinaryThresholdFilter } from "../../transformations/catalogue/mask/maskBinaryThresholdFilter";
 import { createMaskCleanupFilter } from "../../transformations/catalogue/mask/maskCleanupFilter";
 import { createMaskCoverageBoostFilter } from "../../transformations/catalogue/mask/maskCoverageBoostFilter";
+import { createMaskCoverageInvertFilter } from "../../transformations/catalogue/mask/maskCoverageInvertFilter";
 import { createMaskRedInvertForMultiplyFilter } from "../../transformations/catalogue/mask/maskRedInvertForMultiplyFilter";
 import { createMaskRedToAlphaFilter } from "../../transformations/catalogue/mask/maskRedToAlphaFilter";
 import { drawMaskBaseShape } from "../model/maskFactory";
@@ -58,10 +59,12 @@ type MaskApplicationMode = "none" | "regular" | "alpha";
 
 interface ResolvedMaskCompositeState {
   growAmount: number;
+  growInvert: boolean;
   feather:
     | {
         amount: number;
         mode: "hard_outer" | "soft_inner" | "two_way";
+        invert: boolean;
       }
     | null;
 }
@@ -148,6 +151,7 @@ export class SpriteClipMaskController {
   private maskBinaryThresholdFilter: Filter | null = null;
   private maskCleanupFilter: Filter | null = null;
   private maskCoverageBoostFilter: Filter | null = null;
+  private maskCoverageInvertFilter: Filter | null = null;
   private maskRedToAlphaFilter: Filter | null = null;
   private blurFilter: BlurFilter | null = null;
 
@@ -492,6 +496,8 @@ export class SpriteClipMaskController {
     this.maskCleanupFilter = null;
     this.maskCoverageBoostFilter?.destroy();
     this.maskCoverageBoostFilter = null;
+    this.maskCoverageInvertFilter?.destroy();
+    this.maskCoverageInvertFilter = null;
     this.maskRedToAlphaFilter?.destroy();
     this.maskRedToAlphaFilter = null;
     this.blurFilter?.destroy();
@@ -570,12 +576,12 @@ export class SpriteClipMaskController {
     rawTimeTicks: number,
   ): ResolvedMaskCompositeState {
     if (parentClip.type === "mask") {
-      return { growAmount: 0, feather: null };
+      return { growAmount: 0, growInvert: false, feather: null };
     }
 
     const transforms = parentClip.maskCompositeTransformations ?? [];
     if (transforms.length === 0) {
-      return { growAmount: 0, feather: null };
+      return { growAmount: 0, growInvert: false, feather: null };
     }
 
     const state: TransformState = {
@@ -599,6 +605,7 @@ export class SpriteClipMaskController {
 
     return {
       growAmount: state.maskGrow?.amount ?? 0,
+      growInvert: state.maskGrow?.invert ?? false,
       feather: state.feather ?? null,
     };
   }
@@ -748,75 +755,18 @@ export class SpriteClipMaskController {
 
     let currentTexture: Texture = this.effectMaskRenderTexture;
     if (compositeState.growAmount > 0) {
-      this.renderBlurPass(
+      currentTexture = this.renderGrowPass(
         currentTexture,
-        this.perMaskRenderTexture,
         compositeState.growAmount,
-        { boost: true },
+        compositeState.growInvert,
       );
-      this.renderThresholdPass(
-        this.perMaskRenderTexture,
-        this.effectMaskRenderTexture,
-      );
-      currentTexture = this.effectMaskRenderTexture;
     }
 
     if (!feather || feather.amount <= 0) {
       return currentTexture;
     }
 
-    const outputTarget =
-      currentTexture === this.effectMaskRenderTexture
-        ? this.maskRenderTexture
-        : this.effectMaskRenderTexture;
-
-    if (feather.mode === "two_way") {
-      this.renderBlurPass(
-        currentTexture,
-        this.perMaskRenderTexture,
-        feather.amount,
-        { boost: true },
-      );
-      this.renderTextureToTarget(this.perMaskRenderTexture, outputTarget, {
-        clear: true,
-      });
-      this.renderTextureToTarget(currentTexture, outputTarget, {
-        clear: false,
-      });
-      this.renderBlurPass(outputTarget, this.effectMaskRenderTexture, feather.amount);
-      return this.effectMaskRenderTexture;
-    }
-
-    this.renderBlurPass(
-      currentTexture,
-      this.perMaskRenderTexture,
-      feather.amount,
-      { boost: feather.mode === "hard_outer" },
-    );
-
-    if (feather.mode === "soft_inner") {
-      this.renderTextureToTarget(currentTexture, outputTarget, {
-        clear: true,
-      });
-      this.renderTextureToTarget(
-        this.perMaskRenderTexture,
-        outputTarget,
-        {
-          clear: false,
-          blendMode: "multiply",
-        },
-      );
-      return outputTarget;
-    }
-
-    this.renderTextureToTarget(this.perMaskRenderTexture, outputTarget, {
-      clear: true,
-    });
-    this.renderTextureToTarget(currentTexture, outputTarget, {
-      clear: false,
-    });
-
-    return outputTarget;
+    return this.renderFeatherPass(currentTexture, feather);
   }
 
   private renderPresentedMaskTexture(
@@ -865,6 +815,155 @@ export class SpriteClipMaskController {
       clear: true,
       filters: [this.getMaskBinaryThresholdFilter()],
     });
+  }
+
+  private renderCoverageInvertPass(
+    sourceTexture: Texture,
+    target: RenderTexture,
+  ) {
+    this.renderTextureToTarget(sourceTexture, target, {
+      clear: true,
+      filters: [this.getMaskCoverageInvertFilter()],
+    });
+  }
+
+  private renderGrowPass(
+    sourceTexture: Texture,
+    amount: number,
+    invert: boolean,
+  ): Texture {
+    if (!this.effectMaskRenderTexture || !this.perMaskRenderTexture) {
+      return sourceTexture;
+    }
+
+    if (!invert) {
+      this.renderBlurPass(sourceTexture, this.perMaskRenderTexture, amount, {
+        boost: true,
+      });
+      this.renderThresholdPass(
+        this.perMaskRenderTexture,
+        this.effectMaskRenderTexture,
+      );
+      return this.effectMaskRenderTexture;
+    }
+
+    this.renderCoverageInvertPass(sourceTexture, this.perMaskRenderTexture);
+    this.renderBlurPass(
+      this.perMaskRenderTexture,
+      this.effectMaskRenderTexture,
+      amount,
+      { boost: true },
+    );
+    this.renderThresholdPass(
+      this.effectMaskRenderTexture,
+      this.perMaskRenderTexture,
+    );
+    this.renderCoverageInvertPass(
+      this.perMaskRenderTexture,
+      this.effectMaskRenderTexture,
+    );
+    return this.effectMaskRenderTexture;
+  }
+
+  private renderFeatherPass(
+    sourceTexture: Texture,
+    feather: NonNullable<ResolvedMaskCompositeState["feather"]>,
+  ): Texture {
+    if (
+      !this.effectMaskRenderTexture ||
+      !this.perMaskRenderTexture ||
+      !this.maskRenderTexture
+    ) {
+      return sourceTexture;
+    }
+
+    if (!feather.invert) {
+      return this.renderFeatherPassInCurrentSpace(sourceTexture, feather);
+    }
+
+    const invertedInputTarget = this.getAlternateEffectTarget(sourceTexture);
+    if (!invertedInputTarget) {
+      return sourceTexture;
+    }
+
+    this.renderCoverageInvertPass(sourceTexture, invertedInputTarget);
+    const invertedResult = this.renderFeatherPassInCurrentSpace(
+      invertedInputTarget,
+      {
+        amount: feather.amount,
+        mode: feather.mode,
+      },
+    );
+    const finalTarget = this.getAlternateEffectTarget(invertedResult);
+    if (!finalTarget) {
+      return sourceTexture;
+    }
+    this.renderCoverageInvertPass(invertedResult, finalTarget);
+    return finalTarget;
+  }
+
+  private renderFeatherPassInCurrentSpace(
+    sourceTexture: Texture,
+    feather: {
+      amount: number;
+      mode: "hard_outer" | "soft_inner" | "two_way";
+    },
+  ): Texture {
+    const outputTarget = this.getAlternateEffectTarget(sourceTexture);
+    if (!outputTarget || !this.effectMaskRenderTexture || !this.perMaskRenderTexture) {
+      return sourceTexture;
+    }
+
+    if (feather.mode === "two_way") {
+      this.renderBlurPass(
+        sourceTexture,
+        this.perMaskRenderTexture,
+        feather.amount,
+        { boost: true },
+      );
+      this.renderTextureToTarget(this.perMaskRenderTexture, outputTarget, {
+        clear: true,
+      });
+      this.renderTextureToTarget(sourceTexture, outputTarget, {
+        clear: false,
+      });
+      const finalBlurTarget = this.getAlternateEffectTarget(outputTarget);
+      if (!finalBlurTarget) {
+        return outputTarget;
+      }
+      this.renderBlurPass(
+        outputTarget,
+        finalBlurTarget,
+        feather.amount,
+      );
+      return finalBlurTarget;
+    }
+
+    this.renderBlurPass(
+      sourceTexture,
+      this.perMaskRenderTexture,
+      feather.amount,
+      { boost: feather.mode === "hard_outer" },
+    );
+
+    if (feather.mode === "soft_inner") {
+      this.renderTextureToTarget(sourceTexture, outputTarget, {
+        clear: true,
+      });
+      this.renderTextureToTarget(this.perMaskRenderTexture, outputTarget, {
+        clear: false,
+        blendMode: "multiply",
+      });
+      return outputTarget;
+    }
+
+    this.renderTextureToTarget(this.perMaskRenderTexture, outputTarget, {
+      clear: true,
+    });
+    this.renderTextureToTarget(sourceTexture, outputTarget, {
+      clear: false,
+    });
+    return outputTarget;
   }
 
   private renderTextureToTarget(
@@ -1324,6 +1423,13 @@ export class SpriteClipMaskController {
     return this.maskCoverageBoostFilter;
   }
 
+  private getMaskCoverageInvertFilter(): Filter {
+    if (!this.maskCoverageInvertFilter) {
+      this.maskCoverageInvertFilter = createMaskCoverageInvertFilter();
+    }
+    return this.maskCoverageInvertFilter;
+  }
+
   private getMaskRedToAlphaFilter(): Filter {
     if (!this.maskRedToAlphaFilter) {
       this.maskRedToAlphaFilter = createMaskRedToAlphaFilter();
@@ -1337,6 +1443,24 @@ export class SpriteClipMaskController {
     }
     this.blurFilter.strength = amount * MASK_EDGE_BLUR_SCALE;
     return this.blurFilter;
+  }
+
+  private getAlternateEffectTarget(sourceTexture: Texture): RenderTexture | null {
+    if (
+      sourceTexture === this.effectMaskRenderTexture &&
+      this.maskRenderTexture
+    ) {
+      return this.maskRenderTexture;
+    }
+
+    if (
+      sourceTexture === this.maskRenderTexture &&
+      this.effectMaskRenderTexture
+    ) {
+      return this.effectMaskRenderTexture;
+    }
+
+    return this.effectMaskRenderTexture ?? this.maskRenderTexture ?? null;
   }
 
   private renderMaskSubsetToTexture(

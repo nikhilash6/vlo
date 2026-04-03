@@ -29,10 +29,12 @@ export interface TransformState {
   feather?: {
     mode: "hard_outer" | "soft_inner" | "two_way";
     amount: number;
+    invert: boolean;
   } | null;
   /** Binary mask growth state */
   maskGrow?: {
     amount: number;
+    invert: boolean;
   } | null;
 }
 

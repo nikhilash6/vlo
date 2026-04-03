@@ -18,6 +18,7 @@ function createDefaultGeneratedMaskTransforms(): ClipTransform[] {
       parameters: {
         mode: "hard_outer",
         amount: DEFAULT_GENERATED_MASK_OUTER_FEATHER,
+        invert: false,
       },
     },
   ];

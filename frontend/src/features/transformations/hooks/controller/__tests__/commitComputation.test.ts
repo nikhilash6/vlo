@@ -212,4 +212,31 @@ describe("computeCommitMutation", () => {
     expect(xPoints.find((point) => point.time === 50)?.value).toBe(2);
     expect(yPoints.find((point) => point.time === 50)?.value).toBe(2);
   });
+
+  it("inherits shared mask edge inversion from the sibling transform on create", () => {
+    const transform = {
+      id: "feather-1",
+      type: "feather",
+      isEnabled: true,
+      parameters: { amount: 24, mode: "hard_outer", invert: true },
+    };
+
+    const result = computeCommitMutation({
+      groupId: "mask_grow",
+      controlName: "amount",
+      value: 18,
+      transforms: [transform],
+      activeClip: createClip([transform]),
+      playheadTicks: 0,
+      pointEpsilonTicks: 1,
+    });
+
+    expect(result.mode).toBe("create");
+    if (result.mode !== "create") return;
+
+    expect(result.parameters).toMatchObject({
+      amount: 18,
+      invert: true,
+    });
+  });
 });

@@ -78,6 +78,7 @@ describe("insertAssetToTimeline", () => {
         parameters: {
           mode: "hard_outer",
           amount: 30,
+          invert: false,
         },
       }),
     ]);

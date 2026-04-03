@@ -308,6 +308,29 @@ function normalizeMaskCompositeTransformations(
   return normalized.length > 0 ? structuredClone(normalized) : undefined;
 }
 
+function syncMaskEdgeTransformInversion(
+  transforms: readonly ClipTransform[] | undefined,
+  inverted: boolean,
+): ClipTransform[] | undefined {
+  if (!transforms || transforms.length === 0) {
+    return undefined;
+  }
+
+  return transforms.map((transform) => {
+    if (!isMaskEdgeTransform(transform)) {
+      return structuredClone(transform);
+    }
+
+    return {
+      ...structuredClone(transform),
+      parameters: {
+        ...structuredClone(transform.parameters),
+        invert: inverted,
+      },
+    };
+  });
+}
+
 function buildMaskClipTransformations(
   maskTransforms: ClipTransform[],
   parentClip: TimelineClip,
@@ -1567,6 +1590,20 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
 
         if (updates.maskInverted !== undefined) {
           maskClip.maskInverted = updates.maskInverted;
+          const parentClip = draft.clips.find(
+            (clip): clip is StandardTimelineClip =>
+              clip.id === clipId && clip.type !== "mask",
+          );
+          if (parentClip) {
+            const nextCompositeTransforms = syncMaskEdgeTransformInversion(
+              parentClip.maskCompositeTransformations,
+              updates.maskInverted,
+            );
+
+            if (nextCompositeTransforms) {
+              parentClip.maskCompositeTransformations = nextCompositeTransforms;
+            }
+          }
         }
 
         if (updates.maskParameters !== undefined) {

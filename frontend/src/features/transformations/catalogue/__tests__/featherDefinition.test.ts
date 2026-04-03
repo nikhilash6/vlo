@@ -39,6 +39,7 @@ describe("featherDefinition handler", () => {
     expect(state.feather).toEqual({
       amount: 12,
       mode: "hard_outer",
+      invert: false,
     });
   });
 
@@ -76,5 +77,14 @@ describe("featherDefinition handler", () => {
     featherDefinition.handler(state, transform, context);
 
     expect(state.feather?.mode).toBe("hard_outer");
+  });
+
+  it("reads the invert flag", () => {
+    const state = createBaseState();
+    const transform = createTransform({ amount: 8, invert: true });
+
+    featherDefinition.handler(state, transform, context);
+
+    expect(state.feather?.invert).toBe(true);
   });
 });
