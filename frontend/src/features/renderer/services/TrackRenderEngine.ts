@@ -104,8 +104,6 @@ export class TrackRenderEngine {
   private pendingAssetHydrations = new Set<string>();
   private livePipelineBusy = false;
   private inFlightSynchronizedRender: InFlightSynchronizedRender | null = null;
-  private outputMode: "scene" | "mask" = "scene";
-  private contentVisible = false;
 
   // Deferred texture cleanup to avoid null-source races during hot swaps
   private readonly retiredTextures = new Set<Texture>();
@@ -146,12 +144,6 @@ export class TrackRenderEngine {
     );
     this.container.addChild(this.sprite);
     this.container.zIndex = zIndex;
-  }
-
-  public setOutputMode(mode: "scene" | "mask") {
-    if (this.outputMode === mode) return;
-    this.outputMode = mode;
-    this.syncOutputModeVisibility();
   }
 
   public addTo(parent: Container) {
@@ -195,8 +187,7 @@ export class TrackRenderEngine {
     // 4. Handle Blank Space
     if (!activeClip) {
       this.invalidateLivePipeline();
-      this.contentVisible = false;
-      this.syncOutputModeVisibility();
+      this.sprite.visible = false;
       this.currentTextureClipId = null;
       this.maskController.clear();
       // For Export Mode: If we are awaiting a frame but none exists, resolve immediately
@@ -275,7 +266,7 @@ export class TrackRenderEngine {
 
     // 7. Apply Immediate Transforms (even if texture hasn't updated yet)
     // This ensures moving/scaling feels responsive even if the frame decoding lags
-    if (this.contentVisible && this.currentTextureClipId === activeClip.id) {
+    if (this.sprite.visible && this.currentTextureClipId === activeClip.id) {
       applyClipTransforms(
         this.sprite,
         activeClip,
@@ -305,8 +296,7 @@ export class TrackRenderEngine {
     const activeClip = findActiveClipAtTicks(trackClips, currentTime);
     if (!activeClip) {
       this.invalidateLivePipeline();
-      this.contentVisible = false;
-      this.syncOutputModeVisibility();
+      this.sprite.visible = false;
       this.currentTextureClipId = null;
       this.maskController.clear();
       return;
@@ -441,8 +431,7 @@ export class TrackRenderEngine {
             const texture = Texture.from(frame.bitmap);
             this.applyTexture(texture, activeClip.id);
           } else if (this.currentTextureClipId !== activeClip.id) {
-            this.contentVisible = false;
-            this.syncOutputModeVisibility();
+            this.sprite.visible = false;
             this.currentTextureClipId = null;
           }
         } catch (error) {
@@ -481,7 +470,7 @@ export class TrackRenderEngine {
         }
       }
 
-      if (this.contentVisible && this.currentTextureClipId === activeClip.id) {
+      if (this.sprite.visible && this.currentTextureClipId === activeClip.id) {
         applyClipTransforms(
           this.sprite,
           activeClip,
@@ -762,7 +751,7 @@ export class TrackRenderEngine {
     const texture = this.sprite.texture;
     return (
       this.currentTextureClipId === clipId &&
-      this.contentVisible &&
+      this.sprite.visible &&
       texture !== null &&
       texture !== undefined &&
       texture !== Texture.EMPTY &&
@@ -838,7 +827,7 @@ export class TrackRenderEngine {
             this.applyTexture(texture, request.clip.id);
           }
 
-          if (this.contentVisible && this.currentTextureClipId === request.clip.id) {
+          if (this.sprite.visible && this.currentTextureClipId === request.clip.id) {
             applyClipTransforms(
               this.sprite,
               request.clip,
@@ -982,8 +971,7 @@ export class TrackRenderEngine {
     const previousTexture = this.sprite.texture;
     this.sprite.texture = texture;
     this.retireTexture(previousTexture);
-    this.contentVisible = true;
-    this.syncOutputModeVisibility();
+    this.sprite.visible = true;
     this.currentTextureClipId = clipId;
   }
 
@@ -998,7 +986,7 @@ export class TrackRenderEngine {
     maskClips: MaskTimelineClip[] = [],
     assetsById: Map<string, Asset> = new Map<string, Asset>(),
   ) {
-    if (!this.contentVisible) return;
+    if (!this.sprite.visible) return;
     const rawTimeSeconds = currentTime - activeClip.start;
     applyClipTransforms(
       this.sprite,
@@ -1023,11 +1011,6 @@ export class TrackRenderEngine {
 
   public syncMaskSpriteTransform() {
     this.maskController.syncMaskSpriteTransform();
-  }
-
-  private syncOutputModeVisibility() {
-    this.sprite.visible = this.outputMode === "scene" && this.contentVisible;
-    this.maskController.setOutputMode(this.outputMode);
   }
 
   public dispose() {

@@ -154,7 +154,6 @@ export class SpriteClipMaskController {
   private currentInverse = false;
   private lastContentWidth = 0;
   private lastContentHeight = 0;
-  private outputMode: "scene" | "mask" = "scene";
 
   constructor(
     sprite: Sprite,
@@ -182,12 +181,6 @@ export class SpriteClipMaskController {
     }
 
     this.ensureMaskSceneNodesAttached();
-    this.syncOutputModeVisibility();
-  }
-
-  public setOutputMode(mode: "scene" | "mask") {
-    if (this.outputMode === mode) return;
-    this.outputMode = mode;
     this.syncOutputModeVisibility();
   }
 
@@ -1442,11 +1435,9 @@ export class SpriteClipMaskController {
     const shouldKeepMaskSpriteActive =
       this.currentMaskMode === "alpha" && hasMaskTexture;
 
-    // Keep the sprite visible for Pixi's direct-sprite AlphaMask path in
-    // normal scene renders, but only make it renderable when exporting the
-    // mask pass itself.
+    // Keep the sprite visible for Pixi's direct-sprite AlphaMask path, but
+    // never render it as scene content.
     this.maskSprite.visible = shouldKeepMaskSpriteActive;
-    this.maskSprite.renderable =
-      shouldKeepMaskSpriteActive && this.outputMode === "mask";
+    this.maskSprite.renderable = false;
   }
 }

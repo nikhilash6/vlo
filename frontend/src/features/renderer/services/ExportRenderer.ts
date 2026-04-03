@@ -176,7 +176,6 @@ export interface RenderOptions {
   format?: "mp4" | "webm";
   outputs?: OutputVideoDefinition[];
   includeTimelineMasks?: boolean;
-  renderKind?: "scene" | "mask";
   signal?: AbortSignal;
 }
 
@@ -400,9 +399,6 @@ export class ExportRenderer {
         engine.addTo(this.logicalStage);
         return engine;
       });
-
-      const renderKind = options.renderKind ?? "scene";
-      this.engines.forEach((engine) => engine.setOutputMode(renderKind));
 
       this.logicalStage.sortableChildren = true;
       this.logicalStage.sortChildren();

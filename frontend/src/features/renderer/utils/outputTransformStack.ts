@@ -44,8 +44,6 @@ export function createFilterStackTransform(
   };
 }
 
-export type MaskOutputSource = "alpha" | "red";
-
 const defaultVertex = `
 in vec2 aPosition;
 out vec2 vTextureCoord;
@@ -76,7 +74,7 @@ void main(void)
 }
 `;
 
-const binaryMaskFromAlphaFragment = `
+const binaryMaskFragment = `
 in vec2 vTextureCoord;
 out vec4 finalColor;
 uniform sampler2D uTexture;
@@ -92,57 +90,15 @@ void main(void)
 }
 `;
 
-const binaryMaskFromRedFragment = `
-in vec2 vTextureCoord;
-out vec4 finalColor;
-uniform sampler2D uTexture;
-
-void main(void)
-{
-    float coverage = texture(uTexture, vTextureCoord).r;
-    float value = coverage >= 0.05 ? 1.0 : 0.0;
-    finalColor = vec4(value, value, value, 1.0);
-}
-`;
-
-const softMaskFromAlphaFragment = `
-in vec2 vTextureCoord;
-out vec4 finalColor;
-uniform sampler2D uTexture;
-
-void main(void)
-{
-    float coverage = 1.0 - texture(uTexture, vTextureCoord).a;
-    finalColor = vec4(coverage, coverage, coverage, 1.0);
-}
-`;
-
-const softMaskFromRedFragment = `
-in vec2 vTextureCoord;
-out vec4 finalColor;
-uniform sampler2D uTexture;
-
-void main(void)
-{
-    float coverage = texture(uTexture, vTextureCoord).r;
-    finalColor = vec4(coverage, coverage, coverage, 1.0);
-}
-`;
-
 /**
  * Binary mask filter used for export mattes.
  * Keeps only highly transparent pixels as white to suppress subpixel edge halos.
  */
-export function createBinaryMaskOutputFilter(
-  source: MaskOutputSource = "alpha",
-): Filter {
+export function createBinaryMaskOutputFilter(): Filter {
   return Filter.from({
     gl: {
       vertex: defaultVertex,
-      fragment:
-        source === "red"
-          ? binaryMaskFromRedFragment
-          : binaryMaskFromAlphaFragment,
+      fragment: binaryMaskFragment,
     },
   });
 }
@@ -151,16 +107,16 @@ export function createBinaryMaskOutputFilter(
  * Non-binary alpha-to-grayscale mask mapping.
  * Useful for future feathered / soft masks where retaining edge gradients is desired.
  */
-export function createNonBinaryMaskOutputColorMatrixFilter(
-  source: MaskOutputSource = "alpha",
-): Filter {
-  return Filter.from({
-    gl: {
-      vertex: defaultVertex,
-      fragment:
-        source === "red" ? softMaskFromRedFragment : softMaskFromAlphaFragment,
-    },
-  });
+export function createNonBinaryMaskOutputColorMatrixFilter(): ColorMatrixFilter {
+  const filter = new ColorMatrixFilter();
+  // Transparent pixels -> white, opaque pixels -> black (with grayscale falloff).
+  filter.matrix = [
+    0, 0, 0, -1, 1,
+    0, 0, 0, -1, 1,
+    0, 0, 0, -1, 1,
+    0, 0, 0, 0, 1,
+  ];
+  return filter;
 }
 
 export function createTransparentAreaNeutralGrayOutputColorMatrixFilter(): ColorMatrixFilter {

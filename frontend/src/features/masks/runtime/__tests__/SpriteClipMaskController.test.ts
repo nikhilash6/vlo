@@ -97,7 +97,7 @@ function createMaskAsset(id: string): Asset {
 }
 
 describe("SpriteClipMaskController mask composition", () => {
-  it("keeps the alpha-mask sprite active in scene mode without rendering it", async () => {
+  it("keeps the alpha-mask sprite active without rendering it as scene content", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const renderSpy = vi.fn();
     const renderer = {
@@ -137,14 +137,6 @@ describe("SpriteClipMaskController mask composition", () => {
     ).maskSprite;
 
     expect(maskSprite).not.toBeNull();
-    expect(maskSprite?.visible).toBe(true);
-    expect(maskSprite?.renderable).toBe(false);
-
-    controller.setOutputMode("mask");
-    expect(maskSprite?.visible).toBe(true);
-    expect(maskSprite?.renderable).toBe(true);
-
-    controller.setOutputMode("scene");
     expect(maskSprite?.visible).toBe(true);
     expect(maskSprite?.renderable).toBe(false);
 
