@@ -97,6 +97,61 @@ function createMaskAsset(id: string): Asset {
 }
 
 describe("SpriteClipMaskController mask composition", () => {
+  it("keeps the alpha-mask sprite active in scene mode without rendering it", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const renderSpy = vi.fn();
+    const renderer = {
+      render: renderSpy,
+    } as unknown as Renderer;
+    const sprite = new Sprite(Texture.WHITE);
+    const root = new Container();
+    const controller = new SpriteClipMaskController(sprite, renderer, root);
+
+    const parent = {
+      ...createParentClip(),
+      maskCompositeTransformations: [
+        {
+          id: "grow_1",
+          type: "mask_grow",
+          isEnabled: true,
+          parameters: {
+            amount: 12,
+          },
+        },
+      ],
+    } as TimelineClip;
+    const mask = createMaskClip("mask_alpha_scene");
+
+    await controller.syncMaskClips(
+      [mask],
+      parent,
+      { width: 1920, height: 1080 },
+      10,
+      new Map<string, Asset>(),
+    );
+
+    const maskSprite = (
+      controller as unknown as {
+        maskSprite: Sprite | null;
+      }
+    ).maskSprite;
+
+    expect(maskSprite).not.toBeNull();
+    expect(maskSprite?.visible).toBe(true);
+    expect(maskSprite?.renderable).toBe(false);
+
+    controller.setOutputMode("mask");
+    expect(maskSprite?.visible).toBe(true);
+    expect(maskSprite?.renderable).toBe(true);
+
+    controller.setOutputMode("scene");
+    expect(maskSprite?.visible).toBe(true);
+    expect(maskSprite?.renderable).toBe(false);
+
+    controller.dispose();
+    warnSpy.mockRestore();
+  });
+
   it("applies shared parent feathering as a post-composite pass", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const renderSpy = vi.fn();

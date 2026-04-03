@@ -1438,12 +1438,15 @@ export class SpriteClipMaskController {
       return;
     }
 
-    const showMaskSprite =
-      this.outputMode === "mask" &&
-      this.currentMaskMode === "alpha" &&
-      this.hasUsableTexture(this.maskSprite);
+    const hasMaskTexture = this.hasUsableTexture(this.maskSprite);
+    const shouldKeepMaskSpriteActive =
+      this.currentMaskMode === "alpha" && hasMaskTexture;
 
-    this.maskSprite.visible = showMaskSprite;
-    this.maskSprite.renderable = showMaskSprite;
+    // Keep the sprite visible for Pixi's direct-sprite AlphaMask path in
+    // normal scene renders, but only make it renderable when exporting the
+    // mask pass itself.
+    this.maskSprite.visible = shouldKeepMaskSpriteActive;
+    this.maskSprite.renderable =
+      shouldKeepMaskSpriteActive && this.outputMode === "mask";
   }
 }

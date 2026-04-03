@@ -321,49 +321,50 @@ export const MaskPanel = memo(function MaskPanel() {
 
       {selectedMask ? (
         isSam2Mask ? (
-          showSam2DownloadOverlay ? (
-            <Sam2ModelDownloadOverlay onModelsInstalled={handleModelsInstalled} />
-          ) : (
-            <>
-              <Sam2MaskPanel
-                maskMode={selectedMaskMode}
-                maskInverted={maskInverted}
-                maskLabel={selectedMaskLabel}
-                sam2PointMode={sam2PointMode}
-                points={sam2Points}
-                currentFramePointsCount={sam2CurrentFramePointsCount}
-                isSam2Available={isSam2Available}
-                isSam2Checking={isSam2Checking}
-                sam2AvailabilityError={sam2AvailabilityError}
-                onClearPoints={clearSam2Points}
-                onClearCurrentFramePoints={clearSam2CurrentFramePoints}
-                onGenerateFramePreview={generateSam2FramePreview}
-                isFrameGenerating={isSam2FrameGenerating}
-                framePreviewError={sam2FramePreviewError}
-                onGenerateMask={generateSam2Mask}
-                isGenerating={isSam2Generating}
-                generateError={sam2GenerateError}
-                isDirty={isSam2Dirty}
-                hasMaskAsset={hasSam2MaskAsset}
-                onSetMaskMode={setMaskMode}
-                onSetMaskInverted={setMaskInverted}
-                onSetSam2PointMode={setSam2PointMode}
+          <>
+            {showSam2DownloadOverlay && (
+              <Sam2ModelDownloadOverlay
+                onModelsInstalled={handleModelsInstalled}
               />
-              <Box sx={{ px: 2, pb: 2 }}>
-                <Divider sx={{ borderColor: "#2a2d33", mb: 2 }} />
-                <Button
-                  data-testid="mask-delete-button"
-                  variant="outlined"
-                  color="error"
-                  startIcon={<DeleteOutline fontSize="small" />}
-                  onClick={deleteSelectedMask}
-                  sx={{ textTransform: "none", width: "100%" }}
-                >
-                  Delete Mask
-                </Button>
-              </Box>
-            </>
-          )
+            )}
+            <Sam2MaskPanel
+              maskMode={selectedMaskMode}
+              maskInverted={maskInverted}
+              maskLabel={selectedMaskLabel}
+              sam2PointMode={sam2PointMode}
+              points={sam2Points}
+              currentFramePointsCount={sam2CurrentFramePointsCount}
+              isSam2Available={isSam2Available}
+              isSam2Checking={isSam2Checking}
+              sam2AvailabilityError={sam2AvailabilityError}
+              onClearPoints={clearSam2Points}
+              onClearCurrentFramePoints={clearSam2CurrentFramePoints}
+              onGenerateFramePreview={generateSam2FramePreview}
+              isFrameGenerating={isSam2FrameGenerating}
+              framePreviewError={sam2FramePreviewError}
+              onGenerateMask={generateSam2Mask}
+              isGenerating={isSam2Generating}
+              generateError={sam2GenerateError}
+              isDirty={isSam2Dirty}
+              hasMaskAsset={hasSam2MaskAsset}
+              onSetMaskMode={setMaskMode}
+              onSetMaskInverted={setMaskInverted}
+              onSetSam2PointMode={setSam2PointMode}
+            />
+            <Box sx={{ px: 2, pb: 2 }}>
+              <Divider sx={{ borderColor: "#2a2d33", mb: 2 }} />
+              <Button
+                data-testid="mask-delete-button"
+                variant="outlined"
+                color="error"
+                startIcon={<DeleteOutline fontSize="small" />}
+                onClick={deleteSelectedMask}
+                sx={{ textTransform: "none", width: "100%" }}
+              >
+                Delete Mask
+              </Button>
+            </Box>
+          </>
         ) : (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Box sx={{ px: 2 }}>

@@ -205,7 +205,7 @@ describe("MaskPanel", () => {
     expect(mockRequestDraw).toHaveBeenCalledWith("sam2");
   });
 
-  it("shows the SAM2 download overlay only for an unavailable SAM2 mask", () => {
+  it("keeps the SAM2 panel available when an unavailable SAM2 mask is selected", () => {
     const sam2Mask = createMaskClip("clip_1", "mask_sam2", "sam2");
     vi.mocked(useMaskPanel).mockReturnValue({
       ...baseHookValue,
@@ -218,9 +218,7 @@ describe("MaskPanel", () => {
     render(<MaskPanel />);
 
     expect(screen.getByTestId("sam2-download-overlay")).toBeInTheDocument();
-    expect(
-      screen.queryByTestId("sam2-mask-panel"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("sam2-mask-panel")).toBeInTheDocument();
   });
 
   it("does not show the SAM2 download overlay for non-SAM2 masks", () => {
