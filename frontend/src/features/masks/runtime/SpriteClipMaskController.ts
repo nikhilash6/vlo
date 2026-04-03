@@ -1,5 +1,6 @@
 import {
   AlphaMask,
+  BlurFilter,
   Container,
   type Filter,
   Graphics,
@@ -8,7 +9,6 @@ import {
   Sprite,
   Texture,
 } from "pixi.js";
-import { KawaseBlurFilter } from "pixi-filters";
 import type { Renderer } from "pixi.js";
 import type {
   TimelineClip,
@@ -22,6 +22,8 @@ import {
 import { dispatchTransform } from "../../transformations/catalogue/TransformationRegistry";
 import type { TransformState } from "../../transformations/catalogue/types";
 import { createMaskBinaryThresholdFilter } from "../../transformations/catalogue/mask/maskBinaryThresholdFilter";
+import { createMaskCleanupFilter } from "../../transformations/catalogue/mask/maskCleanupFilter";
+import { createMaskCoverageBoostFilter } from "../../transformations/catalogue/mask/maskCoverageBoostFilter";
 import { createMaskRedInvertForMultiplyFilter } from "../../transformations/catalogue/mask/maskRedInvertForMultiplyFilter";
 import { createMaskRedToAlphaFilter } from "../../transformations/catalogue/mask/maskRedToAlphaFilter";
 import { drawMaskBaseShape } from "../model/maskFactory";
@@ -32,8 +34,6 @@ import {
 import { MaskVideoFramePlayer } from "./MaskVideoFramePlayer";
 
 const MASK_EDGE_BLUR_SCALE = 0.5;
-const MASK_EDGE_BLUR_QUALITY = 3;
-
 interface VectorMaskNode {
   root: Container;
   graphics: Graphics;
@@ -146,8 +146,10 @@ export class SpriteClipMaskController {
   private solidMaskSprite: Sprite | null = null;
   private maskInvertFilter: Filter | null = null;
   private maskBinaryThresholdFilter: Filter | null = null;
+  private maskCleanupFilter: Filter | null = null;
+  private maskCoverageBoostFilter: Filter | null = null;
   private maskRedToAlphaFilter: Filter | null = null;
-  private kawaseBlurFilter: KawaseBlurFilter | null = null;
+  private blurFilter: BlurFilter | null = null;
 
   private alphaMaskEffect: AlphaMask | null = null;
   private currentMaskMode: MaskApplicationMode = "none";
@@ -486,10 +488,14 @@ export class SpriteClipMaskController {
     this.maskInvertFilter = null;
     this.maskBinaryThresholdFilter?.destroy();
     this.maskBinaryThresholdFilter = null;
+    this.maskCleanupFilter?.destroy();
+    this.maskCleanupFilter = null;
+    this.maskCoverageBoostFilter?.destroy();
+    this.maskCoverageBoostFilter = null;
     this.maskRedToAlphaFilter?.destroy();
     this.maskRedToAlphaFilter = null;
-    this.kawaseBlurFilter?.destroy();
-    this.kawaseBlurFilter = null;
+    this.blurFilter?.destroy();
+    this.blurFilter = null;
 
     if (this.maskContainer.parent) {
       this.maskContainer.removeFromParent();
@@ -746,6 +752,7 @@ export class SpriteClipMaskController {
         currentTexture,
         this.perMaskRenderTexture,
         compositeState.growAmount,
+        { boost: true },
       );
       this.renderThresholdPass(
         this.perMaskRenderTexture,
@@ -766,16 +773,25 @@ export class SpriteClipMaskController {
     if (feather.mode === "two_way") {
       this.renderBlurPass(
         currentTexture,
-        outputTarget,
+        this.perMaskRenderTexture,
         feather.amount,
+        { boost: true },
       );
-      return outputTarget;
+      this.renderTextureToTarget(this.perMaskRenderTexture, outputTarget, {
+        clear: true,
+      });
+      this.renderTextureToTarget(currentTexture, outputTarget, {
+        clear: false,
+      });
+      this.renderBlurPass(outputTarget, this.effectMaskRenderTexture, feather.amount);
+      return this.effectMaskRenderTexture;
     }
 
     this.renderBlurPass(
       currentTexture,
       this.perMaskRenderTexture,
       feather.amount,
+      { boost: feather.mode === "hard_outer" },
     );
 
     if (feather.mode === "soft_inner") {
@@ -827,10 +843,20 @@ export class SpriteClipMaskController {
     sourceTexture: Texture,
     target: RenderTexture,
     amount: number,
+    options: {
+      boost?: boolean;
+    } = {},
   ) {
+    const filters: Filter[] = [
+      this.getMaskCleanupFilter(),
+      this.getGaussianBlurFilter(amount),
+    ];
+    if (options.boost) {
+      filters.push(this.getMaskCoverageBoostFilter());
+    }
     this.renderTextureToTarget(sourceTexture, target, {
       clear: true,
-      filters: [this.getKawaseBlurFilter(amount)],
+      filters,
     });
   }
 
@@ -1284,6 +1310,20 @@ export class SpriteClipMaskController {
     return this.maskBinaryThresholdFilter;
   }
 
+  private getMaskCleanupFilter(): Filter {
+    if (!this.maskCleanupFilter) {
+      this.maskCleanupFilter = createMaskCleanupFilter();
+    }
+    return this.maskCleanupFilter;
+  }
+
+  private getMaskCoverageBoostFilter(): Filter {
+    if (!this.maskCoverageBoostFilter) {
+      this.maskCoverageBoostFilter = createMaskCoverageBoostFilter();
+    }
+    return this.maskCoverageBoostFilter;
+  }
+
   private getMaskRedToAlphaFilter(): Filter {
     if (!this.maskRedToAlphaFilter) {
       this.maskRedToAlphaFilter = createMaskRedToAlphaFilter();
@@ -1291,16 +1331,12 @@ export class SpriteClipMaskController {
     return this.maskRedToAlphaFilter;
   }
 
-  private getKawaseBlurFilter(amount: number): KawaseBlurFilter {
-    if (!this.kawaseBlurFilter) {
-      this.kawaseBlurFilter = new KawaseBlurFilter({
-        strength: 0,
-        quality: MASK_EDGE_BLUR_QUALITY,
-        clamp: true,
-      });
+  private getGaussianBlurFilter(amount: number): BlurFilter {
+    if (!this.blurFilter) {
+      this.blurFilter = new BlurFilter();
     }
-    this.kawaseBlurFilter.strength = amount * MASK_EDGE_BLUR_SCALE;
-    return this.kawaseBlurFilter;
+    this.blurFilter.strength = amount * MASK_EDGE_BLUR_SCALE;
+    return this.blurFilter;
   }
 
   private renderMaskSubsetToTexture(
