@@ -196,7 +196,7 @@ describe("SpriteClipMaskController mask composition", () => {
     ).vectorMaskNodes.get(featheredMask.id);
 
     expect(alphaMaskEffect).not.toBeNull();
-    expect(renderSpy).toHaveBeenCalledTimes(5);
+    expect(renderSpy).toHaveBeenCalledTimes(6);
     expect(node?.presentation).toBe("graphics");
     expect(node?.graphics.visible).toBe(true);
     expect(node?.spriteHost.visible).toBe(false);
@@ -245,7 +245,52 @@ describe("SpriteClipMaskController mask composition", () => {
     ) ?? null) as AlphaMask | null;
 
     expect(alphaMaskEffect).not.toBeNull();
-    expect(renderSpy).toHaveBeenCalledTimes(5);
+    expect(renderSpy).toHaveBeenCalledTimes(6);
+
+    controller.dispose();
+    warnSpy.mockRestore();
+  });
+
+  it("normalizes asset-backed generation masks before hard outer feathering", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const renderSpy = vi.fn();
+    const renderer = {
+      render: renderSpy,
+    } as unknown as Renderer;
+    const sprite = new Sprite(Texture.WHITE);
+    const root = new Container();
+    const controller = new SpriteClipMaskController(sprite, renderer, root);
+
+    const parent = {
+      ...createParentClip(),
+      maskCompositeTransformations: [
+        {
+          id: "feather_1",
+          type: "feather",
+          isEnabled: true,
+          parameters: {
+            mode: "hard_outer",
+            amount: 20,
+          },
+        },
+      ],
+    } as TimelineClip;
+    const generationMask = createMaskClip("mask_generation_hard_outer", {
+      maskType: "generation",
+      generationMaskAssetId: "generation-mask-asset",
+    });
+    const generationAsset = createMaskAsset("generation-mask-asset");
+
+    await controller.syncMaskClips(
+      [generationMask],
+      parent,
+      { width: 1920, height: 1080 },
+      10,
+      new Map([[generationAsset.id, generationAsset]]),
+      { waitForSam2: true },
+    );
+
+    expect(renderSpy).toHaveBeenCalledTimes(6);
 
     controller.dispose();
     warnSpy.mockRestore();

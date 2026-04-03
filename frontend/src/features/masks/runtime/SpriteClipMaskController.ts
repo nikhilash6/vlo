@@ -22,6 +22,7 @@ import {
 import { dispatchTransform } from "../../transformations/catalogue/TransformationRegistry";
 import type { TransformState } from "../../transformations/catalogue/types";
 import { createMaskBinaryThresholdFilter } from "../../transformations/catalogue/mask/maskBinaryThresholdFilter";
+import { createMaskCoverageThresholdFilter } from "../../transformations/catalogue/mask/maskCoverageThresholdFilter";
 import { createMaskRedInvertForMultiplyFilter } from "../../transformations/catalogue/mask/maskRedInvertForMultiplyFilter";
 import { createMaskRedToAlphaFilter } from "../../transformations/catalogue/mask/maskRedToAlphaFilter";
 import { drawMaskBaseShape } from "../model/maskFactory";
@@ -146,6 +147,7 @@ export class SpriteClipMaskController {
   private solidMaskSprite: Sprite | null = null;
   private maskInvertFilter: Filter | null = null;
   private maskBinaryThresholdFilter: Filter | null = null;
+  private maskCoverageThresholdFilter: Filter | null = null;
   private maskRedToAlphaFilter: Filter | null = null;
   private kawaseBlurFilter: KawaseBlurFilter | null = null;
 
@@ -486,6 +488,8 @@ export class SpriteClipMaskController {
     this.maskInvertFilter = null;
     this.maskBinaryThresholdFilter?.destroy();
     this.maskBinaryThresholdFilter = null;
+    this.maskCoverageThresholdFilter?.destroy();
+    this.maskCoverageThresholdFilter = null;
     this.maskRedToAlphaFilter?.destroy();
     this.maskRedToAlphaFilter = null;
     this.kawaseBlurFilter?.destroy();
@@ -731,7 +735,19 @@ export class SpriteClipMaskController {
       return sourceTexture;
     }
 
-    let currentTexture = sourceTexture;
+    const feather = compositeState.feather;
+    const hasEdgeOps =
+      compositeState.growAmount > 0 || (feather?.amount ?? 0) > 0;
+    if (!hasEdgeOps) {
+      return sourceTexture;
+    }
+
+    this.renderCompositeCoverageThresholdPass(
+      sourceTexture,
+      this.effectMaskRenderTexture,
+    );
+
+    let currentTexture: Texture = this.effectMaskRenderTexture;
     if (compositeState.growAmount > 0) {
       this.renderBlurPass(
         currentTexture,
@@ -745,7 +761,6 @@ export class SpriteClipMaskController {
       currentTexture = this.effectMaskRenderTexture;
     }
 
-    const feather = compositeState.feather;
     if (!feather || feather.amount <= 0) {
       return currentTexture;
     }
@@ -830,6 +845,16 @@ export class SpriteClipMaskController {
     this.renderTextureToTarget(sourceTexture, target, {
       clear: true,
       filters: [this.getMaskBinaryThresholdFilter()],
+    });
+  }
+
+  private renderCompositeCoverageThresholdPass(
+    sourceTexture: Texture,
+    target: RenderTexture,
+  ) {
+    this.renderTextureToTarget(sourceTexture, target, {
+      clear: true,
+      filters: [this.getMaskCoverageThresholdFilter()],
     });
   }
 
@@ -1274,6 +1299,13 @@ export class SpriteClipMaskController {
       this.maskBinaryThresholdFilter = createMaskBinaryThresholdFilter();
     }
     return this.maskBinaryThresholdFilter;
+  }
+
+  private getMaskCoverageThresholdFilter(): Filter {
+    if (!this.maskCoverageThresholdFilter) {
+      this.maskCoverageThresholdFilter = createMaskCoverageThresholdFilter();
+    }
+    return this.maskCoverageThresholdFilter;
   }
 
   private getMaskRedToAlphaFilter(): Filter {
