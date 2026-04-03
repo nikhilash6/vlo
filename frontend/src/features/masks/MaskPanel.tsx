@@ -11,7 +11,7 @@ import {
   Chip,
   FormControlLabel,
 } from "@mui/material";
-import { DeleteOutline, Add } from "@mui/icons-material";
+import { DeleteOutline, Add, ArrowBack } from "@mui/icons-material";
 import { MASK_TYPES } from "./model/maskFactory";
 import { useMaskPanel } from "./hooks/useMaskPanel";
 import {
@@ -54,6 +54,7 @@ const selectedConnectedButtonSx = {
 };
 
 const SHARED_MASK_EDGE_TRANSFORM_TYPES = ["mask_grow", "feather"] as const;
+type MaskPanelView = "home" | "mask";
 
 function isSharedMaskEdgeTransform(transform: ClipTransform): boolean {
   return SHARED_MASK_EDGE_TRANSFORM_TYPES.includes(
@@ -178,6 +179,7 @@ function useLocalActiveSection(
 }
 
 export const MaskPanel = memo(function MaskPanel() {
+  const [panelView, setPanelView] = useState<MaskPanelView>("home");
   const {
     selectedClipId,
     masks,
@@ -296,12 +298,42 @@ export const MaskPanel = memo(function MaskPanel() {
     void ensureSam2Available();
   }, [ensureSam2Available]);
 
+  useEffect(() => {
+    setPanelView("home");
+  }, [selectedClipId]);
+
+  useEffect(() => {
+    if (!selectedMask) {
+      setPanelView("home");
+    }
+  }, [selectedMask]);
+
   const handleSharedMaskEdgeInvertChange = useCallback(
     (_event: React.ChangeEvent<HTMLInputElement>, checked: boolean) => {
       setSharedMaskTransforms(setSharedMaskEdgeInvert(sharedMaskTransforms, checked));
     },
     [setSharedMaskTransforms, sharedMaskTransforms],
   );
+
+  const handleRequestDraw = useCallback(
+    (shape: (typeof MASK_TYPES)[number]) => {
+      requestDraw(shape);
+      setPanelView("mask");
+    },
+    [requestDraw],
+  );
+
+  const handleOpenMaskDetail = useCallback(
+    (maskId: string) => {
+      selectMask(maskId);
+      setPanelView("mask");
+    },
+    [selectMask],
+  );
+
+  const handleBackToHome = useCallback(() => {
+    setPanelView("home");
+  }, []);
 
   if (!selectedClipId) return null;
 
@@ -313,8 +345,11 @@ export const MaskPanel = memo(function MaskPanel() {
   const selectedMaskMode =
     (selectedMask?.type === "mask" ? selectedMask.maskMode : undefined) ??
     "apply";
-  const isSam2Mask = selectedMaskIsSam2;
-  const showSam2DownloadOverlay = isSam2Mask && !isSam2Available;
+  const hasSam2Masks = masks.some(
+    (mask) => mask.type === "mask" && mask.maskType === "sam2",
+  );
+  const showSam2DownloadOverlay = hasSam2Masks && !isSam2Available;
+  const isDetailView = panelView === "mask" && !!selectedMask;
 
   return (
     <Box
@@ -327,297 +362,340 @@ export const MaskPanel = memo(function MaskPanel() {
         overflowY: "auto",
       }}
     >
-      <Box sx={{ px: 2, pt: 2, pb: 1 }}>
-        <Typography
-          variant="caption"
-          sx={{ color: "text.secondary", display: "block", mb: 1 }}
-        >
-          Clip Masks
-        </Typography>
-        <Box
-          sx={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 1,
-            width: "100%",
-          }}
-        >
-          {masks.map((mask, index) => (
-            <Chip
-              key={mask.id}
-              data-testid="mask-chip"
-              label={`Mask ${index + 1}`}
+      {isDetailView && selectedMask ? (
+        <>
+          <Box sx={{ px: 2, pt: 2, pb: 1 }}>
+            <Button
+              data-testid="mask-back-button"
               size="small"
-              variant="outlined"
-              color={
-                parseMaskClipId(mask.id)?.maskId === selectedMaskId
-                  ? "primary"
-                  : "default"
-              }
-              onClick={() => {
-                const maskLocalId = parseMaskClipId(mask.id)?.maskId;
-                if (maskLocalId) selectMask(maskLocalId);
-              }}
+              startIcon={<ArrowBack fontSize="small" />}
+              onClick={handleBackToHome}
               sx={{
-                fontSize: "0.75rem",
-                height: 24,
-                cursor: "pointer",
+                textTransform: "none",
+                color: "text.secondary",
+                px: 0,
+                minWidth: 0,
               }}
-            />
-          ))}
-          <Chip
-            size="small"
-            data-testid="mask-add-chip"
-            label="Add mask"
-            variant="outlined"
-            icon={<Add sx={{ fontSize: "1rem !important" }} />}
-            onClick={(event) => setAddMenuAnchorEl(event.currentTarget)}
-            disabled={isAddDisabled}
-            sx={{
-              fontSize: "0.75rem",
-              height: 24,
-              cursor: isAddDisabled ? "default" : "pointer",
-            }}
-          />
-        </Box>
-        <Menu
-          data-testid="mask-add-menu"
-          anchorEl={addMenuAnchorEl}
-          open={Boolean(addMenuAnchorEl)}
-          onClose={() => setAddMenuAnchorEl(null)}
-        >
-          {MASK_TYPES.map((shape) => (
-            <MenuItem key={shape} onClick={() => requestDraw(shape)}>
-              {shape[0].toUpperCase() + shape.slice(1)}
-            </MenuItem>
-          ))}
-        </Menu>
-        {addDisabledReason && (
-          <Typography
-            variant="caption"
-            sx={{ color: "text.secondary", display: "block", mt: 1 }}
-          >
-            {addDisabledReason}
-          </Typography>
-        )}
-      </Box>
+            >
+              Back To Masks
+            </Button>
+          </Box>
 
-      {sharedMaskContextId && sharedMaskOperationDefinitions.length > 0 && (
-        <Box sx={{ px: 2, pb: 1 }}>
-          <Typography
-            variant="caption"
-            sx={{ color: "text.secondary", display: "block", mb: 1 }}
-          >
-            Shared Mask Edges
-          </Typography>
-          <FormControlLabel
-            sx={{ mb: 1 }}
-            control={
-              <Checkbox
-                size="small"
-                checked={sharedMaskEdgeInvertState.checked}
-                indeterminate={sharedMaskEdgeInvertState.indeterminate}
-                onChange={handleSharedMaskEdgeInvertChange}
+          {selectedMaskIsSam2 ? (
+            <>
+              <Sam2MaskPanel
+                maskMode={selectedMaskMode}
+                maskInverted={maskInverted}
+                maskLabel={selectedMaskLabel}
+                sam2PointMode={sam2PointMode}
+                points={sam2Points}
+                currentFramePointsCount={sam2CurrentFramePointsCount}
+                isSam2Available={isSam2Available}
+                isSam2Checking={isSam2Checking}
+                sam2AvailabilityError={sam2AvailabilityError}
+                onClearPoints={clearSam2Points}
+                onClearCurrentFramePoints={clearSam2CurrentFramePoints}
+                onGenerateFramePreview={generateSam2FramePreview}
+                isFrameGenerating={isSam2FrameGenerating}
+                framePreviewError={sam2FramePreviewError}
+                onGenerateMask={generateSam2Mask}
+                isGenerating={isSam2Generating}
+                generateError={sam2GenerateError}
+                isDirty={isSam2Dirty}
+                hasMaskAsset={hasSam2MaskAsset}
+                onSetMaskMode={setMaskMode}
+                onSetMaskInverted={setMaskInverted}
+                onSetSam2PointMode={setSam2PointMode}
               />
-            }
-            label="Apply To Inverse"
-          />
-          <DefaultTransformationSections
-            definitions={sharedMaskOperationDefinitions}
-            activeTransforms={sharedMaskTransforms}
-            activeContextId={sharedMaskContextId}
-            activeSectionId={activeSharedSectionId}
-            timelineClip={sharedMaskTimelineClip}
-            onCommit={handleSharedMaskCommit}
-            onSetDefaultGroupsEnabled={handleSetSharedMaskGroupsEnabled}
-            onUpdateTransform={updateSharedMaskTransform}
-            onSetTransforms={setSharedMaskTransforms}
-            onActivateSection={activateSharedSection}
-          />
-        </Box>
-      )}
+              <Box sx={{ px: 2, pb: 2 }}>
+                <Divider sx={{ borderColor: "#2a2d33", mb: 2 }} />
+                <Button
+                  data-testid="mask-delete-button"
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteOutline fontSize="small" />}
+                  onClick={deleteSelectedMask}
+                  sx={{ textTransform: "none", width: "100%" }}
+                >
+                  Delete Mask
+                </Button>
+              </Box>
+            </>
+          ) : (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <Box sx={{ px: 2 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "text.secondary", display: "inline-block", mr: 1 }}
+                >
+                  {selectedMaskLabel}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "text.disabled", display: "inline-block" }}
+                >
+                  {`— Shape: ${selectedMask.type === "mask" ? (selectedMask.maskType ?? "rectangle") : "rectangle"}`}
+                </Typography>
+              </Box>
 
-      {selectedMask ? (
-        isSam2Mask ? (
-          <>
-            {showSam2DownloadOverlay && (
+              <DefaultTransformationSections
+                definitions={layoutDefinitions}
+                activeTransforms={selectedMaskTransforms}
+                activeContextId={selectedMaskContextId}
+                activeSectionId={activeSelectedMaskSectionId}
+                timelineClip={selectedMaskTimelineClip}
+                onCommit={handleSelectedMaskCommit}
+                onSetDefaultGroupsEnabled={handleSetSelectedMaskGroupsEnabled}
+                onUpdateTransform={updateSelectedMaskTransform}
+                onSetTransforms={setSelectedMaskTransforms}
+                onActivateSection={activateSelectedMaskSection}
+              />
+
+              <Box sx={{ px: 2, pb: 2 }}>
+                <Divider sx={{ borderColor: "#2a2d33", mb: 2 }} />
+
+                <Typography
+                  variant="caption"
+                  sx={{ color: "text.secondary", display: "block", mb: 1 }}
+                >
+                  Mode
+                </Typography>
+                <ButtonGroup
+                  variant="contained"
+                  disableElevation
+                  size="small"
+                  fullWidth
+                  sx={{ mb: 1 }}
+                >
+                  <Button
+                    data-testid="mask-mode-apply"
+                    onClick={() => setMaskMode("apply")}
+                    sx={
+                      selectedMaskMode === "apply"
+                        ? selectedConnectedButtonSx
+                        : connectedButtonSx
+                    }
+                  >
+                    Apply
+                  </Button>
+                  <Button
+                    data-testid="mask-mode-preview"
+                    onClick={() => setMaskMode("preview")}
+                    sx={
+                      selectedMaskMode === "preview"
+                        ? selectedConnectedButtonSx
+                        : connectedButtonSx
+                    }
+                  >
+                    Preview
+                  </Button>
+                  <Button
+                    data-testid="mask-mode-off"
+                    onClick={() => setMaskMode("off")}
+                    sx={
+                      selectedMaskMode === "off"
+                        ? selectedConnectedButtonSx
+                        : connectedButtonSx
+                    }
+                  >
+                    Off
+                  </Button>
+                </ButtonGroup>
+
+                <Typography
+                  variant="caption"
+                  sx={{ color: "text.secondary", display: "block", mb: 1 }}
+                >
+                  Inversion
+                </Typography>
+                <ButtonGroup
+                  variant="contained"
+                  disableElevation
+                  size="small"
+                  fullWidth
+                  sx={{ mb: 1 }}
+                >
+                  <Button
+                    data-testid="mask-inversion-normal"
+                    onClick={() => setMaskInverted(false)}
+                    sx={
+                      !maskInverted
+                        ? selectedConnectedButtonSx
+                        : connectedButtonSx
+                    }
+                  >
+                    Normal
+                  </Button>
+                  <Button
+                    data-testid="mask-inversion-inverted"
+                    onClick={() => setMaskInverted(true)}
+                    sx={
+                      maskInverted ? selectedConnectedButtonSx : connectedButtonSx
+                    }
+                  >
+                    Inverted
+                  </Button>
+                </ButtonGroup>
+
+                <Button
+                  data-testid="mask-delete-button"
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteOutline fontSize="small" />}
+                  onClick={deleteSelectedMask}
+                  sx={{ textTransform: "none", width: "100%" }}
+                >
+                  Delete Mask
+                </Button>
+              </Box>
+            </Box>
+          )}
+        </>
+      ) : (
+        <>
+          <Box sx={{ px: 2, pt: 2, pb: 1 }}>
+            <Typography
+              variant="caption"
+              sx={{ color: "text.secondary", display: "block", mb: 1 }}
+            >
+              Clip Masks
+            </Typography>
+            <Box
+              sx={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 1,
+                width: "100%",
+              }}
+            >
+              {masks.map((mask, index) => (
+                <Chip
+                  key={mask.id}
+                  data-testid="mask-chip"
+                  label={`Mask ${index + 1}`}
+                  size="small"
+                  variant="outlined"
+                  color={
+                    isDetailView &&
+                    parseMaskClipId(mask.id)?.maskId === selectedMaskId
+                      ? "primary"
+                      : "default"
+                  }
+                  onClick={() => {
+                    const maskLocalId = parseMaskClipId(mask.id)?.maskId;
+                    if (maskLocalId) {
+                      handleOpenMaskDetail(maskLocalId);
+                    }
+                  }}
+                  sx={{
+                    fontSize: "0.75rem",
+                    height: 24,
+                    cursor: "pointer",
+                  }}
+                />
+              ))}
+              <Chip
+                size="small"
+                data-testid="mask-add-chip"
+                label="Add mask"
+                variant="outlined"
+                icon={<Add sx={{ fontSize: "1rem !important" }} />}
+                onClick={(event) => setAddMenuAnchorEl(event.currentTarget)}
+                disabled={isAddDisabled}
+                sx={{
+                  fontSize: "0.75rem",
+                  height: 24,
+                  cursor: isAddDisabled ? "default" : "pointer",
+                }}
+              />
+            </Box>
+            <Menu
+              data-testid="mask-add-menu"
+              anchorEl={addMenuAnchorEl}
+              open={Boolean(addMenuAnchorEl)}
+              onClose={() => setAddMenuAnchorEl(null)}
+            >
+              {MASK_TYPES.map((shape) => (
+                <MenuItem key={shape} onClick={() => handleRequestDraw(shape)}>
+                  {shape[0].toUpperCase() + shape.slice(1)}
+                </MenuItem>
+              ))}
+            </Menu>
+            {addDisabledReason && (
+              <Typography
+                variant="caption"
+                sx={{ color: "text.secondary", display: "block", mt: 1 }}
+              >
+                {addDisabledReason}
+              </Typography>
+            )}
+          </Box>
+
+          {showSam2DownloadOverlay && (
+            <Box sx={{ px: 2, pb: 2 }}>
               <Sam2ModelDownloadOverlay
                 onModelsInstalled={handleModelsInstalled}
               />
+            </Box>
+          )}
+
+          {masks.length > 0 &&
+            sharedMaskContextId &&
+            sharedMaskOperationDefinitions.length > 0 && (
+              <>
+                <Box
+                  sx={{
+                    px: 2,
+                    pb: 1,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 2,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "text.secondary", display: "block" }}
+                  >
+                    Shared Mask Edges
+                  </Typography>
+                  <FormControlLabel
+                    sx={{ mr: 0 }}
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={sharedMaskEdgeInvertState.checked}
+                        indeterminate={sharedMaskEdgeInvertState.indeterminate}
+                        onChange={handleSharedMaskEdgeInvertChange}
+                      />
+                    }
+                    label="Apply To Inverse"
+                  />
+                </Box>
+
+                <DefaultTransformationSections
+                  definitions={sharedMaskOperationDefinitions}
+                  activeTransforms={sharedMaskTransforms}
+                  activeContextId={sharedMaskContextId}
+                  activeSectionId={activeSharedSectionId}
+                  timelineClip={sharedMaskTimelineClip}
+                  onCommit={handleSharedMaskCommit}
+                  onSetDefaultGroupsEnabled={handleSetSharedMaskGroupsEnabled}
+                  onUpdateTransform={updateSharedMaskTransform}
+                  onSetTransforms={setSharedMaskTransforms}
+                  onActivateSection={activateSharedSection}
+                />
+              </>
             )}
-            <Sam2MaskPanel
-              maskMode={selectedMaskMode}
-              maskInverted={maskInverted}
-              maskLabel={selectedMaskLabel}
-              sam2PointMode={sam2PointMode}
-              points={sam2Points}
-              currentFramePointsCount={sam2CurrentFramePointsCount}
-              isSam2Available={isSam2Available}
-              isSam2Checking={isSam2Checking}
-              sam2AvailabilityError={sam2AvailabilityError}
-              onClearPoints={clearSam2Points}
-              onClearCurrentFramePoints={clearSam2CurrentFramePoints}
-              onGenerateFramePreview={generateSam2FramePreview}
-              isFrameGenerating={isSam2FrameGenerating}
-              framePreviewError={sam2FramePreviewError}
-              onGenerateMask={generateSam2Mask}
-              isGenerating={isSam2Generating}
-              generateError={sam2GenerateError}
-              isDirty={isSam2Dirty}
-              hasMaskAsset={hasSam2MaskAsset}
-              onSetMaskMode={setMaskMode}
-              onSetMaskInverted={setMaskInverted}
-              onSetSam2PointMode={setSam2PointMode}
-            />
+
+          {masks.length === 0 && (
             <Box sx={{ px: 2, pb: 2 }}>
-              <Divider sx={{ borderColor: "#2a2d33", mb: 2 }} />
-              <Button
-                data-testid="mask-delete-button"
-                variant="outlined"
-                color="error"
-                startIcon={<DeleteOutline fontSize="small" />}
-                onClick={deleteSelectedMask}
-                sx={{ textTransform: "none", width: "100%" }}
-              >
-                Delete Mask
-              </Button>
-            </Box>
-          </>
-        ) : (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            <Box sx={{ px: 2 }}>
-              <Typography
-                variant="caption"
-                sx={{ color: "text.secondary", display: "inline-block", mr: 1 }}
-              >
-                {selectedMaskLabel}
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{ color: "text.disabled", display: "inline-block" }}
-              >
-                {`— Shape: ${selectedMask?.type === "mask" ? (selectedMask.maskType ?? "rectangle") : "rectangle"}`}
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                Add a mask to start editing.
               </Typography>
             </Box>
-
-            <DefaultTransformationSections
-              definitions={layoutDefinitions}
-              activeTransforms={selectedMaskTransforms}
-              activeContextId={selectedMaskContextId}
-              activeSectionId={activeSelectedMaskSectionId}
-              timelineClip={selectedMaskTimelineClip}
-              onCommit={handleSelectedMaskCommit}
-              onSetDefaultGroupsEnabled={handleSetSelectedMaskGroupsEnabled}
-              onUpdateTransform={updateSelectedMaskTransform}
-              onSetTransforms={setSelectedMaskTransforms}
-              onActivateSection={activateSelectedMaskSection}
-            />
-
-            <Box sx={{ px: 2, pb: 2 }}>
-              <Divider sx={{ borderColor: "#2a2d33", mb: 2 }} />
-
-              <Typography
-                variant="caption"
-                sx={{ color: "text.secondary", display: "block", mb: 1 }}
-              >
-                Mode
-              </Typography>
-              <ButtonGroup
-                variant="contained"
-                disableElevation
-                size="small"
-                fullWidth
-                sx={{ mb: 1 }}
-              >
-                <Button
-                  data-testid="mask-mode-apply"
-                  onClick={() => setMaskMode("apply")}
-                  sx={
-                    selectedMaskMode === "apply"
-                      ? selectedConnectedButtonSx
-                      : connectedButtonSx
-                  }
-                >
-                  Apply
-                </Button>
-                <Button
-                  data-testid="mask-mode-preview"
-                  onClick={() => setMaskMode("preview")}
-                  sx={
-                    selectedMaskMode === "preview"
-                      ? selectedConnectedButtonSx
-                      : connectedButtonSx
-                  }
-                >
-                  Preview
-                </Button>
-                <Button
-                  data-testid="mask-mode-off"
-                  onClick={() => setMaskMode("off")}
-                  sx={
-                    selectedMaskMode === "off"
-                      ? selectedConnectedButtonSx
-                      : connectedButtonSx
-                  }
-                >
-                  Off
-                </Button>
-              </ButtonGroup>
-
-              <Typography
-                variant="caption"
-                sx={{ color: "text.secondary", display: "block", mb: 1 }}
-              >
-                Inversion
-              </Typography>
-              <ButtonGroup
-                variant="contained"
-                disableElevation
-                size="small"
-                fullWidth
-                sx={{ mb: 1 }}
-              >
-                <Button
-                  data-testid="mask-inversion-normal"
-                  onClick={() => setMaskInverted(false)}
-                  sx={
-                    !maskInverted
-                      ? selectedConnectedButtonSx
-                      : connectedButtonSx
-                  }
-                >
-                  Normal
-                </Button>
-                <Button
-                  data-testid="mask-inversion-inverted"
-                  onClick={() => setMaskInverted(true)}
-                  sx={
-                    maskInverted ? selectedConnectedButtonSx : connectedButtonSx
-                  }
-                >
-                  Inverted
-                </Button>
-              </ButtonGroup>
-
-              <Button
-                data-testid="mask-delete-button"
-                variant="outlined"
-                color="error"
-                startIcon={<DeleteOutline fontSize="small" />}
-                onClick={deleteSelectedMask}
-                sx={{ textTransform: "none", width: "100%" }}
-              >
-                Delete Mask
-              </Button>
-            </Box>
-          </Box>
-        )
-      ) : (
-        <Box sx={{ px: 2, pb: 2 }}>
-          <Typography variant="caption" sx={{ color: "text.secondary" }}>
-            Add a mask to start editing.
-          </Typography>
-        </Box>
+          )}
+        </>
       )}
     </Box>
   );

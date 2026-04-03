@@ -166,6 +166,9 @@ describe("MaskPanel", () => {
     expect(
       screen.getByText("Add a mask to start editing."),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("default-sections-order-mask-composite-context"),
+    ).not.toBeInTheDocument();
   });
 
   it("renders selectable mask buttons plus trailing add mask button", () => {
@@ -187,6 +190,27 @@ describe("MaskPanel", () => {
       screen.getByRole("button", { name: "Add mask" }),
     ).toBeInTheDocument();
   }, 10000);
+
+  it("does not highlight any mask chip on the home view", () => {
+    vi.mocked(useMaskPanel).mockReturnValue({
+      ...baseHookValue,
+      masks: [
+        createMaskClip("clip_1", "mask_1", "circle"),
+        createMaskClip("clip_1", "mask_2", "rectangle"),
+      ],
+      selectedMaskId: "mask_1",
+      selectedMask: createMaskClip("clip_1", "mask_1", "circle"),
+    });
+
+    render(<MaskPanel />);
+
+    expect(screen.getByRole("button", { name: "Mask 1" })).not.toHaveClass(
+      "MuiChip-colorPrimary",
+    );
+    expect(screen.getByRole("button", { name: "Mask 2" })).not.toHaveClass(
+      "MuiChip-colorPrimary",
+    );
+  });
 
   it("shows helper text when add is disabled", () => {
     vi.mocked(useMaskPanel).mockReturnValue({
@@ -225,7 +249,7 @@ describe("MaskPanel", () => {
     expect(mockRequestDraw).toHaveBeenCalledWith("sam2");
   });
 
-  it("keeps the SAM2 panel available when an unavailable SAM2 mask is selected", () => {
+  it("shows SAM2 download on home and opens the SAM2 detail view separately", () => {
     const sam2Mask = createMaskClip("clip_1", "mask_sam2", "sam2");
     vi.mocked(useMaskPanel).mockReturnValue({
       ...baseHookValue,
@@ -238,7 +262,12 @@ describe("MaskPanel", () => {
     render(<MaskPanel />);
 
     expect(screen.getByTestId("sam2-download-overlay")).toBeInTheDocument();
+    expect(screen.queryByTestId("sam2-mask-panel")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mask 1" }));
+    expect(mockSelectMask).toHaveBeenCalledWith("mask_sam2");
     expect(screen.getByTestId("sam2-mask-panel")).toBeInTheDocument();
+    expect(screen.queryByTestId("sam2-download-overlay")).not.toBeInTheDocument();
   });
 
   it("does not show the SAM2 download overlay for non-SAM2 masks", () => {
@@ -279,6 +308,9 @@ describe("MaskPanel", () => {
 
     render(<MaskPanel />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Mask 1" }));
+    expect(mockSelectMask).toHaveBeenCalledWith("mask_1");
+
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     expect(mockSetMaskMode).toHaveBeenCalledWith("preview");
 
@@ -289,7 +321,7 @@ describe("MaskPanel", () => {
     expect(mockDeleteSelectedMask).toHaveBeenCalled();
   });
 
-  it("renders mask operations before feather in non-SAM2 mode", () => {
+  it("keeps shared mask edges on home and opens individual controls in detail view", () => {
     vi.mocked(useMaskPanel).mockReturnValue({
       ...baseHookValue,
       masks: [createMaskClip("clip_1", "mask_1", "triangle")],
@@ -302,9 +334,18 @@ describe("MaskPanel", () => {
     expect(
       screen.getByTestId("default-sections-order-mask-composite-context"),
     ).toHaveTextContent("mask_grow>feather");
+    expect(
+      screen.queryByTestId("default-sections-order-mask-context"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mask 1" }));
+
     expect(screen.getByTestId("default-sections-order-mask-context")).toHaveTextContent(
       "layout",
     );
+    expect(
+      screen.queryByTestId("default-sections-order-mask-composite-context"),
+    ).not.toBeInTheDocument();
   });
 
   it("shares one inverse toggle across grow and feather", () => {
@@ -388,7 +429,31 @@ describe("MaskPanel", () => {
     ]);
   });
 
-  it("renders Sam2MaskPanel when a SAM2 mask is selected", () => {
+  it("returns from a mask detail view back to the shared home view", () => {
+    vi.mocked(useMaskPanel).mockReturnValue({
+      ...baseHookValue,
+      masks: [createMaskClip("clip_1", "mask_1", "triangle")],
+      selectedMaskId: "mask_1",
+      selectedMask: createMaskClip("clip_1", "mask_1", "triangle"),
+    });
+
+    render(<MaskPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mask 1" }));
+    expect(screen.getByRole("button", { name: "Back To Masks" })).toBeInTheDocument();
+    expect(screen.getByTestId("default-sections-order-mask-context")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back To Masks" }));
+
+    expect(
+      screen.getByTestId("default-sections-order-mask-composite-context"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("default-sections-order-mask-context"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders Sam2MaskPanel in the dedicated mask detail view", () => {
     const sam2Mask = createMaskClip("clip_1", "mask_sam2", "sam2");
     vi.mocked(useMaskPanel).mockReturnValue({
       ...baseHookValue,
@@ -399,32 +464,25 @@ describe("MaskPanel", () => {
 
     render(<MaskPanel />);
 
-    // Sam2MaskPanel should be rendered (via the mock) with the correct label
-    const sam2Panel = screen.getByTestId("sam2-mask-panel");
-    expect(sam2Panel).toBeInTheDocument();
-    expect(sam2Panel).toHaveTextContent("Mask 1");
-
-    // Standard mask controls should NOT be rendered inside the SAM2 panel body
-    expect(
-      screen.queryByRole("button", { name: "Apply" }),
-    ).not.toBeInTheDocument();
-
     expect(
       screen.getByTestId("default-sections-order-mask-composite-context"),
-    ).toHaveTextContent(
-      "mask_grow>feather",
-    );
+    ).toHaveTextContent("mask_grow>feather");
     expect(
       screen.queryByTestId("default-sections-order-mask-context"),
     ).not.toBeInTheDocument();
 
-    const defaultSections = screen.getByTestId(
-      "default-sections-order-mask-composite-context",
-    );
-    const deleteButton = screen.getByRole("button", { name: "Delete Mask" });
+    fireEvent.click(screen.getByRole("button", { name: "Mask 1" }));
+
+    const sam2Panel = screen.getByTestId("sam2-mask-panel");
+    expect(sam2Panel).toBeInTheDocument();
+    expect(sam2Panel).toHaveTextContent("Mask 1");
     expect(
-      defaultSections.compareDocumentPosition(deleteButton) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).not.toBe(0);
+      screen.queryByTestId("default-sections-order-mask-context"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("default-sections-order-mask-composite-context"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back To Masks" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete Mask" })).toBeInTheDocument();
   });
 });
