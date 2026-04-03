@@ -115,7 +115,6 @@ describe("inputSelection", () => {
     expect(maskRenderOptions?.outputs).toHaveLength(1);
     expect(maskRenderOptions?.outputs?.[0]?.id).toBe("mask");
     expect(maskRenderOptions?.includeTimelineMasks).toBeUndefined();
-    expect(maskRenderOptions?.renderKind).toBe("mask");
 
     const videoRenderOptions = renderSpy.mock.calls[1][3];
     expect(videoRenderOptions).toMatchObject({
@@ -130,94 +129,5 @@ describe("inputSelection", () => {
 
     expect(result.video.type).toBe("video/webm");
     expect(result.mask.type).toBe("video/webm");
-  });
-
-  it("renders timeline-mask derived masks in a dedicated mask pass", async () => {
-    const renderSpy = vi
-      .fn()
-      .mockResolvedValueOnce({
-        video: new Blob(["mask"], { type: "video/webm" }),
-        outputs: {
-          mask: new Blob(["mask"], { type: "video/webm" }),
-        },
-      })
-      .mockResolvedValueOnce({
-        video: new Blob(["video"], { type: "video/webm" }),
-        outputs: {
-          video: new Blob(["video"], { type: "video/webm" }),
-        },
-      });
-
-    vi.spyOn(ExportRenderer, "create").mockResolvedValue({
-      render: renderSpy,
-    } as unknown as ExportRenderer);
-
-    const timelineSelection = {
-      start: 0,
-      end: 24,
-      clips: useTimelineStore.getState().clips,
-      fps: 24,
-    };
-
-    await renderTimelineSelectionToWebmWithMask(timelineSelection, "binary");
-
-    expect(renderSpy).toHaveBeenCalledTimes(2);
-
-    const maskRenderOptions = renderSpy.mock.calls[0][3];
-    expect(maskRenderOptions?.outputs).toHaveLength(1);
-    expect(maskRenderOptions?.outputs?.[0]?.id).toBe("mask");
-    expect(maskRenderOptions?.renderKind).toBe("mask");
-
-    const videoRenderOptions = renderSpy.mock.calls[1][3];
-    expect(videoRenderOptions?.outputs).toHaveLength(1);
-    expect(videoRenderOptions?.outputs?.[0]?.id).toBe("video");
-    expect(videoRenderOptions?.includeTimelineMasks).toBeUndefined();
-    expect(videoRenderOptions?.renderKind).toBeUndefined();
-  });
-
-  it("keeps alpha-derived masks on the scene pass when no timeline mask is active", async () => {
-    useTimelineStore.setState({
-      clips: [
-        {
-          id: "clip_1",
-          trackId: "track_1",
-          type: "video",
-          name: "Clip",
-          assetId: "asset_1",
-          start: 0,
-          timelineDuration: 24,
-          offset: 0,
-          clipComponents: [],
-        },
-      ] as never,
-    });
-
-    const renderSpy = vi.fn().mockResolvedValue({
-      video: new Blob(["video"], { type: "video/webm" }),
-      outputs: {
-        video: new Blob(["video"], { type: "video/webm" }),
-        mask: new Blob(["mask"], { type: "video/webm" }),
-      },
-    });
-
-    const createSpy = vi
-      .spyOn(ExportRenderer, "create")
-      .mockResolvedValue({ render: renderSpy } as unknown as ExportRenderer);
-
-    const timelineSelection = {
-      start: 0,
-      end: 24,
-      clips: useTimelineStore.getState().clips,
-      fps: 24,
-    };
-
-    await renderTimelineSelectionToWebmWithMask(timelineSelection, "binary");
-
-    expect(createSpy).toHaveBeenCalledTimes(1);
-    expect(renderSpy).toHaveBeenCalledTimes(1);
-
-    const renderOptions = renderSpy.mock.calls[0][3];
-    expect(renderOptions?.renderKind).toBeUndefined();
-    expect(renderOptions?.outputs).toHaveLength(2);
   });
 });

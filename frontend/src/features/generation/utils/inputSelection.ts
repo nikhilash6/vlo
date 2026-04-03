@@ -1,7 +1,4 @@
-import type {
-  MaskTimelineClip,
-  TimelineSelection,
-} from "../../../types/TimelineTypes";
+import type { TimelineSelection } from "../../../types/TimelineTypes";
 import {
   ExportRenderer,
   buildProjectRenderInputs,
@@ -9,7 +6,6 @@ import {
   createFilterStackTransform,
   createNonBinaryMaskOutputColorMatrixFilter,
   createTransparentAreaNeutralGrayOutputColorMatrixFilter,
-  type MaskOutputSource,
   renderProjectFrameFileAtTick,
 } from "../../renderer";
 import {
@@ -71,43 +67,12 @@ export interface TimelineSelectionWithMaskResult {
   mask: File;
 }
 
-function resolveSelectionMaskClips(
-  timelineSelection: TimelineSelection,
-): MaskTimelineClip[] {
-  return timelineSelection.clips.filter(
-    (clip): clip is MaskTimelineClip => clip.type === "mask",
-  );
-}
-
-function selectionHasActiveTimelineMasks(
-  timelineSelection: TimelineSelection,
-): boolean {
-  const maskClipsById = new Map(
-    resolveSelectionMaskClips(timelineSelection).map(
-      (clip) => [clip.id, clip] as const,
-    ),
-  );
-
-  return timelineSelection.clips.some((clip) => {
-    if (clip.type === "mask") return false;
-
-    return (clip.clipComponents ?? []).some((component) => {
-      if (component.componentType !== "mask") return false;
-      const maskClip = maskClipsById.get(component.clipId);
-      return maskClip?.maskMode === "apply";
-    });
-  });
-}
-
-function createMaskFilter(
-  maskType: DerivedMaskType,
-  source: MaskOutputSource = "alpha",
-) {
+function createMaskFilter(maskType: DerivedMaskType) {
   switch (maskType) {
     case "binary":
-      return createBinaryMaskOutputFilter(source);
+      return createBinaryMaskOutputFilter();
     case "soft":
-      return createNonBinaryMaskOutputColorMatrixFilter(source);
+      return createNonBinaryMaskOutputColorMatrixFilter();
   }
 }
 
@@ -141,19 +106,14 @@ function createVideoOutputDefinition(
   };
 }
 
-function createMaskOutputDefinition(
-  maskType: DerivedMaskType,
-  source: MaskOutputSource = "alpha",
-) {
+function createMaskOutputDefinition(maskType: DerivedMaskType) {
   return {
     id: "mask",
     format: "webm" as const,
     includeAudio: false,
     preserveAlpha: false,
     bitrate: 20_000_000,
-    transformStack: [
-      createFilterStackTransform([createMaskFilter(maskType, source)]),
-    ],
+    transformStack: [createFilterStackTransform([createMaskFilter(maskType)])],
   };
 }
 
@@ -172,23 +132,14 @@ export async function renderTimelineSelectionToWebmWithMask(
   const videoTreatment =
     options.videoTreatment ?? DEFAULT_DERIVED_MASK_SOURCE_VIDEO_TREATMENT;
   try {
-    const hasActiveTimelineMasks =
-      selectionHasActiveTimelineMasks(timelineSelection);
-    const maskOutputSource: MaskOutputSource = hasActiveTimelineMasks
-      ? "red"
-      : "alpha";
-    const maskOutput = createMaskOutputDefinition(maskType, maskOutputSource);
+    const maskOutput = createMaskOutputDefinition(maskType);
     let videoBlob: Blob;
     let maskBlob: Blob | undefined;
-    const shouldRenderMaskSeparately =
-      videoTreatment === "remove_transparency" || hasActiveTimelineMasks;
 
-    if (shouldRenderMaskSeparately) {
-      // Timeline-mask exports need a dedicated mask-only render pass so the
-      // workflow mask comes from the composed mask layer rather than inferred
-      // scene transparency. We also keep the old separate-pass behavior for
-      // remove_transparency, where the video payload intentionally ignores
-      // timeline masking.
+    if (videoTreatment === "remove_transparency") {
+      // The derived mask must still be extracted from the masked timeline
+      // output, but the backend video should come from a pass that ignores
+      // timeline masks entirely rather than trying to flatten alpha later.
       const maskRenderer = await ExportRenderer.create(exportConfig);
       const maskResult = await maskRenderer.render(
         projectData,
@@ -197,7 +148,6 @@ export async function renderTimelineSelectionToWebmWithMask(
         {
           timelineSelection,
           outputs: [maskOutput],
-          renderKind: hasActiveTimelineMasks ? "mask" : "scene",
           signal: options.signal,
         },
       );
@@ -212,8 +162,7 @@ export async function renderTimelineSelectionToWebmWithMask(
         {
           timelineSelection,
           outputs: [createVideoOutputDefinition(videoTreatment)],
-          includeTimelineMasks:
-            videoTreatment === "remove_transparency" ? false : undefined,
+          includeTimelineMasks: false,
           signal: options.signal,
         },
       );
