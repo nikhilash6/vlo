@@ -95,10 +95,27 @@ export class MediaFileProcessor {
       const THUMBNAIL_MAX_SIZE = 320;
 
       // 1. Get Duration / FPS
-      const durationSec = await input.computeDuration();
-      const duration = durationSec || 0;
-      let fps: number | null = null;
       const videoTrack = await input.getPrimaryVideoTrack();
+      let duration = 0;
+      let fps: number | null = null;
+
+      if (videoTrack) {
+        try {
+          const videoDurationSec = await videoTrack.computeDuration();
+          if (Number.isFinite(videoDurationSec) && videoDurationSec > 0) {
+            duration = videoDurationSec;
+          }
+        } catch (error) {
+          console.warn("Failed to compute primary video track duration", error);
+        }
+      }
+
+      if (duration <= 0) {
+        const durationSec = await input.computeDuration();
+        if (Number.isFinite(durationSec) && durationSec > 0) {
+          duration = durationSec;
+        }
+      }
 
       if (videoTrack) {
         try {

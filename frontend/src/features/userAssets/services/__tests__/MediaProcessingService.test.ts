@@ -10,7 +10,7 @@ import {
   MediaProcessingService,
   MediaFileProcessor,
 } from "../MediaProcessingService";
-import { Input } from "mediabunny";
+import { CanvasSink, Input } from "mediabunny";
 
 // Mock mediabunny
 vi.mock("mediabunny", () => {
@@ -23,13 +23,26 @@ vi.mock("mediabunny", () => {
       dispose: vi.fn(),
     };
   });
+  const MockCanvasSink = vi.fn(function () {
+    return {
+      canvases: vi.fn(() => ({
+        next: vi.fn().mockResolvedValue({ value: undefined }),
+        return: vi.fn().mockResolvedValue(undefined),
+      })),
+    };
+  });
 
   return {
     Input: MockInput,
     BlobSource: vi.fn(),
     ALL_FORMATS: [],
+    CanvasSink: MockCanvasSink,
+    Output: vi.fn(),
     Mp4OutputFormat: vi.fn(),
     BufferTarget: vi.fn(),
+    Conversion: {
+      init: vi.fn(),
+    },
   };
 });
 
@@ -151,6 +164,46 @@ describe("MediaFileProcessor", () => {
 
     await expect(processor.computeDuration()).resolves.toBe(12.5);
     expect(computeDuration).toHaveBeenCalled();
+  });
+
+  it("should prefer primary video track duration when generating video metadata", async () => {
+    const computeDuration = vi.fn().mockResolvedValue(12.041678004535147);
+    const trackComputeDuration = vi.fn().mockResolvedValue(12.041666666666666);
+    const computePacketStats = vi.fn().mockResolvedValue({
+      averagePacketRate: 24,
+    });
+    const getFirstTimestamp = vi.fn().mockResolvedValue(0);
+
+    vi.mocked(Input).mockImplementationOnce(function () {
+      return {
+        getMimeType: vi.fn(),
+        computeDuration,
+        getPrimaryVideoTrack: vi.fn().mockResolvedValue({
+          computeDuration: trackComputeDuration,
+          computePacketStats,
+          displayWidth: 1920,
+          displayHeight: 1080,
+          getFirstTimestamp,
+        }),
+        getPrimaryAudioTrack: vi.fn(),
+        dispose: vi.fn(),
+      };
+    });
+    vi.mocked(CanvasSink).mockImplementationOnce(function () {
+      return {
+        canvases: vi.fn(() => ({
+          next: vi.fn().mockResolvedValue({ value: undefined }),
+          return: vi.fn().mockResolvedValue(undefined),
+        })),
+      };
+    });
+
+    const metadata = await processor.generateVideoMetadata();
+
+    expect(metadata.duration).toBe(12.041666666666666);
+    expect(metadata.fps).toBe(24);
+    expect(trackComputeDuration).toHaveBeenCalledTimes(1);
+    expect(computeDuration).not.toHaveBeenCalled();
   });
 });
 
