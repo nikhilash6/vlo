@@ -10,6 +10,8 @@ import {
   type ProjectData,
   type ExportConfig,
 } from "../services/ExportRenderer";
+import { deriveTrueDimensionsFromShortEdge } from "../utils/dimensions";
+import type { AspectRatio } from "../../project/useProjectStore";
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
@@ -30,12 +32,13 @@ export interface SelectionExportOptions {
 }
 
 export interface ProjectExportOptions {
-  resolutionHeight: number;
+  resolution: number;
   fileHandle?: FileSystemFileHandle;
   onProgress?: (progress: number) => void;
 }
 
 export interface UseExportJobControllerOptions {
+  projectAspectRatio: AspectRatio;
   logicalDimensions: { width: number; height: number };
   projectFps: number;
 }
@@ -51,6 +54,7 @@ export interface ExportJobController {
  * when users quickly cancel and start another render.
  */
 export function useExportJobController({
+  projectAspectRatio,
   logicalDimensions,
   projectFps,
 }: UseExportJobControllerOptions): ExportJobController {
@@ -191,19 +195,23 @@ export function useExportJobController({
   );
 
   const runProjectExport = useCallback(
-    async ({ resolutionHeight, fileHandle, onProgress }: ProjectExportOptions) => {
+    async ({ resolution, fileHandle, onProgress }: ProjectExportOptions) => {
       const sessionId = beginSession();
-      const aspectRatio = logicalDimensions.width / logicalDimensions.height;
-      const outputHeight = resolutionHeight;
-      const rawWidth = outputHeight * aspectRatio;
-      const outputWidth = Math.round(rawWidth / 2) * 2;
-      const evenOutputHeight = Math.round(outputHeight / 2) * 2;
+      const trueDimensions = deriveTrueDimensionsFromShortEdge(
+        projectAspectRatio,
+        resolution,
+      );
+      const outputWidth = Math.max(2, Math.round(trueDimensions.width / 2) * 2);
+      const outputHeight = Math.max(
+        2,
+        Math.round(trueDimensions.height / 2) * 2,
+      );
 
       const exportConfig: ExportConfig = {
         logicalWidth: logicalDimensions.width,
         logicalHeight: logicalDimensions.height,
         outputWidth,
-        outputHeight: evenOutputHeight,
+        outputHeight,
         fileHandle,
       };
 
@@ -240,6 +248,7 @@ export function useExportJobController({
       buildProjectData,
       finalizeSession,
       logicalDimensions,
+      projectAspectRatio,
       registerRenderer,
     ],
   );

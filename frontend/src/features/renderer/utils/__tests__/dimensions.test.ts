@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { getProjectDimensions } from "../dimensions";
+import {
+  deriveTrueDimensionsFromShortEdge,
+  getProjectDimensions,
+} from "../dimensions";
 
 describe("getProjectDimensions", () => {
   it("should return correct dimensions for 16:9", () => {
@@ -27,6 +30,29 @@ describe("getProjectDimensions", () => {
     expect(getProjectDimensions("invalid")).toEqual({
       width: 1920,
       height: 1080,
+    });
+  });
+});
+
+describe("deriveTrueDimensionsFromShortEdge", () => {
+  it("returns true landscape dimensions from the short edge", () => {
+    expect(deriveTrueDimensionsFromShortEdge("16:9", 1080)).toEqual({
+      width: 1920,
+      height: 1080,
+    });
+  });
+
+  it("returns true portrait dimensions from the short edge", () => {
+    expect(deriveTrueDimensionsFromShortEdge("9:16", 1080)).toEqual({
+      width: 1080,
+      height: 1920,
+    });
+  });
+
+  it("returns square dimensions from the short edge", () => {
+    expect(deriveTrueDimensionsFromShortEdge("1:1", 720)).toEqual({
+      width: 720,
+      height: 720,
     });
   });
 });

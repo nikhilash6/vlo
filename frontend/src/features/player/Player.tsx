@@ -71,6 +71,7 @@ function PlayerImpl() {
   );
   const { cancel, runSelectionExport, runProjectExport } =
     useExportJobController({
+      projectAspectRatio: config.aspectRatio,
       logicalDimensions,
       projectFps: config.fps,
     });
@@ -410,7 +411,7 @@ function PlayerImpl() {
   }, [isPlaying, setIsPlaying, handleConfirmSelection]);
 
   const handleExport = useCallback(
-    async (resolutionHeight: number) => {
+    async (resolution: number) => {
       const { setIsProcessing, setProgress, setDialogView, closeDialog } =
         useExtractStore.getState();
 
@@ -442,7 +443,7 @@ function PlayerImpl() {
 
       try {
         await runProjectExport({
-          resolutionHeight,
+          resolution,
           fileHandle,
           onProgress: (progress) => {
             useExtractStore.getState().setProgress(progress);
