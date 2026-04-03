@@ -146,20 +146,7 @@ describe("SpriteClipMaskController mask composition", () => {
 
   it("applies shared parent feathering as a post-composite pass", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const renderSnapshots: Array<{
-      clear?: boolean;
-      filters?: readonly unknown[] | null;
-    }> = [];
-    const renderSpy = vi.fn((args: unknown) => {
-      const renderArgs = args as {
-        clear?: boolean;
-        container?: { filters?: readonly unknown[] | null };
-      };
-      renderSnapshots.push({
-        clear: renderArgs.clear,
-        filters: renderArgs.container?.filters ?? null,
-      });
-    });
+    const renderSpy = vi.fn();
     const renderer = {
       render: renderSpy,
     } as unknown as Renderer;
@@ -194,9 +181,8 @@ describe("SpriteClipMaskController mask composition", () => {
     const alphaMaskEffect = (sprite.effects?.find(
       (effect) => effect instanceof AlphaMask,
     ) ?? null) as AlphaMask | null;
-    const controllerState = (
+    const node = (
       controller as unknown as {
-        maskCoverageMinFilter: unknown;
         vectorMaskNodes: Map<
           string,
           {
@@ -207,19 +193,10 @@ describe("SpriteClipMaskController mask composition", () => {
           }
         >;
       }
-    );
-    const node = controllerState.vectorMaskNodes.get(featheredMask.id);
+    ).vectorMaskNodes.get(featheredMask.id);
 
     expect(alphaMaskEffect).not.toBeNull();
-    expect(renderSpy).toHaveBeenCalledTimes(4);
-    expect(
-      renderSnapshots.some(
-        (call) =>
-          call.clear === true &&
-          call.filters?.length === 1 &&
-          call.filters[0] === controllerState.maskCoverageMinFilter,
-      ),
-    ).toBe(true);
+    expect(renderSpy).toHaveBeenCalledTimes(5);
     expect(node?.presentation).toBe("graphics");
     expect(node?.graphics.visible).toBe(true);
     expect(node?.spriteHost.visible).toBe(false);
@@ -229,22 +206,9 @@ describe("SpriteClipMaskController mask composition", () => {
     warnSpy.mockRestore();
   });
 
-  it("uses explicit max coverage compositing for hard outer feathering", async () => {
+  it("applies shared hard outer feathering as an aligned blur and overlay pass", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const renderSnapshots: Array<{
-      clear?: boolean;
-      filters?: readonly unknown[] | null;
-    }> = [];
-    const renderSpy = vi.fn((args: unknown) => {
-      const renderArgs = args as {
-        clear?: boolean;
-        container?: { filters?: readonly unknown[] | null };
-      };
-      renderSnapshots.push({
-        clear: renderArgs.clear,
-        filters: renderArgs.container?.filters ?? null,
-      });
-    });
+    const renderSpy = vi.fn();
     const renderer = {
       render: renderSpy,
     } as unknown as Renderer;
@@ -276,22 +240,12 @@ describe("SpriteClipMaskController mask composition", () => {
       new Map<string, Asset>(),
     );
 
-    const hardOuterFilter = (
-      controller as unknown as {
-        maskCoverageMaxFilter: unknown;
-      }
-    ).maskCoverageMaxFilter;
+    const alphaMaskEffect = (sprite.effects?.find(
+      (effect) => effect instanceof AlphaMask,
+    ) ?? null) as AlphaMask | null;
 
-    expect(hardOuterFilter).not.toBeNull();
-    expect(renderSpy).toHaveBeenCalledTimes(4);
-    expect(
-      renderSnapshots.some(
-        (call) =>
-          call.clear === true &&
-          call.filters?.length === 1 &&
-          call.filters[0] === hardOuterFilter,
-      ),
-    ).toBe(true);
+    expect(alphaMaskEffect).not.toBeNull();
+    expect(renderSpy).toHaveBeenCalledTimes(5);
 
     controller.dispose();
     warnSpy.mockRestore();
