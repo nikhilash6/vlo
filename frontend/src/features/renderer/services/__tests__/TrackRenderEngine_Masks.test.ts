@@ -137,6 +137,7 @@ vi.mock("pixi.js", async () => {
   };
 });
 
+import { Texture } from "pixi.js";
 import { TrackRenderEngine } from "../TrackRenderEngine";
 
 function createParentClip(
@@ -367,6 +368,67 @@ describe("TrackRenderEngine masks", () => {
 
     expect(sam2RenderAtSpy).toHaveBeenCalledTimes(1);
     expect(sam2RenderAtSpy.mock.calls[0]?.[0]).toBeCloseTo(1 / 30, 6);
+
+    engine.dispose();
+  });
+
+  it("re-syncs masks after the content texture size resolves", async () => {
+    const engine = new TrackRenderEngine(1);
+    const internals = engine as unknown as {
+      sprite: { texture: unknown };
+      maskController: {
+        syncMaskClips: (
+          maskClips: MaskTimelineClip[],
+          clip: StandardTimelineClip,
+          logicalDimensions: { width: number; height: number },
+          rawTime: number,
+          assetsById: Map<string, Asset>,
+          options?: { fps?: number; skipSam2FrameRender?: boolean; waitForSam2?: boolean },
+        ) => Promise<void>;
+      };
+    };
+    internals.sprite.texture = Texture.EMPTY;
+    const syncMaskClipsSpy = vi.spyOn(internals.maskController, "syncMaskClips");
+
+    const clip = createParentClip();
+    const sam2Mask = createSam2MaskClip("mask_sam2", "sam2_asset");
+    const assets: Asset[] = [
+      {
+        id: "asset_1",
+        src: "file://asset.mp4",
+        name: "asset",
+        hash: "hash",
+        type: "video",
+        createdAt: 0,
+      },
+      {
+        id: "sam2_asset",
+        src: "file://sam2.mp4",
+        name: "sam2",
+        hash: "sam2_hash",
+        type: "video",
+        createdAt: 0,
+      },
+    ];
+    const assetsById = new Map(assets.map((asset) => [asset.id, asset] as const));
+
+    await engine.renderFrame(
+      10,
+      clip,
+      { width: 1920, height: 1080 },
+      [sam2Mask],
+      assetsById,
+      { fps: 30 },
+    );
+
+    expect(syncMaskClipsSpy).toHaveBeenCalledTimes(2);
+    expect(syncMaskClipsSpy.mock.calls[0]?.[5]).toEqual(
+      expect.objectContaining({ waitForSam2: true }),
+    );
+    expect(syncMaskClipsSpy.mock.calls[1]?.[5]).toEqual(
+      expect.objectContaining({ skipSam2FrameRender: true }),
+    );
+    expect(sam2RenderAtSpy).toHaveBeenCalledTimes(1);
 
     engine.dispose();
   });

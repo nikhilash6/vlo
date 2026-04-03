@@ -38,7 +38,7 @@ uniform sampler2D uTexture;
 void main(void)
 {
     vec4 color = texture(uTexture, vTextureCoord);
-    float coverage = max(color.r, color.a);
+    float coverage = color.r;
     finalColor = vec4(coverage, coverage, coverage, 1.0);
 }
 `;
@@ -46,10 +46,9 @@ void main(void)
 /**
  * Normalizes red-coded mask coverage for the final Pixi AlphaMask
  * presentation sprite. Pixi's mask shader multiplies `mask.r` by `mask.a`,
- * so we keep coverage in RGB and force alpha to 1.0 to avoid unintentionally
- * attenuating the mask. We resolve the incoming coverage from `max(red, alpha)`
- * because intermediate RenderTextures can be premultiplied, which otherwise
- * collapses soft feather values back toward zero in the red channel alone.
+ * so we keep coverage in RGB and force alpha to 1.0. Alpha is intentionally
+ * ignored here because inverted-mask composition can leave intermediate render
+ * textures with full-frame alpha while red still carries the real coverage.
  */
 export function createMaskRedToAlphaFilter(): Filter {
   return Filter.from({

@@ -429,7 +429,17 @@ export class TrackRenderEngine {
 
           if (frame.bitmap) {
             const texture = Texture.from(frame.bitmap);
-            this.applyTexture(texture, activeClip.id);
+            const contentSizeChanged = this.applyTexture(texture, activeClip.id);
+            if (contentSizeChanged) {
+              await this.resyncMasksForResolvedTexture(
+                maskClips,
+                activeClip,
+                logicalDimensions,
+                rawTimeSeconds,
+                assetById,
+                fps,
+              );
+            }
           } else if (this.currentTextureClipId !== activeClip.id) {
             this.sprite.visible = false;
             this.currentTextureClipId = null;
@@ -528,8 +538,28 @@ export class TrackRenderEngine {
       };
 
       const resolveFrame = settle((bitmap: ImageBitmap | null) => {
-        this.updateTexture(bitmap, activeClip, logicalDimensions, rawTime);
-        resolve();
+        void (async () => {
+          try {
+            await this.updateTexture(
+              bitmap,
+              activeClip,
+              logicalDimensions,
+              rawTime,
+              {
+                maskClips,
+                assetsById,
+                fps: options.fps,
+              },
+            );
+            resolve();
+          } catch (error) {
+            reject(
+              error instanceof Error
+                ? error
+                : new Error("Failed to refresh masks after frame update"),
+            );
+          }
+        })();
       });
       const rejectFrame = settle((error: Error) => {
         reject(error);
@@ -824,7 +854,19 @@ export class TrackRenderEngine {
 
           if (frame.bitmap) {
             const texture = Texture.from(frame.bitmap);
-            this.applyTexture(texture, request.clip.id);
+            const contentSizeChanged = this.applyTexture(
+              texture,
+              request.clip.id,
+            );
+            if (contentSizeChanged) {
+              await this.resyncMasksForResolvedTexture(
+                request.maskClips,
+                request.clip,
+                request.logicalDimensions,
+                request.rawTimeTicks,
+                request.assetsById,
+              );
+            }
           }
 
           if (this.sprite.visible && this.currentTextureClipId === request.clip.id) {
@@ -953,26 +995,85 @@ export class TrackRenderEngine {
     this.liveRenderQueue.splice(0, overflow);
   }
 
-  private updateTexture(
+  private async updateTexture(
     bitmap: ImageBitmap | null,
     clip: TimelineClip,
     dimensions: { width: number; height: number },
     rawTime: number,
+    options: {
+      maskClips?: MaskTimelineClip[];
+      assetsById?: Map<string, Asset>;
+      fps?: number;
+    } = {},
   ) {
     if (bitmap) {
       const texture = Texture.from(bitmap);
-      this.applyTexture(texture, clip.id);
+      const contentSizeChanged = this.applyTexture(texture, clip.id);
       applyClipTransforms(this.sprite, clip, dimensions, rawTime);
       this.maskController.syncMaskSpriteTransform();
+      if (contentSizeChanged) {
+        await this.resyncMasksForResolvedTexture(
+          options.maskClips ?? [],
+          clip,
+          dimensions,
+          rawTime,
+          options.assetsById ?? new Map<string, Asset>(),
+          options.fps,
+        );
+      }
     }
   }
 
-  private applyTexture(texture: Texture, clipId: string) {
+  private applyTexture(texture: Texture, clipId: string): boolean {
     const previousTexture = this.sprite.texture;
+    const previousWidth =
+      previousTexture &&
+      previousTexture !== Texture.EMPTY &&
+      typeof previousTexture.width === "number"
+        ? previousTexture.width
+        : 0;
+    const previousHeight =
+      previousTexture &&
+      previousTexture !== Texture.EMPTY &&
+      typeof previousTexture.height === "number"
+        ? previousTexture.height
+        : 0;
+    const nextWidth = typeof texture.width === "number" ? texture.width : 0;
+    const nextHeight = typeof texture.height === "number" ? texture.height : 0;
+    const contentSizeChanged =
+      previousWidth !== nextWidth || previousHeight !== nextHeight;
+
     this.sprite.texture = texture;
     this.retireTexture(previousTexture);
     this.sprite.visible = true;
     this.currentTextureClipId = clipId;
+    return contentSizeChanged;
+  }
+
+  private async resyncMasksForResolvedTexture(
+    maskClips: MaskTimelineClip[],
+    clip: TimelineClip,
+    logicalDimensions: { width: number; height: number },
+    rawTime: number,
+    assetsById: Map<string, Asset>,
+    fps?: number,
+  ): Promise<void> {
+    if (maskClips.length === 0) {
+      return;
+    }
+
+    try {
+      await this.maskController.syncMaskClips(
+        maskClips,
+        clip,
+        logicalDimensions,
+        rawTime,
+        assetsById,
+        { fps, skipSam2FrameRender: true },
+      );
+    } catch (error) {
+      console.warn("Failed to resync masks after texture update", error);
+    }
   }
 
   /**
