@@ -526,12 +526,99 @@ describe("MaskPanel", () => {
 
     render(<MaskPanel />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Union" }));
     fireEvent.click(screen.getByRole("button", { name: "Mask 2" }));
 
     expect(mockSetMaskBooleanExpression).toHaveBeenCalledWith({
       kind: "operation",
       operator: "union",
+      left: {
+        kind: "mask_ref",
+        maskId: "mask_1",
+      },
+      right: {
+        kind: "mask_ref",
+        maskId: "mask_2",
+      },
+    });
+  });
+
+  it("can nest another union into a selected subexpression", () => {
+    vi.mocked(useMaskPanel).mockReturnValue({
+      ...baseHookValue,
+      masks: [
+        createMaskClip("clip_1", "mask_1", "circle"),
+        createMaskClip("clip_1", "mask_2", "rectangle"),
+        createMaskClip("clip_1", "mask_3", "triangle"),
+      ],
+      maskBooleanExpression: {
+        kind: "operation",
+        operator: "union",
+        left: {
+          kind: "mask_ref",
+          maskId: "mask_1",
+        },
+        right: {
+          kind: "mask_ref",
+          maskId: "mask_2",
+        },
+      },
+    });
+
+    render(<MaskPanel />);
+
+    fireEvent.click(screen.getByTestId("mask-equation-mask-left"));
+    fireEvent.click(screen.getByRole("button", { name: "Mask 3" }));
+
+    expect(mockSetMaskBooleanExpression).toHaveBeenCalledWith({
+      kind: "operation",
+      operator: "union",
+      left: {
+        kind: "operation",
+        operator: "union",
+        left: {
+          kind: "mask_ref",
+          maskId: "mask_1",
+        },
+        right: {
+          kind: "mask_ref",
+          maskId: "mask_3",
+        },
+      },
+      right: {
+        kind: "mask_ref",
+        maskId: "mask_2",
+      },
+    });
+  });
+
+  it("cycles an inline operator chip through the boolean operations", () => {
+    vi.mocked(useMaskPanel).mockReturnValue({
+      ...baseHookValue,
+      masks: [
+        createMaskClip("clip_1", "mask_1", "circle"),
+        createMaskClip("clip_1", "mask_2", "rectangle"),
+      ],
+      maskBooleanExpression: {
+        kind: "operation",
+        operator: "union",
+        left: {
+          kind: "mask_ref",
+          maskId: "mask_1",
+        },
+        right: {
+          kind: "mask_ref",
+          maskId: "mask_2",
+        },
+      },
+    });
+
+    render(<MaskPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Union" }));
+
+    expect(mockSetMaskBooleanExpression).toHaveBeenCalledWith({
+      kind: "operation",
+      operator: "intersect",
       left: {
         kind: "mask_ref",
         maskId: "mask_1",

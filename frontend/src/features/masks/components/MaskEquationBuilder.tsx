@@ -1,12 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import {
-  Box,
-  Button,
-  ButtonGroup,
-  Chip,
-  IconButton,
-  Typography,
-} from "@mui/material";
+import { Box, Button, Chip, IconButton, Typography } from "@mui/material";
 import {
   BackspaceOutlined,
   ClearOutlined,
@@ -19,6 +12,8 @@ import type {
   MaskTimelineClip,
 } from "../../../types/TimelineTypes";
 import {
+  appendMaskBooleanExpression,
+  cycleMaskBooleanOperator,
   type MaskBooleanExpressionPath,
   collectMaskBooleanExpressionMaskIds,
   createMaskBooleanMaskRef,
@@ -43,31 +38,6 @@ const OPERATOR_LABELS: Record<MaskBooleanOperator, string> = {
   union: "Union",
   intersect: "Intersect",
   subtract: "Minus",
-};
-
-const actionButtonSx = {
-  textTransform: "none",
-  borderColor: "#2f333a",
-  bgcolor: "#4a4f57",
-  color: "#f2f3f5",
-  "&:hover": {
-    bgcolor: "#5a606b",
-    borderColor: "#2f333a",
-  },
-  "&.Mui-disabled": {
-    bgcolor: "#3a3f47",
-    color: "#8a8f98",
-    borderColor: "#2f333a",
-  },
-};
-
-const selectedActionButtonSx = {
-  ...actionButtonSx,
-  bgcolor: "#6b7280",
-  color: "#ffffff",
-  "&:hover": {
-    bgcolor: "#7a8292",
-  },
 };
 
 function arePathsEqual(
@@ -109,13 +79,10 @@ export function MaskEquationBuilder({
   const [selectedPath, setSelectedPath] = useState<MaskBooleanExpressionPath>(
     [],
   );
-  const [pendingOperator, setPendingOperator] =
-    useState<MaskBooleanOperator | null>(null);
 
   useEffect(() => {
     if (!expression) {
       setSelectedPath([]);
-      setPendingOperator(null);
       return;
     }
 
@@ -165,7 +132,6 @@ export function MaskEquationBuilder({
 
   const handleSelectPath = (path: MaskBooleanExpressionPath) => {
     setSelectedPath(path);
-    setPendingOperator(null);
   };
 
   const handleUseMask = (maskId: string) => {
@@ -174,52 +140,26 @@ export function MaskEquationBuilder({
     if (!expression) {
       onExpressionChange(maskRef);
       setSelectedPath([]);
-      setPendingOperator(null);
       return;
     }
 
-    const node = getMaskBooleanExpressionAtPath(expression, selectedPath);
+    const targetPath = selectedNode ? selectedPath : [];
+    const node =
+      getMaskBooleanExpressionAtPath(expression, targetPath) ?? expression;
     if (!node) {
       onExpressionChange(maskRef);
       setSelectedPath([]);
-      setPendingOperator(null);
       return;
     }
 
-    if (pendingOperator) {
-      onExpressionChange(
-        replaceMaskBooleanExpressionAtPath(expression, selectedPath, {
-          kind: "operation",
-          operator: pendingOperator,
-          left: structuredClone(node),
-          right: maskRef,
-        }),
-      );
-      setPendingOperator(null);
-      return;
-    }
-
-    if (node.kind === "mask_ref") {
-      onExpressionChange(
-        replaceMaskBooleanExpressionAtPath(expression, selectedPath, maskRef),
-      );
-    }
-  };
-
-  const handleOperatorClick = (operator: MaskBooleanOperator) => {
-    if (!expression || !selectedNode) {
-      return;
-    }
-
-    if (selectedNode.kind === "operation") {
-      onExpressionChange(
-        setMaskBooleanExpressionOperatorAtPath(expression, selectedPath, operator),
-      );
-      setPendingOperator(null);
-      return;
-    }
-
-    setPendingOperator(operator);
+    onExpressionChange(
+      replaceMaskBooleanExpressionAtPath(
+        expression,
+        targetPath,
+        appendMaskBooleanExpression(node, maskId),
+      ),
+    );
+    setSelectedPath(targetPath);
   };
 
   const handleDeleteSelected = () => {
@@ -233,7 +173,6 @@ export function MaskEquationBuilder({
     );
     onExpressionChange(nextExpression);
     setSelectedPath(selectedPath.slice(0, -1));
-    setPendingOperator(null);
   };
 
   const handleSwapSelected = () => {
@@ -244,16 +183,13 @@ export function MaskEquationBuilder({
     onExpressionChange(
       swapMaskBooleanExpressionOperandsAtPath(expression, selectedPath),
     );
-    setPendingOperator(null);
   };
 
   const helperText = !expression
     ? "Click a mask chip to start the equation."
-    : pendingOperator
-      ? `Click a mask chip to add it with ${OPERATOR_LABELS[pendingOperator].toLowerCase()}.`
-      : selectedNode?.kind === "operation"
-        ? "Choose an operator to retarget the selected group, or swap/delete it."
-        : "Select part of the equation, then choose an operator or replace it with another mask.";
+    : selectedNode?.kind === "operation"
+      ? "Click a mask chip to union it into the selected group. Click the operator chip to cycle it."
+      : "Select a mask or group, then click another mask chip to union it into that part of the equation.";
 
   const renderNode = (
     node: MaskBooleanExpression,
@@ -317,7 +253,17 @@ export function MaskEquationBuilder({
           variant={isSelected ? "filled" : "outlined"}
           onClick={(event) => {
             event.stopPropagation();
-            handleSelectPath(path);
+            if (!expression) {
+              return;
+            }
+            setSelectedPath(path);
+            onExpressionChange(
+              setMaskBooleanExpressionOperatorAtPath(
+                expression,
+                path,
+                cycleMaskBooleanOperator(node.operator),
+              ),
+            );
           }}
           sx={{ height: 24 }}
         />
@@ -404,27 +350,6 @@ export function MaskEquationBuilder({
       </Box>
 
       <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        <ButtonGroup variant="contained" disableElevation size="small" fullWidth>
-          {(
-            Object.entries(OPERATOR_LABELS) as Array<
-              [MaskBooleanOperator, string]
-            >
-          ).map(([operator, label]) => {
-            const isActive = pendingOperator === operator;
-            return (
-              <Button
-                key={operator}
-                data-testid={`mask-equation-operator-${operator}`}
-                disabled={!expression}
-                onClick={() => handleOperatorClick(operator)}
-                sx={isActive ? selectedActionButtonSx : actionButtonSx}
-              >
-                {label}
-              </Button>
-            );
-          })}
-        </ButtonGroup>
-
         <Box sx={{ display: "flex", gap: 1 }}>
           <Button
             data-testid="mask-equation-swap"
@@ -457,7 +382,6 @@ export function MaskEquationBuilder({
             onClick={() => {
               onExpressionChange(null);
               setSelectedPath([]);
-              setPendingOperator(null);
             }}
             sx={{ textTransform: "none", flex: 1 }}
           >

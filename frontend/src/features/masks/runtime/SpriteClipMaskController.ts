@@ -37,7 +37,7 @@ import {
   collectUnionMaskIds,
   countMaskBooleanOperationNodes,
   getMaskLocalId,
-  resolveMaskBooleanExpression,
+  resolveRenderableMaskBooleanExpression,
 } from "../model/maskBooleanExpression";
 import {
   calculatePlayerFrameTime,
@@ -232,7 +232,7 @@ export class SpriteClipMaskController {
     const resolvedMaskExpression =
       parentClip.type === "mask"
         ? null
-        : resolveMaskBooleanExpression(parentClip, maskClips);
+        : resolveRenderableMaskBooleanExpression(parentClip, maskClips);
     const referencedMaskIds = new Set(
       collectMaskBooleanExpressionMaskIds(resolvedMaskExpression),
     );

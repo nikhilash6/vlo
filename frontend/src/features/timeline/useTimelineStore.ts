@@ -30,6 +30,7 @@ import { getTrackTypeFromClipType } from "./utils/formatting";
 import { getResizedClipLeft, getResizedClipRight } from "./utils/clipMath";
 import { resolveCollision } from "./utils/collision";
 import {
+  appendMaskBooleanExpression,
   getMaskLocalId,
   pruneMaskBooleanExpression,
   resolveMaskBooleanExpression,
@@ -219,6 +220,17 @@ function getChildMaskClipIds(clip: TimelineClip): string[] {
   return getClipComponents(clip)
     .filter((component) => component.componentType === "mask")
     .map((component) => component.clipId);
+}
+
+function getOrderedChildMaskClips(
+  clips: readonly TimelineClip[],
+  parent: TimelineClip,
+): MaskTimelineClip[] {
+  const clipById = new Map(clips.map((clip) => [clip.id, clip] as const));
+
+  return getChildMaskClipIds(parent)
+    .map((maskClipId) => clipById.get(maskClipId))
+    .filter((clip): clip is MaskTimelineClip => !!clip && clip.type === "mask");
 }
 
 function getSam2MaskAssetId(clip: TimelineClip): string | null {
@@ -1626,12 +1638,23 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
     addClipMask: (clipId, mask) => {
       commitModelMutation((draft) => {
         const parent = draft.clips.find((clip) => clip.id === clipId);
-        if (!parent) return;
+        if (!parent || parent.type === "mask") return;
+
+        const existingMaskClips = getOrderedChildMaskClips(draft.clips, parent);
 
         const maskClip = maskToClip(parent, mask);
         draft.clips.push(maskClip);
-
         addMaskClipComponent(parent, maskClip.id);
+
+        const maskLocalId = getMaskLocalId(maskClip);
+        if (!maskLocalId) {
+          return;
+        }
+
+        parent.maskBooleanExpression = appendMaskBooleanExpression(
+          resolveMaskBooleanExpression(parent, existingMaskClips),
+          maskLocalId,
+        );
       });
     },
 

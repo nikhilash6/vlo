@@ -7,6 +7,11 @@ import type {
 } from "../../../types/TimelineTypes";
 
 const MASK_CLIP_ID_SEPARATOR = "::mask::";
+const MASK_BOOLEAN_OPERATOR_ORDER: MaskBooleanOperator[] = [
+  "union",
+  "intersect",
+  "subtract",
+];
 
 export type MaskBooleanExpressionPath = Array<"left" | "right">;
 
@@ -60,6 +65,37 @@ export function createMaskBooleanMaskRef(maskId: string): MaskBooleanExpression 
     kind: "mask_ref",
     maskId,
   };
+}
+
+export function appendMaskBooleanExpression(
+  expression: MaskBooleanExpression | null | undefined,
+  maskId: string,
+  operator: MaskBooleanOperator = "union",
+): MaskBooleanExpression {
+  const maskRef = createMaskBooleanMaskRef(maskId);
+  if (!expression) {
+    return maskRef;
+  }
+
+  return {
+    kind: "operation",
+    operator,
+    left: structuredClone(expression),
+    right: maskRef,
+  };
+}
+
+export function cycleMaskBooleanOperator(
+  operator: MaskBooleanOperator,
+): MaskBooleanOperator {
+  const currentIndex = MASK_BOOLEAN_OPERATOR_ORDER.indexOf(operator);
+  if (currentIndex < 0) {
+    return "union";
+  }
+
+  return MASK_BOOLEAN_OPERATOR_ORDER[
+    (currentIndex + 1) % MASK_BOOLEAN_OPERATOR_ORDER.length
+  ];
 }
 
 export function getMaskLocalIdFromMaskClipId(maskClipId: string): string | null {
@@ -190,6 +226,26 @@ export function resolveMaskBooleanExpression(
   }
 
   return resolveLegacyMaskBooleanExpression(maskClips);
+}
+
+export function resolveRenderableMaskBooleanExpression(
+  parentClip: Pick<StandardTimelineClip, "maskBooleanExpression">,
+  maskClips: readonly MaskTimelineClip[],
+): MaskBooleanExpression | null {
+  const resolvedExpression = resolveMaskBooleanExpression(parentClip, maskClips);
+  if (!resolvedExpression) {
+    return null;
+  }
+
+  const offMaskIds = maskClips
+    .filter((maskClip) => maskClip.maskMode === "off")
+    .map((maskClip) => getMaskLocalId(maskClip))
+    .filter((maskId): maskId is string => !!maskId);
+  if (offMaskIds.length === 0) {
+    return resolvedExpression;
+  }
+
+  return pruneMaskBooleanExpression(resolvedExpression, offMaskIds);
 }
 
 export function getMaskBooleanExpressionAtPath(

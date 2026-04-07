@@ -6,6 +6,7 @@ import type {
   StandardTimelineClip,
   TimelineTrack,
 } from "../../../types/TimelineTypes";
+import { createMask } from "../../masks/model/maskFactory";
 import {
   selectMaskClipsForParent,
   selectResolvedMaskBooleanExpressionForParent,
@@ -261,5 +262,49 @@ describe("useTimelineStore mask boolean expressions", () => {
       `${pastedParent?.id}::mask::mask_1`,
       `${pastedParent?.id}::mask::mask_2`,
     ]);
+  });
+
+  it("automatically appends a newly added mask to the end of the equation as a union", () => {
+    const parent = createParentClip("clip_1", "track_current", ["mask_1"]);
+    const mask1 = createMaskClip("clip_1", "mask_1", "track_current");
+
+    useTimelineStore.getState().replaceTimelineSnapshot({
+      tracks: useTimelineStore.getState().tracks,
+      clips: [parent, mask1],
+    });
+
+    act(() => {
+      useTimelineStore.getState().addClipMask(
+        parent.id,
+        createMask("triangle", {
+          id: "mask_2",
+          inverted: false,
+          parameters: {
+            baseWidth: 120,
+            baseHeight: 120,
+          },
+        }),
+      );
+    });
+
+    const updatedParent = useTimelineStore
+      .getState()
+      .clips.find(
+        (clip): clip is StandardTimelineClip =>
+          clip.id === parent.id && clip.type !== "mask",
+      );
+
+    expect(updatedParent?.maskBooleanExpression).toEqual({
+      kind: "operation",
+      operator: "union",
+      left: {
+        kind: "mask_ref",
+        maskId: "mask_1",
+      },
+      right: {
+        kind: "mask_ref",
+        maskId: "mask_2",
+      },
+    });
   });
 });
