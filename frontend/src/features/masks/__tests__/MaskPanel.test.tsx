@@ -107,6 +107,7 @@ describe("MaskPanel", () => {
   const mockRequestDraw = vi.fn();
   const mockSelectMask = vi.fn();
   const mockSetMaskMode = vi.fn();
+  const mockSetMaskBooleanExpression = vi.fn();
   const mockSetMaskInverted = vi.fn();
   const mockSetSam2PointMode = vi.fn();
   const mockClearSam2Points = vi.fn();
@@ -123,6 +124,7 @@ describe("MaskPanel", () => {
     baseHookValue = {
       selectedClipId: "clip_1",
       masks: [],
+      maskBooleanExpression: null,
       selectedMaskId: null,
       selectedMask: null,
       addMenuAnchorEl: null,
@@ -132,6 +134,7 @@ describe("MaskPanel", () => {
       requestDraw: mockRequestDraw,
       selectMask: mockSelectMask,
       setMaskMode: mockSetMaskMode,
+      setMaskBooleanExpression: mockSetMaskBooleanExpression,
       maskInverted: false,
       setMaskInverted: mockSetMaskInverted,
       sam2PointMode: "add",
@@ -265,6 +268,12 @@ describe("MaskPanel", () => {
     expect(screen.queryByTestId("sam2-mask-panel")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Mask 1" }));
+    expect(mockSetMaskBooleanExpression).toHaveBeenCalledWith({
+      kind: "mask_ref",
+      maskId: "mask_sam2",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Mask 1" }));
     expect(mockSelectMask).toHaveBeenCalledWith("mask_sam2");
     expect(screen.getByTestId("sam2-mask-panel")).toBeInTheDocument();
     expect(screen.queryByTestId("sam2-download-overlay")).not.toBeInTheDocument();
@@ -308,7 +317,7 @@ describe("MaskPanel", () => {
 
     render(<MaskPanel />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Mask 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit Mask 1" }));
     expect(mockSelectMask).toHaveBeenCalledWith("mask_1");
 
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
@@ -338,7 +347,7 @@ describe("MaskPanel", () => {
       screen.queryByTestId("default-sections-order-mask-context"),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Mask 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit Mask 1" }));
 
     expect(screen.getByTestId("default-sections-order-mask-context")).toHaveTextContent(
       "layout",
@@ -439,7 +448,7 @@ describe("MaskPanel", () => {
 
     render(<MaskPanel />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Mask 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit Mask 1" }));
     expect(screen.getByRole("button", { name: "Back To Masks" })).toBeInTheDocument();
     expect(screen.getByTestId("default-sections-order-mask-context")).toBeInTheDocument();
 
@@ -471,7 +480,7 @@ describe("MaskPanel", () => {
       screen.queryByTestId("default-sections-order-mask-context"),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Mask 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit Mask 1" }));
 
     const sam2Panel = screen.getByTestId("sam2-mask-panel");
     expect(sam2Panel).toBeInTheDocument();
@@ -484,5 +493,53 @@ describe("MaskPanel", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Back To Masks" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete Mask" })).toBeInTheDocument();
+  });
+
+  it("inserts masks into the boolean equation from the available mask row", () => {
+    vi.mocked(useMaskPanel).mockReturnValue({
+      ...baseHookValue,
+      masks: [createMaskClip("clip_1", "mask_1", "circle")],
+    });
+
+    render(<MaskPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mask 1" }));
+
+    expect(mockSetMaskBooleanExpression).toHaveBeenCalledWith({
+      kind: "mask_ref",
+      maskId: "mask_1",
+    });
+  });
+
+  it("wraps the selected equation node with an operator when adding another mask", () => {
+    vi.mocked(useMaskPanel).mockReturnValue({
+      ...baseHookValue,
+      masks: [
+        createMaskClip("clip_1", "mask_1", "circle"),
+        createMaskClip("clip_1", "mask_2", "rectangle"),
+      ],
+      maskBooleanExpression: {
+        kind: "mask_ref",
+        maskId: "mask_1",
+      },
+    });
+
+    render(<MaskPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Union" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mask 2" }));
+
+    expect(mockSetMaskBooleanExpression).toHaveBeenCalledWith({
+      kind: "operation",
+      operator: "union",
+      left: {
+        kind: "mask_ref",
+        maskId: "mask_1",
+      },
+      right: {
+        kind: "mask_ref",
+        maskId: "mask_2",
+      },
+    });
   });
 });

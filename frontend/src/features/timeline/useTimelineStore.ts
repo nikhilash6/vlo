@@ -13,6 +13,7 @@ import type {
   ClipMaskMode,
   ClipMaskParameters,
   ClipMaskPoint,
+  MaskBooleanExpression,
   TimelineClip,
   TimelineTrack,
   MaskTimelineClip,
@@ -28,6 +29,11 @@ import { TICKS_PER_SECOND } from "./constants";
 import { getTrackTypeFromClipType } from "./utils/formatting";
 import { getResizedClipLeft, getResizedClipRight } from "./utils/clipMath";
 import { resolveCollision } from "./utils/collision";
+import {
+  getMaskLocalId,
+  pruneMaskBooleanExpression,
+  resolveMaskBooleanExpression,
+} from "../masks/model/maskBooleanExpression";
 
 enablePatches();
 
@@ -684,6 +690,19 @@ function removeClipsFromDraft(
     const parent = draft.clips.find((candidate) => candidate.id === parsed.clipId);
     if (parent) {
       removeMaskClipComponent(parent, removedClip.id);
+      if (
+        parent.type !== "mask" &&
+        parent.maskBooleanExpression !== undefined &&
+        parent.maskBooleanExpression !== null
+      ) {
+        const removedMaskId = getMaskLocalId(removedClip);
+        if (removedMaskId) {
+          parent.maskBooleanExpression = pruneMaskBooleanExpression(
+            parent.maskBooleanExpression,
+            [removedMaskId],
+          );
+        }
+      }
     }
   }
 
@@ -713,10 +732,28 @@ export const selectMaskClipsForParent = (
   if (!parent) return [];
   const maskChildIds = getChildMaskClipIds(parent);
   if (maskChildIds.length === 0) return [];
-  const maskChildIdSet = new Set(maskChildIds);
-  return state.clips.filter(
-    (clip) => maskChildIdSet.has(clip.id) && clip.type === "mask",
-  ) as MaskTimelineClip[];
+  const clipById = new Map(state.clips.map((clip) => [clip.id, clip] as const));
+  return maskChildIds
+    .map((maskChildId) => clipById.get(maskChildId))
+    .filter((clip): clip is MaskTimelineClip => !!clip && clip.type === "mask");
+};
+
+export const selectResolvedMaskBooleanExpressionForParent = (
+  state: { clips: TimelineClip[] },
+  parentClipId: string,
+): MaskBooleanExpression | null => {
+  const parent = state.clips.find(
+    (clip): clip is StandardTimelineClip =>
+      clip.id === parentClipId && clip.type !== "mask",
+  );
+  if (!parent) {
+    return null;
+  }
+
+  return resolveMaskBooleanExpression(
+    parent,
+    selectMaskClipsForParent(state, parentClipId),
+  );
 };
 
 // ---------------------------------------------------------------------------
@@ -785,6 +822,10 @@ interface TimelineState {
   setClipMaskCompositeTransforms: (
     clipId: string,
     transforms: ClipTransform[],
+  ) => void;
+  setClipMaskBooleanExpression: (
+    clipId: string,
+    expression: MaskBooleanExpression | null,
   ) => void;
 
   removeClipTransform: (clipId: string, effectId: string) => void;
@@ -1528,6 +1569,23 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
           return {
             ...clip,
             maskCompositeTransformations: nextTransforms,
+          };
+        });
+      });
+    },
+
+    setClipMaskBooleanExpression: (clipId, expression) => {
+      commitModelMutation((draft) => {
+        draft.clips = draft.clips.map((clip) => {
+          if (clip.id !== clipId || clip.type === "mask") {
+            return clip;
+          }
+
+          return {
+            ...clip,
+            maskBooleanExpression: expression
+              ? structuredClone(expression)
+              : null,
           };
         });
       });

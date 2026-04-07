@@ -34,6 +34,23 @@ export interface ClipTransform {
 
 export type ClipMaskType = "circle" | "rectangle" | "triangle" | "sam2" | "generation";
 export type ClipMaskMode = "apply" | "preview" | "off";
+export type MaskBooleanOperator = "union" | "intersect" | "subtract";
+
+export interface MaskBooleanMaskRefExpression {
+  kind: "mask_ref";
+  maskId: string;
+}
+
+export interface MaskBooleanOperationExpression {
+  kind: "operation";
+  operator: MaskBooleanOperator;
+  left: MaskBooleanExpression;
+  right: MaskBooleanExpression;
+}
+
+export type MaskBooleanExpression =
+  | MaskBooleanMaskRefExpression
+  | MaskBooleanOperationExpression;
 
 export interface ClipMaskParameters {
   baseWidth: number;
@@ -110,6 +127,12 @@ export interface StandardTimelineClip extends TimelineClipBase {
    * Stores only local mask composite transforms such as grow/feather.
    */
   maskCompositeTransformations?: ClipTransform[];
+  /**
+   * Explicit boolean-algebra expression over child mask clips.
+   * `undefined` preserves legacy union/subtract fallback behavior, while
+   * `null` intentionally disables composed masking for the parent clip.
+   */
+  maskBooleanExpression?: MaskBooleanExpression | null;
   /**
    * Clip components (masks, motion encodings, etc.) owned by this clip.
    * Each component points to a subordinate clip and declares its component type.

@@ -3,8 +3,10 @@ import { useShallow } from "zustand/react/shallow";
 import { getRuntimeStatus } from "../../../services/runtimeApi";
 import type {
   ClipMaskPoint,
+  MaskBooleanExpression,
   ClipMaskMode,
   ClipMaskType,
+  MaskTimelineClip,
   TimelineClip,
 } from "../../../types/TimelineTypes";
 import {
@@ -17,6 +19,7 @@ import {
 } from "../../timeline";
 import { useMaskViewStore } from "../store/useMaskViewStore";
 import { createMask } from "../model/maskFactory";
+import { resolveMaskBooleanExpression } from "../model/maskBooleanExpression";
 import { ensureAssetFileLoaded, useAssetStore } from "../../userAssets";
 import { playbackClock } from "../../player/services/PlaybackClock";
 import { calculateClipTime } from "../../transformations";
@@ -116,7 +119,8 @@ function toClipInputTimeTicks(parentClip: TimelineClip, globalTimeTicks: number)
 
 export interface UseMaskPanelResult {
   selectedClipId: string | null;
-  masks: TimelineClip[];
+  masks: MaskTimelineClip[];
+  maskBooleanExpression: MaskBooleanExpression | null;
   selectedMaskId: string | null;
   selectedMask: TimelineClip | null;
   addMenuAnchorEl: HTMLElement | null;
@@ -126,6 +130,7 @@ export interface UseMaskPanelResult {
   requestDraw: (shape: ClipMaskType) => void;
   selectMask: (maskId: string) => void;
   setMaskMode: (mode: ClipMaskMode) => void;
+  setMaskBooleanExpression: (expression: MaskBooleanExpression | null) => void;
   maskInverted: boolean;
   setMaskInverted: (inverted: boolean) => void;
   sam2PointMode: "add" | "remove";
@@ -208,6 +213,9 @@ export function useMaskPanel(): UseMaskPanelResult {
   const updateClipMask = useTimelineStore((state) => state.updateClipMask);
   const removeClipMask = useTimelineStore((state) => state.removeClipMask);
   const addClipMask = useTimelineStore((state) => state.addClipMask);
+  const setClipMaskBooleanExpression = useTimelineStore(
+    (state) => state.setClipMaskBooleanExpression,
+  );
   const assets = useAssetStore((state) => state.assets);
   const addLocalAsset = useAssetStore((state) => state.addLocalAsset);
   const deleteAsset = useAssetStore((state) => state.deleteAsset);
@@ -230,6 +238,13 @@ export function useMaskPanel(): UseMaskPanelResult {
         : [],
     ),
   );
+  const maskBooleanExpression = useMemo(() => {
+    if (!selectedClip || selectedClip.type === "mask") {
+      return null;
+    }
+
+    return resolveMaskBooleanExpression(selectedClip, masks);
+  }, [masks, selectedClip]);
 
   const selectedMask = useMemo(() => {
     if (!selectedMaskId) return null;
@@ -1084,6 +1099,7 @@ export function useMaskPanel(): UseMaskPanelResult {
   return {
     selectedClipId,
     masks,
+    maskBooleanExpression,
     selectedMaskId,
     selectedMask,
     addMenuAnchorEl,
@@ -1093,6 +1109,10 @@ export function useMaskPanel(): UseMaskPanelResult {
     requestDraw,
     selectMask,
     setMaskMode,
+    setMaskBooleanExpression: (expression) => {
+      if (!selectedClipId) return;
+      setClipMaskBooleanExpression(selectedClipId, expression);
+    },
     maskInverted,
     setMaskInverted,
     sam2PointMode,

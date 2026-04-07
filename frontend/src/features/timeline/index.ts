@@ -5,6 +5,7 @@ export {
   countSam2MaskAssetConsumers,
   parseMaskClipId,
   selectMaskClipsForParent,
+  selectResolvedMaskBooleanExpressionForParent,
 } from "./useTimelineStore";
 export {
   TRACK_HEIGHT,

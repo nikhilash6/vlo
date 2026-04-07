@@ -339,17 +339,19 @@ describe("SpriteClipMaskController mask composition", () => {
       clear?: boolean;
       transform?: unknown;
       blendMode?: unknown;
+      filters?: unknown;
     }> = [];
     const renderSpy = vi.fn((args: unknown) => {
       const renderArgs = args as {
         clear?: boolean;
         transform?: unknown;
-        container?: { blendMode?: unknown };
+        container?: { blendMode?: unknown; filters?: unknown };
       };
       renderSnapshots.push({
         clear: renderArgs.clear,
         transform: renderArgs.transform,
         blendMode: renderArgs.container?.blendMode,
+        filters: renderArgs.container?.filters,
       });
     });
     const renderer = {
@@ -381,17 +383,17 @@ describe("SpriteClipMaskController mask composition", () => {
     expect(alphaMaskEffect).not.toBeNull();
     expect(alphaMaskEffect?.inverse).toBe(false);
 
-    // Non-inverted union + inverted union + erase pass + present red->alpha.
-    expect(renderSpy).toHaveBeenCalledTimes(4);
-
-    const compositingCall = renderSnapshots.find((call) => {
-      return (
-        call.clear === false &&
-        call.transform === undefined &&
-        call.blendMode === "multiply"
-      );
-    });
-    expect(compositingCall).toBeTruthy();
+    // Render each referenced leaf once, invert the inverted leaf in-place,
+    // then run one shader-based boolean combine and present the final mask.
+    expect(renderSpy).toHaveBeenCalledTimes(6);
+    expect(
+      renderSnapshots.some(
+        (call) =>
+          call.clear === true &&
+          call.transform === undefined &&
+          Array.isArray((call as { filters?: unknown }).filters),
+      ),
+    ).toBe(true);
 
     controller.dispose();
     warnSpy.mockRestore();
@@ -403,17 +405,19 @@ describe("SpriteClipMaskController mask composition", () => {
       clear?: boolean;
       transform?: unknown;
       blendMode?: unknown;
+      filters?: unknown;
     }> = [];
     const renderSpy = vi.fn((args: unknown) => {
       const renderArgs = args as {
         clear?: boolean;
         transform?: unknown;
-        container?: { blendMode?: unknown };
+        container?: { blendMode?: unknown; filters?: unknown };
       };
       renderSnapshots.push({
         clear: renderArgs.clear,
         transform: renderArgs.transform,
         blendMode: renderArgs.container?.blendMode,
+        filters: renderArgs.container?.filters,
       });
     });
     const renderer = {
@@ -441,19 +445,259 @@ describe("SpriteClipMaskController mask composition", () => {
       new Map<string, Asset>(),
     );
 
-    // Fill full mask + render inverted union + erase union + present red->alpha.
-    expect(renderSpy).toHaveBeenCalledTimes(4);
+    // Render each inverted leaf, invert both leaf textures, then run one
+    // shader-based intersection before presenting red->alpha.
+    expect(renderSpy).toHaveBeenCalledTimes(8);
     expect(
       renderSnapshots.filter((call) => call.transform !== undefined).length,
-    ).toBe(1);
+    ).toBe(2);
     expect(
       renderSnapshots.some(
         (call) =>
-          call.clear === false &&
+          call.clear === true &&
           call.transform === undefined &&
-          call.blendMode === "multiply",
+          Array.isArray((call as { filters?: unknown }).filters),
       ),
     ).toBe(true);
+
+    controller.dispose();
+    warnSpy.mockRestore();
+  });
+
+  it("evaluates an explicit intersection expression via multiply compositing", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const renderSnapshots: Array<{
+      clear?: boolean;
+      transform?: unknown;
+      blendMode?: unknown;
+      filters?: unknown;
+    }> = [];
+    const renderSpy = vi.fn((args: unknown) => {
+      const renderArgs = args as {
+        clear?: boolean;
+        transform?: unknown;
+        container?: { blendMode?: unknown; filters?: unknown };
+      };
+      renderSnapshots.push({
+        clear: renderArgs.clear,
+        transform: renderArgs.transform,
+        blendMode: renderArgs.container?.blendMode,
+        filters: renderArgs.container?.filters,
+      });
+    });
+    const renderer = {
+      render: renderSpy,
+    } as unknown as Renderer;
+    const sprite = new Sprite();
+    const root = new Container();
+    const controller = new SpriteClipMaskController(sprite, renderer, root);
+
+    const parent = {
+      ...createParentClip(),
+      maskBooleanExpression: {
+        kind: "operation",
+        operator: "intersect",
+        left: {
+          kind: "mask_ref",
+          maskId: "mask_a",
+        },
+        right: {
+          kind: "mask_ref",
+          maskId: "mask_b",
+        },
+      },
+    } as TimelineClip;
+    const maskA = createMaskClip("mask_a");
+    const maskB = createMaskClip("mask_b", {
+      maskType: "circle",
+    });
+
+    await controller.syncMaskClips(
+      [maskA, maskB],
+      parent,
+      { width: 1920, height: 1080 },
+      10,
+      new Map<string, Asset>(),
+    );
+
+    expect(renderSpy).toHaveBeenCalledTimes(4);
+    expect(
+      renderSnapshots.some(
+        (call) =>
+          call.clear === true &&
+          call.transform === undefined &&
+          Array.isArray((call as { filters?: unknown }).filters),
+      ),
+    ).toBe(true);
+
+    controller.dispose();
+    warnSpy.mockRestore();
+  });
+
+  it("evaluates an explicit union expression with a coverage-preserving combine shader", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const renderSnapshots: Array<{
+      clear?: boolean;
+      transform?: unknown;
+      blendMode?: unknown;
+      filters?: unknown;
+    }> = [];
+    const renderSpy = vi.fn((args: unknown) => {
+      const renderArgs = args as {
+        clear?: boolean;
+        transform?: unknown;
+        container?: { blendMode?: unknown; filters?: unknown };
+      };
+      renderSnapshots.push({
+        clear: renderArgs.clear,
+        transform: renderArgs.transform,
+        blendMode: renderArgs.container?.blendMode,
+        filters: renderArgs.container?.filters,
+      });
+    });
+    const renderer = {
+      render: renderSpy,
+    } as unknown as Renderer;
+    const sprite = new Sprite();
+    const root = new Container();
+    const controller = new SpriteClipMaskController(sprite, renderer, root);
+
+    const parent = {
+      ...createParentClip(),
+      maskBooleanExpression: {
+        kind: "operation",
+        operator: "union",
+        left: {
+          kind: "mask_ref",
+          maskId: "mask_a",
+        },
+        right: {
+          kind: "mask_ref",
+          maskId: "mask_b",
+        },
+      },
+      maskCompositeTransformations: [
+        {
+          id: "grow_1",
+          type: "mask_grow",
+          isEnabled: true,
+          parameters: {
+            amount: 8,
+          },
+        },
+      ],
+    } as TimelineClip;
+    const maskA = createMaskClip("mask_a");
+    const maskB = createMaskClip("mask_b", {
+      maskType: "circle",
+    });
+
+    await controller.syncMaskClips(
+      [maskA, maskB],
+      parent,
+      { width: 1920, height: 1080 },
+      10,
+      new Map<string, Asset>(),
+    );
+
+    const unionFilter = (
+      controller as unknown as {
+        maskBooleanBlendFilters: Partial<Record<"union", unknown>>;
+      }
+    ).maskBooleanBlendFilters.union;
+
+    expect(unionFilter).toBeTruthy();
+    expect(renderSpy).toHaveBeenCalledTimes(7);
+    expect(
+      renderSnapshots.some(
+        (call) =>
+          call.clear === true &&
+          call.transform === undefined &&
+          Array.isArray(call.filters) &&
+          call.filters.includes(unionFilter),
+      ),
+    ).toBe(true);
+
+    controller.dispose();
+    warnSpy.mockRestore();
+  });
+
+  it("evaluates nested minus expressions from the stored AST", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const renderSnapshots: Array<{
+      clear?: boolean;
+      transform?: unknown;
+      blendMode?: unknown;
+      filters?: unknown;
+    }> = [];
+    const renderSpy = vi.fn((args: unknown) => {
+      const renderArgs = args as {
+        clear?: boolean;
+        transform?: unknown;
+        container?: { blendMode?: unknown; filters?: unknown };
+      };
+      renderSnapshots.push({
+        clear: renderArgs.clear,
+        transform: renderArgs.transform,
+        blendMode: renderArgs.container?.blendMode,
+        filters: renderArgs.container?.filters,
+      });
+    });
+    const renderer = {
+      render: renderSpy,
+    } as unknown as Renderer;
+    const sprite = new Sprite();
+    const root = new Container();
+    const controller = new SpriteClipMaskController(sprite, renderer, root);
+
+    const parent = {
+      ...createParentClip(),
+      maskBooleanExpression: {
+        kind: "operation",
+        operator: "subtract",
+        left: {
+          kind: "mask_ref",
+          maskId: "mask_a",
+        },
+        right: {
+          kind: "operation",
+          operator: "union",
+          left: {
+            kind: "mask_ref",
+            maskId: "mask_b",
+          },
+          right: {
+            kind: "mask_ref",
+            maskId: "mask_c",
+          },
+        },
+      },
+    } as TimelineClip;
+    const maskA = createMaskClip("mask_a");
+    const maskB = createMaskClip("mask_b", {
+      maskType: "circle",
+    });
+    const maskC = createMaskClip("mask_c", {
+      maskType: "triangle",
+    });
+
+    await controller.syncMaskClips(
+      [maskA, maskB, maskC],
+      parent,
+      { width: 1920, height: 1080 },
+      10,
+      new Map<string, Asset>(),
+    );
+
+    expect(renderSpy).toHaveBeenCalledTimes(6);
+    expect(
+      renderSnapshots.filter(
+        (call) =>
+          call.clear === true &&
+          call.transform === undefined &&
+          Array.isArray((call as { filters?: unknown }).filters),
+      ),
+    ).toHaveLength(3);
 
     controller.dispose();
     warnSpy.mockRestore();

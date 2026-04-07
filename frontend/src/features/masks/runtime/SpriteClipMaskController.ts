@@ -11,6 +11,7 @@ import {
 } from "pixi.js";
 import type { Renderer } from "pixi.js";
 import type {
+  MaskBooleanExpression,
   TimelineClip,
   MaskTimelineClip,
 } from "../../../types/TimelineTypes";
@@ -23,11 +24,21 @@ import { dispatchTransform } from "../../transformations/catalogue/Transformatio
 import type { TransformState } from "../../transformations/catalogue/types";
 import { createMaskBinaryThresholdFilter } from "../../transformations/catalogue/mask/maskBinaryThresholdFilter";
 import { createMaskCleanupFilter } from "../../transformations/catalogue/mask/maskCleanupFilter";
+import {
+  createMaskBooleanBlendFilter,
+  type MaskBooleanBlendFilter,
+} from "../../transformations/catalogue/mask/maskBooleanBlendFilter";
 import { createMaskCoverageBoostFilter } from "../../transformations/catalogue/mask/maskCoverageBoostFilter";
 import { createMaskCoverageInvertFilter } from "../../transformations/catalogue/mask/maskCoverageInvertFilter";
-import { createMaskRedInvertForMultiplyFilter } from "../../transformations/catalogue/mask/maskRedInvertForMultiplyFilter";
 import { createMaskRedToAlphaFilter } from "../../transformations/catalogue/mask/maskRedToAlphaFilter";
 import { drawMaskBaseShape } from "../model/maskFactory";
+import {
+  collectMaskBooleanExpressionMaskIds,
+  collectUnionMaskIds,
+  countMaskBooleanOperationNodes,
+  getMaskLocalId,
+  resolveMaskBooleanExpression,
+} from "../model/maskBooleanExpression";
 import {
   calculatePlayerFrameTime,
   snapFrameTimeSeconds,
@@ -145,9 +156,13 @@ export class SpriteClipMaskController {
   private perMaskRenderTexture: RenderTexture | null = null;
   private effectMaskRenderTexture: RenderTexture | null = null;
   private presentationMaskRenderTexture: RenderTexture | null = null;
+  private leafMaskRenderTextures = new Map<string, RenderTexture>();
+  private expressionRenderTextures: RenderTexture[] = [];
   private perMaskSprite: Sprite | null = null;
-  private solidMaskSprite: Sprite | null = null;
-  private maskInvertFilter: Filter | null = null;
+  private maskBooleanSprite: Sprite | null = null;
+  private maskBooleanBlendFilters: Partial<
+    Record<"union" | "intersect" | "subtract", MaskBooleanBlendFilter>
+  > = {};
   private maskBinaryThresholdFilter: Filter | null = null;
   private maskCleanupFilter: Filter | null = null;
   private maskCoverageBoostFilter: Filter | null = null;
@@ -214,15 +229,33 @@ export class SpriteClipMaskController {
       waitForSam2 = false,
       skipSam2FrameRender = false,
     } = options;
+    const resolvedMaskExpression =
+      parentClip.type === "mask"
+        ? null
+        : resolveMaskBooleanExpression(parentClip, maskClips);
+    const referencedMaskIds = new Set(
+      collectMaskBooleanExpressionMaskIds(resolvedMaskExpression),
+    );
+    const referencedMaskClips = maskClips.filter((clip) => {
+      const maskId = getMaskLocalId(clip);
+      return !!maskId && referencedMaskIds.has(maskId);
+    });
+    const maskClipByLocalId = new Map<string, MaskTimelineClip>();
+    referencedMaskClips.forEach((clip) => {
+      const maskId = getMaskLocalId(clip);
+      if (!maskId) {
+        return;
+      }
+      maskClipByLocalId.set(maskId, clip);
+    });
+
     // These legacy option names now gate all asset-backed mask video decoding.
     // Generation masks intentionally share the same render path as SAM2 masks.
-    const activeMaskClips = maskClips.filter(
-      (clip) => {
-        if (clip.maskMode !== "apply") return false;
-        const assetMaskId = getAssetBackedMaskId(clip);
-        return assetMaskId === null || assetsById.has(assetMaskId);
-      },
-    );
+    const activeMaskClips = referencedMaskClips.filter((clip) => {
+      if (clip.maskMode !== "apply") return false;
+      const assetMaskId = getAssetBackedMaskId(clip);
+      return assetMaskId === null || assetsById.has(assetMaskId);
+    });
     const activeVectorMasks = activeMaskClips.filter(
       (clip) =>
         !isAssetBackedMask(clip) &&
@@ -232,12 +265,6 @@ export class SpriteClipMaskController {
     const activeAssetMasks = activeMaskClips.filter((clip) =>
       isAssetBackedMask(clip),
     );
-    const effectiveMaskCount = activeMaskClips.length;
-
-    if (effectiveMaskCount === 0) {
-      this.clear();
-      return;
-    }
 
     this.reconcileVectorNodes(activeVectorMasks.map((clip) => clip.id));
     this.reconcileAssetMaskNodes(
@@ -246,6 +273,16 @@ export class SpriteClipMaskController {
         assetId: getAssetBackedMaskId(clip) as string,
       })),
     );
+
+    if (!resolvedMaskExpression || referencedMaskIds.size === 0) {
+      this.clear();
+      return;
+    }
+
+    if (activeMaskClips.length === 0) {
+      this.clear();
+      return;
+    }
 
     activeVectorMasks.forEach((maskClip) => {
       const node = this.vectorMaskNodes.get(maskClip.id);
@@ -338,7 +375,7 @@ export class SpriteClipMaskController {
       );
     }
 
-    const singleMask = effectiveMaskCount === 1 ? activeMaskClips[0] : null;
+    const singleMask = activeMaskClips.length === 1 ? activeMaskClips[0] : null;
     const sharedMaskCompositeState = this.resolveMaskCompositeState(
       parentClip,
       logicalDimensions,
@@ -348,12 +385,19 @@ export class SpriteClipMaskController {
     const hasSharedEdgeOps =
       sharedMaskCompositeState.growAmount > 0 ||
       (sharedMaskCompositeState.feather?.amount ?? 0) > 0;
-    const hasInvertedMask = activeMaskClips.some(
-      (maskClip) => maskClip.maskInverted ?? false,
-    );
+    const hasInvertedMask = activeMaskClips.some((maskClip) => maskClip.maskInverted);
+    const canUseLegacySimpleUnionFastPath =
+      parentClip.type !== "mask" &&
+      parentClip.maskBooleanExpression === undefined;
+    const simpleUnionMasks = hasSharedEdgeOps || !canUseLegacySimpleUnionFastPath
+      ? null
+      : this.resolveSimpleUnionMaskClips(
+          resolvedMaskExpression,
+          maskClipByLocalId,
+        );
     const shouldUseCompositedAlphaMask =
       this.renderer !== null &&
-      (activeAssetMasks.length > 0 || hasInvertedMask || hasSharedEdgeOps);
+      (hasSharedEdgeOps || simpleUnionMasks === null);
     this.sanitizeAssetMaskSpriteVisibility();
 
     if (this.maskSprite && shouldUseCompositedAlphaMask) {
@@ -371,15 +415,23 @@ export class SpriteClipMaskController {
         (activeVectorMasks.length > 0 || hasReadyAssetMask) &&
         this.hasRenderableContentTexture()
       ) {
-        this.renderMaskClipsToTexture(
-          activeMaskClips,
+        const renderedTexture = this.renderMaskBooleanExpressionToTexture(
+          resolvedMaskExpression,
+          maskClipByLocalId,
           clipContentSize,
           sharedMaskCompositeState,
         );
-        this.applyAlphaMask(this.maskSprite, false);
+        if (renderedTexture) {
+          this.applyAlphaMask(this.maskSprite, false);
+        } else {
+          this.removeMaskFromTarget();
+        }
       } else {
         this.removeMaskFromTarget();
       }
+    } else if (simpleUnionMasks) {
+      const inverse = false;
+      this.applyMaskEffect(this.maskContainer, inverse, false);
     } else if (activeAssetMasks.length > 0 || hasInvertedMask || hasSharedEdgeOps) {
       // No renderer / no maskSprite (test fallback): Container-based AlphaMask
       const inverse = singleMask ? (singleMask.maskInverted ?? false) : false;
@@ -465,6 +517,14 @@ export class SpriteClipMaskController {
       this.presentationMaskRenderTexture.destroy(true);
       this.presentationMaskRenderTexture = null;
     }
+    this.leafMaskRenderTextures.forEach((texture) => {
+      texture.destroy(true);
+    });
+    this.leafMaskRenderTextures.clear();
+    this.expressionRenderTextures.forEach((texture) => {
+      texture.destroy(true);
+    });
+    this.expressionRenderTextures = [];
 
     if (this.maskSprite) {
       if (this.maskSprite.parent) {
@@ -482,14 +542,17 @@ export class SpriteClipMaskController {
       }
       this.perMaskSprite = null;
     }
-    if (this.solidMaskSprite) {
-      if (!this.solidMaskSprite.destroyed) {
-        this.solidMaskSprite.destroy();
+    if (this.maskBooleanSprite) {
+      this.maskBooleanSprite.filters = null;
+      if (!this.maskBooleanSprite.destroyed) {
+        this.maskBooleanSprite.destroy();
       }
-      this.solidMaskSprite = null;
+      this.maskBooleanSprite = null;
     }
-    this.maskInvertFilter?.destroy();
-    this.maskInvertFilter = null;
+    Object.values(this.maskBooleanBlendFilters).forEach((filter) => {
+      filter?.destroy();
+    });
+    this.maskBooleanBlendFilters = {};
     this.maskBinaryThresholdFilter?.destroy();
     this.maskBinaryThresholdFilter = null;
     this.maskCleanupFilter?.destroy();
@@ -542,6 +605,9 @@ export class SpriteClipMaskController {
 
   public syncMaskSpriteTransform() {
     if (!this.maskSprite) return;
+    this.maskSprite.anchor.copyFrom(this.sprite.anchor);
+    this.maskSprite.pivot.copyFrom(this.sprite.pivot);
+
     const maskPosition = this.maskSprite.position as {
       x: number;
       y: number;
@@ -567,6 +633,7 @@ export class SpriteClipMaskController {
     }
 
     this.maskSprite.rotation = this.sprite.rotation;
+    this.maskSprite.alpha = this.sprite.alpha;
   }
 
   private resolveMaskCompositeState(
@@ -610,126 +677,189 @@ export class SpriteClipMaskController {
     };
   }
 
-  /**
-   * Render all mask children in `maskContainer` to the RenderTexture.
-   * In renderer mode the maskContainer lives in the track container but stays
-   * hidden; we briefly toggle visibility while rendering offscreen.
-   * We position it at (width/2, height/2) so children at (0,0) with
-   * anchor(0.5) render centered in the texture.
-   */
-  private renderMasksToTexture(contentSize: {
-    width: number;
-    height: number;
-  }) {
-    if (!this.renderer) return;
-    const { width, height } = contentSize;
-
-    this.ensureMaskRenderTexture(contentSize);
-    if (!this.maskRenderTexture) return;
-
-    // Render the standalone maskContainer into the RenderTexture.
-    // Use a transform that centers (0,0) at (width/2, height/2) so mask
-    // children with anchor(0.5) at position (0,0) fill the texture.
-    const previousMaskContainerVisibility = this.maskContainer.visible;
-    this.sanitizeAssetMaskSpriteVisibility();
-    this.maskContainer.visible = true;
-    try {
-      const transform = new Matrix().translate(width / 2, height / 2);
-      this.renderer.render({
-        container: this.maskContainer,
-        target: this.maskRenderTexture,
-        clear: true,
-        transform,
-      });
-    } finally {
-      this.maskContainer.visible = previousMaskContainerVisibility;
+  private resolveSimpleUnionMaskClips(
+    expression: MaskBooleanExpression | null,
+    maskClipByLocalId: Map<string, MaskTimelineClip>,
+  ): MaskTimelineClip[] | null {
+    const unionMaskIds = collectUnionMaskIds(expression);
+    if (!unionMaskIds || unionMaskIds.length === 0) {
+      return null;
     }
+
+    const masks: MaskTimelineClip[] = [];
+    for (const maskId of unionMaskIds) {
+      const maskClip = maskClipByLocalId.get(maskId);
+      if (!maskClip) {
+        return null;
+      }
+      if (
+        maskClip.maskMode !== "apply" ||
+        maskClip.maskInverted ||
+        isAssetBackedMask(maskClip) ||
+        !this.isMaskClipRenderable(maskClip)
+      ) {
+        return null;
+      }
+      masks.push(maskClip);
+    }
+
+    return masks;
   }
 
-  /**
-   * Renderer-only per-mask compositing path.
-   *
-   * Composition model:
-   * 1) Union all non-inverted masks as the include region (or full-white when absent).
-   * 2) Union all inverted masks.
-   * 3) Multiply include by inverse(invertedUnion), i.e. `include * (1 - invertedUnion)`.
-   *
-   * This supports multiple inverted masks and preserves mask transforms by
-   * rendering subsets through the shared `maskContainer` path.
-   */
-  private renderMaskClipsToTexture(
-    maskClips: MaskTimelineClip[],
+  private renderLeafMaskTextures(
+    referencedMaskIds: string[],
+    maskClipByLocalId: Map<string, MaskTimelineClip>,
     contentSize: { width: number; height: number },
-    compositeState: ResolvedMaskCompositeState,
   ) {
-    if (!this.renderer || !this.maskSprite) return;
-
-    this.ensureMaskRenderTexture(contentSize);
-    this.ensurePerMaskRenderTexture(contentSize);
-    this.ensureEffectMaskRenderTexture(contentSize);
-    this.ensurePresentationMaskRenderTexture(contentSize);
-    this.ensureSolidMaskSprite(contentSize);
-
-    if (
-      !this.maskRenderTexture ||
-      !this.perMaskRenderTexture ||
-      !this.effectMaskRenderTexture ||
-      !this.presentationMaskRenderTexture ||
-      !this.perMaskSprite ||
-      !this.solidMaskSprite
-    ) {
+    if (!this.renderer || !this.perMaskRenderTexture) {
       return;
     }
-
-    const nonInvertedMaskIds = new Set<string>();
-    const invertedMaskIds = new Set<string>();
-    maskClips.forEach((maskClip) => {
-      if (!this.isMaskClipRenderable(maskClip)) return;
-      if (maskClip.maskInverted ?? false) {
-        invertedMaskIds.add(maskClip.id);
-      } else {
-        nonInvertedMaskIds.add(maskClip.id);
-      }
-    });
+    const perMaskRenderTexture = this.perMaskRenderTexture;
 
     const transform = new Matrix().translate(
       contentSize.width / 2,
       contentSize.height / 2,
     );
 
-    if (nonInvertedMaskIds.size > 0) {
-      this.renderMaskSubsetToTexture(
-        nonInvertedMaskIds,
-        this.maskRenderTexture,
-        transform,
-      );
-    } else {
-      this.renderer.render({
-        container: this.solidMaskSprite,
-        target: this.maskRenderTexture,
+    referencedMaskIds.forEach((maskId) => {
+      const leafTexture = this.leafMaskRenderTextures.get(maskId);
+      if (!leafTexture) {
+        return;
+      }
+
+      const maskClip = maskClipByLocalId.get(maskId);
+      if (
+        !maskClip ||
+        maskClip.maskMode !== "apply" ||
+        !this.isMaskClipRenderable(maskClip)
+      ) {
+        this.renderMaskSubsetToTexture(new Set<string>(), leafTexture, transform);
+        return;
+      }
+
+      this.renderMaskSubsetToTexture(new Set<string>([maskClip.id]), leafTexture, transform);
+      if (!maskClip.maskInverted) {
+        return;
+      }
+
+      this.renderTextureToTarget(leafTexture, perMaskRenderTexture, {
+        clear: true,
+        filters: [this.getMaskCoverageInvertFilter()],
+      });
+      this.renderTextureToTarget(perMaskRenderTexture, leafTexture, {
         clear: true,
       });
+    });
+  }
+
+  private evaluateMaskBooleanExpression(
+    expression: MaskBooleanExpression,
+    operationTextureIndex: { current: number },
+  ): Texture | null {
+    if (expression.kind === "mask_ref") {
+      return this.leafMaskRenderTextures.get(expression.maskId) ?? null;
     }
 
-    if (invertedMaskIds.size > 0) {
-      this.renderMaskSubsetToTexture(
-        invertedMaskIds,
-        this.perMaskRenderTexture,
-        transform,
-      );
-      this.renderTextureToTarget(this.perMaskRenderTexture, this.maskRenderTexture, {
-        clear: false,
-        blendMode: "multiply",
-        filters: [this.getMaskInvertFilter()],
-      });
+    const leftTexture = this.evaluateMaskBooleanExpression(
+      expression.left,
+      operationTextureIndex,
+    );
+    const rightTexture = this.evaluateMaskBooleanExpression(
+      expression.right,
+      operationTextureIndex,
+    );
+    const targetTexture =
+      this.expressionRenderTextures[operationTextureIndex.current];
+    operationTextureIndex.current += 1;
+
+    if (!leftTexture || !rightTexture || !targetTexture) {
+      return leftTexture ?? rightTexture ?? null;
+    }
+
+    this.renderMaskBooleanOperationToTarget(
+      leftTexture,
+      rightTexture,
+      targetTexture,
+      expression.operator,
+    );
+    return targetTexture;
+  }
+
+  private renderMaskBooleanOperationToTarget(
+    leftTexture: Texture,
+    rightTexture: Texture,
+    targetTexture: RenderTexture,
+    operator: "union" | "intersect" | "subtract",
+  ) {
+    if (!this.renderer) {
+      return;
+    }
+
+    const maskBooleanSprite = this.ensureMaskBooleanSprite();
+
+    const booleanBlendFilter = this.getMaskBooleanBlendFilter(operator);
+    booleanBlendFilter.setLeftTexture(leftTexture);
+
+    maskBooleanSprite.texture = rightTexture;
+    maskBooleanSprite.position.set(0, 0);
+    maskBooleanSprite.scale.set(1, 1);
+    maskBooleanSprite.filters = [booleanBlendFilter];
+
+    this.renderer.render({
+      container: maskBooleanSprite,
+      target: targetTexture,
+      clear: true,
+    });
+
+    maskBooleanSprite.filters = null;
+  }
+
+  private renderMaskBooleanExpressionToTexture(
+    expression: MaskBooleanExpression,
+    maskClipByLocalId: Map<string, MaskTimelineClip>,
+    contentSize: { width: number; height: number },
+    compositeState: ResolvedMaskCompositeState,
+  ): Texture | null {
+    if (!this.renderer) {
+      return null;
+    }
+
+    const referencedMaskIds = [
+      ...new Set(collectMaskBooleanExpressionMaskIds(expression)),
+    ];
+    if (referencedMaskIds.length === 0) {
+      return null;
+    }
+
+    this.ensureMaskRenderTexture(contentSize);
+    this.ensurePerMaskRenderTexture(contentSize);
+    this.ensureEffectMaskRenderTexture(contentSize);
+    this.ensurePresentationMaskRenderTexture(contentSize);
+    this.reconcileLeafMaskRenderTextures(referencedMaskIds, contentSize);
+    this.ensureExpressionRenderTextureCount(
+      countMaskBooleanOperationNodes(expression),
+      contentSize,
+    );
+
+    if (!this.maskRenderTexture || !this.perMaskRenderTexture) {
+      return null;
+    }
+
+    this.renderLeafMaskTextures(referencedMaskIds, maskClipByLocalId, contentSize);
+    const evaluatedTexture = this.evaluateMaskBooleanExpression(expression, {
+      current: 0,
+    });
+    if (!evaluatedTexture) {
+      return null;
     }
 
     const effectTexture = this.renderCompositeMaskEdgeTexture(
-      this.maskRenderTexture,
+      evaluatedTexture,
       compositeState,
     );
     this.renderPresentedMaskTexture(effectTexture, contentSize);
     this.syncOutputModeVisibility();
+    return effectTexture;
   }
 
   private renderCompositeMaskEdgeTexture(
@@ -1345,6 +1475,15 @@ export class SpriteClipMaskController {
     }
   }
 
+  private ensureMaskBooleanSprite(): Sprite {
+    if (!this.maskBooleanSprite) {
+      this.maskBooleanSprite = new Sprite(Texture.WHITE);
+      this.maskBooleanSprite.anchor.set(0);
+    }
+
+    return this.maskBooleanSprite;
+  }
+
   private ensureEffectMaskRenderTexture(contentSize: {
     width: number;
     height: number;
@@ -1386,20 +1525,93 @@ export class SpriteClipMaskController {
     this.maskSprite.texture = this.presentationMaskRenderTexture;
   }
 
-  private ensureSolidMaskSprite(contentSize: { width: number; height: number }) {
-    if (!this.solidMaskSprite) {
-      this.solidMaskSprite = new Sprite(Texture.WHITE);
-      this.solidMaskSprite.anchor.set(0);
-    }
-    this.solidMaskSprite.width = contentSize.width;
-    this.solidMaskSprite.height = contentSize.height;
+  private reconcileLeafMaskRenderTextures(
+    maskIds: string[],
+    contentSize: { width: number; height: number },
+  ) {
+    const wantedMaskIds = new Set(maskIds);
+
+    this.leafMaskRenderTextures.forEach((texture, maskId) => {
+      if (wantedMaskIds.has(maskId)) {
+        if (
+          texture.width !== contentSize.width ||
+          texture.height !== contentSize.height
+        ) {
+          texture.resize(contentSize.width, contentSize.height);
+        }
+        return;
+      }
+
+      texture.destroy(true);
+      this.leafMaskRenderTextures.delete(maskId);
+    });
+
+    maskIds.forEach((maskId) => {
+      const existing = this.leafMaskRenderTextures.get(maskId);
+      if (existing) {
+        if (
+          existing.width !== contentSize.width ||
+          existing.height !== contentSize.height
+        ) {
+          existing.resize(contentSize.width, contentSize.height);
+        }
+        return;
+      }
+
+      this.leafMaskRenderTextures.set(
+        maskId,
+        RenderTexture.create({
+          width: contentSize.width,
+          height: contentSize.height,
+          dynamic: true,
+        }),
+      );
+    });
   }
 
-  private getMaskInvertFilter(): Filter {
-    if (!this.maskInvertFilter) {
-      this.maskInvertFilter = createMaskRedInvertForMultiplyFilter();
+  private ensureExpressionRenderTextureCount(
+    count: number,
+    contentSize: { width: number; height: number },
+  ) {
+    while (this.expressionRenderTextures.length > count) {
+      const texture = this.expressionRenderTextures.pop();
+      texture?.destroy(true);
     }
-    return this.maskInvertFilter;
+
+    while (this.expressionRenderTextures.length < count) {
+      this.expressionRenderTextures.push(
+        RenderTexture.create({
+          width: contentSize.width,
+          height: contentSize.height,
+          dynamic: true,
+        }),
+      );
+    }
+
+    this.expressionRenderTextures.forEach((texture) => {
+      if (
+        texture.width !== contentSize.width ||
+        texture.height !== contentSize.height
+      ) {
+        texture.resize(contentSize.width, contentSize.height);
+      }
+    });
+  }
+
+  private getMaskBooleanBlendFilter(
+    operator: "union" | "intersect" | "subtract",
+  ): MaskBooleanBlendFilter {
+    const existingFilter = this.maskBooleanBlendFilters[operator];
+    if (existingFilter) {
+      return existingFilter;
+    }
+
+    const filter = createMaskBooleanBlendFilter(
+      operator,
+      this.ensureMaskBooleanSprite(),
+    );
+    this.maskBooleanBlendFilters[operator] = filter;
+    return filter;
   }
 
   private getMaskBinaryThresholdFilter(): Filter {

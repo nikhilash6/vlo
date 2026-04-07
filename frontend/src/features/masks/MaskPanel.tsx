@@ -23,10 +23,13 @@ import {
   insertTransformRespectingDefaultOrder,
   useTransformationController,
 } from "../transformations";
-import { parseMaskClipId } from "../timeline";
 import { Sam2MaskPanel } from "./components/Sam2MaskPanel";
 import { Sam2ModelDownloadOverlay } from "./components/Sam2ModelDownloadOverlay";
-import type { ClipTransform } from "../../types/TimelineTypes";
+import { MaskEquationBuilder } from "./components/MaskEquationBuilder";
+import type {
+  ClipTransform,
+  MaskTimelineClip,
+} from "../../types/TimelineTypes";
 
 const connectedButtonSx = {
   textTransform: "none",
@@ -183,7 +186,7 @@ export const MaskPanel = memo(function MaskPanel() {
   const {
     selectedClipId,
     masks,
-    selectedMaskId,
+    maskBooleanExpression,
     selectedMask,
     addMenuAnchorEl,
     isAddDisabled,
@@ -192,6 +195,7 @@ export const MaskPanel = memo(function MaskPanel() {
     requestDraw,
     selectMask,
     setMaskMode,
+    setMaskBooleanExpression,
     maskInverted,
     setMaskInverted,
     sam2PointMode,
@@ -560,40 +564,26 @@ export const MaskPanel = memo(function MaskPanel() {
             >
               Clip Masks
             </Typography>
-            <Box
-              sx={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 1,
-                width: "100%",
-              }}
+            <Menu
+              data-testid="mask-add-menu"
+              anchorEl={addMenuAnchorEl}
+              open={Boolean(addMenuAnchorEl)}
+              onClose={() => setAddMenuAnchorEl(null)}
             >
-              {masks.map((mask, index) => (
-                <Chip
-                  key={mask.id}
-                  data-testid="mask-chip"
-                  label={`Mask ${index + 1}`}
-                  size="small"
-                  variant="outlined"
-                  color={
-                    isDetailView &&
-                    parseMaskClipId(mask.id)?.maskId === selectedMaskId
-                      ? "primary"
-                      : "default"
-                  }
-                  onClick={() => {
-                    const maskLocalId = parseMaskClipId(mask.id)?.maskId;
-                    if (maskLocalId) {
-                      handleOpenMaskDetail(maskLocalId);
-                    }
-                  }}
-                  sx={{
-                    fontSize: "0.75rem",
-                    height: 24,
-                    cursor: "pointer",
-                  }}
-                />
+              {MASK_TYPES.map((shape) => (
+                <MenuItem key={shape} onClick={() => handleRequestDraw(shape)}>
+                  {shape[0].toUpperCase() + shape.slice(1)}
+                </MenuItem>
               ))}
+            </Menu>
+          </Box>
+
+          <MaskEquationBuilder
+            masks={masks as MaskTimelineClip[]}
+            expression={maskBooleanExpression}
+            onExpressionChange={setMaskBooleanExpression}
+            onOpenMaskDetail={handleOpenMaskDetail}
+            addAction={
               <Chip
                 size="small"
                 data-testid="mask-add-chip"
@@ -608,28 +598,19 @@ export const MaskPanel = memo(function MaskPanel() {
                   cursor: isAddDisabled ? "default" : "pointer",
                 }}
               />
-            </Box>
-            <Menu
-              data-testid="mask-add-menu"
-              anchorEl={addMenuAnchorEl}
-              open={Boolean(addMenuAnchorEl)}
-              onClose={() => setAddMenuAnchorEl(null)}
-            >
-              {MASK_TYPES.map((shape) => (
-                <MenuItem key={shape} onClick={() => handleRequestDraw(shape)}>
-                  {shape[0].toUpperCase() + shape.slice(1)}
-                </MenuItem>
-              ))}
-            </Menu>
-            {addDisabledReason && (
+            }
+          />
+
+          {addDisabledReason && (
+            <Box sx={{ px: 2, pb: 1 }}>
               <Typography
                 variant="caption"
-                sx={{ color: "text.secondary", display: "block", mt: 1 }}
+                sx={{ color: "text.secondary", display: "block" }}
               >
                 {addDisabledReason}
               </Typography>
-            )}
-          </Box>
+            </Box>
+          )}
 
           {showSam2DownloadOverlay && (
             <Box sx={{ px: 2, pb: 2 }}>
