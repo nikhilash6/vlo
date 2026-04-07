@@ -228,6 +228,7 @@ export function MaskEquationBuilder({
     path: MaskBooleanExpressionPath,
   ): ReactNode => {
     const isSelected = arePathsEqual(path, selectedPath);
+    const isRootGroup = path.length === 0;
 
     if (node.kind === "mask_ref") {
       const isDropTarget =
@@ -299,16 +300,21 @@ export function MaskEquationBuilder({
           }
         }}
         sx={{
-          display: "inline-flex",
+          display: isRootGroup ? "flex" : "inline-flex",
+          flexWrap: "wrap",
           alignItems: "center",
-          gap: 0.5,
+          columnGap: 0.5,
+          rowGap: 0.5,
           px: 0.75,
           py: 0.5,
-          borderRadius: 999,
+          borderRadius: "10px",
           border: "1px solid",
           borderColor: isSelected ? "primary.main" : "#2f333a",
           bgcolor: isSelected ? "rgba(25, 118, 210, 0.12)" : "transparent",
           minHeight: 32,
+          minWidth: 0,
+          maxWidth: "100%",
+          width: isRootGroup ? "100%" : "fit-content",
         }}
       >
         <Typography variant="caption" sx={{ color: "text.secondary" }}>
@@ -405,6 +411,7 @@ export function MaskEquationBuilder({
               gap: 1,
               minHeight: 32,
               alignItems: "center",
+              minWidth: 0,
             }}
           >
             {renderNode(expression, [])}
