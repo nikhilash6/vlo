@@ -63,7 +63,7 @@
     "inputs": [
       {
         "kind": "required",
-        "input": "77",
+        "input": "89",
         "message": "Video is required."
       },
       {

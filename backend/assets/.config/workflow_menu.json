@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "default",
+      "name": "Default",
+      "order": 0,
+      "workflow_ids": [
+        "video_ltx2_3_flf2v_custom_audio.json",
+        "video_ltx2_3_i2v.json",
+        "video_wan2_2_14B_flfv2v_vlo.json",
+        "vlo_VACE_inpaint.json",
+        "wan2_2_flf2v.json"
+      ]
+    },
+    {
+      "id": "core",
+      "name": "Core",
+      "order": 1,
+      "workflow_ids": []
+    }
+  ]
+}

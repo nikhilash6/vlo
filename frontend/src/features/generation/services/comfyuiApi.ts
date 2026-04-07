@@ -13,6 +13,7 @@ import type {
   WorkflowRulesResponse,
 } from "./workflowRules";
 import { isRecord } from "./parsers";
+import type { WorkflowOption } from "../store/types";
 
 const COMFY_API = `${API_BASE_URL}/comfy`;
 
@@ -371,6 +372,14 @@ export interface SyncObjectInfoResult {
   >;
 }
 
+interface WorkflowListResponseItem {
+  id: string;
+  name: string;
+  group_id?: string;
+  group_name?: string;
+  group_order?: number;
+}
+
 export async function syncObjectInfo(): Promise<SyncObjectInfoResult> {
   const resp = await fetch(`${COMFY_API}/object_info/sync`, { method: "POST" });
   if (!resp.ok) {
@@ -379,14 +388,21 @@ export async function syncObjectInfo(): Promise<SyncObjectInfoResult> {
   return resp.json();
 }
 
-export async function listWorkflows(): Promise<
-  Array<{ id: string; name: string }>
-> {
+export async function listWorkflows(): Promise<WorkflowOption[]> {
   const resp = await fetch(`${COMFY_API}/workflow/list`);
   if (!resp.ok) {
     await throwRequestError("Workflow list fetch", resp);
   }
-  return resp.json();
+  const workflows = (await resp.json()) as WorkflowListResponseItem[];
+  return workflows.map((workflow) => ({
+    id: workflow.id,
+    name: workflow.name,
+    ...(workflow.group_id ? { groupId: workflow.group_id } : {}),
+    ...(workflow.group_name ? { groupName: workflow.group_name } : {}),
+    ...(typeof workflow.group_order === "number"
+      ? { groupOrder: workflow.group_order }
+      : {}),
+  }));
 }
 
 export async function getWorkflowContent(

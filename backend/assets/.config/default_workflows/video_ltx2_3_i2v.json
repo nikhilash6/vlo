@@ -20,10 +20,10 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "Note: Image Input",
+      "title": "Note: I2V / T2V",
       "properties": {},
       "widgets_values": [
-        "You need to upload an image even for the **Text to Video** generation."
+        "Upload a source image for **Image to Video**, or enable **Text to Video** mode and leave the image empty."
       ],
       "color": "#222",
       "bgcolor": "#000"
@@ -135,7 +135,7 @@
         "secondTabWidth": 65
       },
       "widgets_values": [
-        "video/LTX_2.3_i2v",
+        "video/LTX_2.3_i2v_t2v",
         "auto",
         "auto"
       ]

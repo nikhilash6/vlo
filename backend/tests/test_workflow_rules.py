@@ -912,6 +912,33 @@ def test_real_ltx_flf2v_custom_audio_default_workflow_sidecar_waives_default_req
     )
 
 
+def test_real_ltx_i2v_default_workflow_exposes_t2v_toggle_and_waives_image_requirement():
+    base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
+    workflow_path = base / "video_ltx2_3_i2v.json"
+    workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+
+    set_object_info_cache(None)
+    try:
+        rules_model, warnings = load_rules_model_for_workflow(base, workflow_path.name)
+        assert warnings == []
+        rules_model = enrich_rules_with_object_info(rules_model, workflow)
+        rules = dump_resolved_rules(rules_model)
+    finally:
+        set_object_info_cache(None)
+
+    assert rules["name"] == "LTX2.3 I2V / T2V"
+    assert rules["nodes"]["269"]["present"] == {
+        "required": False,
+        "label": "Source image",
+    }
+    assert rules["nodes"]["267:201"]["widgets"]["value"] == {
+        "label": "Text to Video",
+        "control_after_generate": False,
+        "value_type": "boolean",
+    }
+    assert rules["validation"]["inputs"] == []
+
+
 def test_real_video_wan_default_workflow_sidecar_requires_video_and_derives_denoise():
     base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
     workflow_path = base / "video_wan2_2_14B_flfv2v_vlo.json"

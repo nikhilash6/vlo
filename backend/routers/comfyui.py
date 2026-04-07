@@ -45,6 +45,9 @@ from routers.comfyui_compat import compat_router  # noqa: F401 -- re-exported fo
 
 WORKFLOWS_DIR = Path(__file__).parent.parent / "assets" / "workflows"
 DEFAULT_WORKFLOWS_DIR = Path(__file__).parent.parent / "assets" / ".config" / "default_workflows"
+WORKFLOW_MENU_CONFIG_PATH = (
+    Path(__file__).parent.parent / "assets" / ".config" / "workflow_menu.json"
+)
 
 router = APIRouter(prefix="/comfy", tags=["comfyui"])
 
@@ -214,6 +217,67 @@ def _resolve_workflow_sidecar_path(filename: str) -> Path | None:
         return default
 
     return None
+
+
+def _load_workflow_menu_metadata() -> dict[str, dict[str, Any]]:
+    if not WORKFLOW_MENU_CONFIG_PATH.exists():
+        return {}
+
+    try:
+        raw = json.loads(WORKFLOW_MENU_CONFIG_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("Failed to load workflow menu config: %s", exc)
+        return {}
+
+    if not isinstance(raw, dict):
+        return {}
+
+    raw_groups = raw.get("groups")
+    if not isinstance(raw_groups, list):
+        return {}
+
+    metadata_by_workflow_id: dict[str, dict[str, Any]] = {}
+    for index, raw_group in enumerate(raw_groups):
+        if not isinstance(raw_group, dict):
+            continue
+
+        raw_group_id = raw_group.get("id")
+        if not isinstance(raw_group_id, str) or not raw_group_id.strip():
+            continue
+        group_id = raw_group_id.strip()
+
+        raw_group_name = raw_group.get("name")
+        group_name = (
+            raw_group_name.strip()
+            if isinstance(raw_group_name, str) and raw_group_name.strip()
+            else group_id.title()
+        )
+
+        raw_group_order = raw_group.get("order")
+        group_order = raw_group_order if isinstance(raw_group_order, int) else index
+
+        raw_workflow_ids = raw_group.get("workflow_ids")
+        if not isinstance(raw_workflow_ids, list):
+            continue
+
+        for raw_workflow_id in raw_workflow_ids:
+            if not isinstance(raw_workflow_id, str) or not raw_workflow_id.strip():
+                continue
+            metadata_by_workflow_id[raw_workflow_id.strip()] = {
+                "group_id": group_id,
+                "group_name": group_name,
+                "group_order": group_order,
+            }
+
+    return metadata_by_workflow_id
+
+
+def _workflow_list_sort_key(item: dict[str, Any]) -> tuple[int, str]:
+    raw_group_order = item.get("group_order")
+    group_order = raw_group_order if isinstance(raw_group_order, int) else 1_000_000
+    name = item.get("name")
+    workflow_name = name if isinstance(name, str) else ""
+    return (group_order, workflow_name.casefold())
 
 
 def _resolve_workflow_rules_response(
@@ -389,6 +453,7 @@ async def list_workflows():
     try:
         seen: set[str] = set()
         workflows = []
+        workflow_menu_metadata = _load_workflow_menu_metadata()
 
         # Main dir first – these take precedence.
         if WORKFLOWS_DIR.exists():
@@ -403,7 +468,9 @@ async def list_workflows():
                 )
                 if rules.name:
                     name = rules.name
-                workflows.append({"id": path.name, "name": name})
+                workflow_item: dict[str, Any] = {"id": path.name, "name": name}
+                workflow_item.update(workflow_menu_metadata.get(path.name, {}))
+                workflows.append(workflow_item)
 
         # Default dir – only add workflows not already seen.
         if DEFAULT_WORKFLOWS_DIR.exists():
@@ -416,9 +483,11 @@ async def list_workflows():
                 rules, _ = load_rules_model_for_workflow(DEFAULT_WORKFLOWS_DIR, path.name)
                 if rules.name:
                     name = rules.name
-                workflows.append({"id": path.name, "name": name})
+                workflow_item = {"id": path.name, "name": name}
+                workflow_item.update(workflow_menu_metadata.get(path.name, {}))
+                workflows.append(workflow_item)
 
-        workflows.sort(key=lambda x: x["name"])
+        workflows.sort(key=_workflow_list_sort_key)
         return workflows
     except OSError as exc:
         return error_response(

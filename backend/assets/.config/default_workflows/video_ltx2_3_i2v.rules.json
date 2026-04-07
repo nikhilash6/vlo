@@ -1,6 +1,21 @@
 {
-  "name": "LTX2.3 I2V",
+  "name": "LTX2.3 I2V / T2V",
   "version": 1,
+  "nodes": {
+    "269": {
+      "present": {
+        "required": false,
+        "label": "Source image"
+      }
+    },
+    "267:201": {
+      "widgets": {
+        "value": {
+          "label": "Text to Video"
+        }
+      }
+    }
+  },
   "aspect_ratio_processing": {
     "enabled": true,
     "stride": 32,

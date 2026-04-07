@@ -16,6 +16,7 @@ import {
   Popover,
   Select,
   MenuItem,
+  ListSubheader,
   FormControl,
   InputLabel,
   Checkbox,
@@ -55,6 +56,7 @@ import { getOutputMediaKindFromFilename } from "./constants/mediaKinds";
 import { getObjectInfo, saveWorkflowContent } from "./services/comfyuiApi";
 import { isAspectRatioWidget } from "./utils/aspectRatioWidgets";
 import { WorkflowDependencyResolver } from "./components/WorkflowDependencyResolver";
+import { buildWorkflowMenuSections } from "./store/workflowCatalog";
 
 const EXACT_ASPECT_RATIO_TOOLTIP =
   "If selected, this will make the output aspect ratio exactly match the input ratio, even if it doesn't match the project-supported aspect ratios. If unselected, it will crop the image to the best supported fit before dispatch.";
@@ -288,6 +290,10 @@ export function GenerationPanel() {
   const setMaskCropDilation = useGenerationStore((s) => s.setMaskCropDilation);
   const syncedWorkflow = useGenerationStore((s) => s.syncedWorkflow);
   const syncedGraphData = useGenerationStore((s) => s.syncedGraphData);
+  const workflowMenuSections = useMemo(
+    () => buildWorkflowMenuSections(availableWorkflows),
+    [availableWorkflows],
+  );
   const fetchWorkflows = useGenerationStore((s) => s.fetchWorkflows);
   const hasMaskMappings = derivedMaskMappings.length > 0;
   const aspectRatioProcessingConfig =
@@ -665,11 +671,29 @@ export function GenerationPanel() {
               "& .MuiSelect-select": { py: 1 },
             }}
           >
-            {availableWorkflows.map((wf) => (
-              <MenuItem key={wf.id} value={wf.id}>
-                {wf.name}
-              </MenuItem>
-            ))}
+            {workflowMenuSections.flatMap((section) => [
+              section.label ? (
+                <ListSubheader
+                  key={`${section.key}-header`}
+                  disableSticky
+                  sx={{
+                    bgcolor: "#111",
+                    color: "text.secondary",
+                    lineHeight: 1.8,
+                    fontSize: 12,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.6,
+                  }}
+                >
+                  {section.label}
+                </ListSubheader>
+              ) : null,
+              ...section.workflows.map((wf) => (
+                <MenuItem key={wf.id} value={wf.id}>
+                  {wf.name}
+                </MenuItem>
+              )),
+            ])}
           </Select>
         </FormControl>
       </Box>

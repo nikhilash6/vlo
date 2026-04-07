@@ -38,7 +38,13 @@ export interface TempWorkflow {
   rulesWarnings?: WorkflowRuleWarning[];
 }
 
-export type WorkflowOption = { id: string; name: string };
+export interface WorkflowOption {
+  id: string;
+  name: string;
+  groupId?: string;
+  groupName?: string;
+  groupOrder?: number;
+}
 
 export interface PreviewAnimation {
   frameUrls: (string | null)[];

@@ -53,6 +53,70 @@ def test_save_workflow_content_persists_to_backend_workflows_dir(
     ) == {"LoadImage": {"input": {}}}
 
 
+def test_list_workflows_applies_menu_groups_and_preserves_shadowing(
+    tmp_path, monkeypatch
+):
+    workflows_dir = tmp_path / "workflows"
+    default_workflows_dir = tmp_path / "default_workflows"
+    workflow_menu_path = tmp_path / "workflow_menu.json"
+    workflows_dir.mkdir()
+    default_workflows_dir.mkdir()
+
+    (workflows_dir / "shared.json").write_text("{}", encoding="utf-8")
+    (default_workflows_dir / "shared.json").write_text("{}", encoding="utf-8")
+    (default_workflows_dir / "core.json").write_text("{}", encoding="utf-8")
+    (default_workflows_dir / "zzz.json").write_text("{}", encoding="utf-8")
+    workflow_menu_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "groups": [
+                    {
+                        "id": "default",
+                        "name": "Default",
+                        "order": 0,
+                        "workflow_ids": ["shared.json"],
+                    },
+                    {
+                        "id": "core",
+                        "name": "Core",
+                        "order": 1,
+                        "workflow_ids": ["core.json"],
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(comfyui, "WORKFLOWS_DIR", workflows_dir)
+    monkeypatch.setattr(comfyui, "DEFAULT_WORKFLOWS_DIR", default_workflows_dir)
+    monkeypatch.setattr(comfyui, "WORKFLOW_MENU_CONFIG_PATH", workflow_menu_path)
+
+    workflows = asyncio.run(comfyui.list_workflows())
+
+    assert workflows == [
+        {
+            "id": "shared.json",
+            "name": "shared",
+            "group_id": "default",
+            "group_name": "Default",
+            "group_order": 0,
+        },
+        {
+            "id": "core.json",
+            "name": "core",
+            "group_id": "core",
+            "group_name": "Core",
+            "group_order": 1,
+        },
+        {
+            "id": "zzz.json",
+            "name": "zzz",
+        },
+    ]
+
+
 def test_resolve_workflow_rules_uses_graph_data_for_randomized_control_after_generate():
     payload = {
         "workflow": {
