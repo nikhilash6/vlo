@@ -47,20 +47,9 @@ void main(void)
 }
 `;
 
-const coverageExpressionByOperator: Record<MaskBooleanOperator, string> = {
-  union: "max(leftCoverage, rightCoverage)",
-  intersect: "leftCoverage * rightCoverage",
-  subtract: "leftCoverage * (1.0 - rightCoverage)",
-};
-
-const inverseCoverageExpressionByOperator: Record<MaskBooleanOperator, string> = {
-  union: "1.0 - max(1.0 - leftCoverage, 1.0 - rightCoverage)",
-  intersect: "1.0 - ((1.0 - leftCoverage) * (1.0 - rightCoverage))",
-  subtract: "1.0 - ((1.0 - leftCoverage) * rightCoverage)",
-};
-
-function createFragmentSource(operator: MaskBooleanOperator): string {
-  return `
+const SHARED_MASK_BOOLEAN_BLEND_PROGRAM = GlProgram.from({
+  vertex: defaultVertex,
+  fragment: `
 in vec2 vTextureCoord;
 in vec2 vLeftCoord;
 out vec4 finalColor;
@@ -69,6 +58,7 @@ uniform sampler2D uTexture;
 uniform sampler2D uLeftTexture;
 uniform vec4 uInputClamp;
 uniform vec4 uLeftClamp;
+uniform float uOperator;
 uniform float uOperateOnInverseCoverage;
 
 float readMaskCoverage(sampler2D maskTexture, vec2 uv, vec4 clampFrame)
@@ -82,22 +72,53 @@ float readMaskCoverage(sampler2D maskTexture, vec2 uv, vec4 clampFrame)
     return texture(maskTexture, clamp(uv, clampFrame.xy, clampFrame.zw)).r * clip;
 }
 
+float applyMaskBooleanOperator(float leftCoverage, float rightCoverage)
+{
+    if (uOperator < 0.5) {
+        return max(leftCoverage, rightCoverage);
+    }
+
+    if (uOperator < 1.5) {
+        return leftCoverage * rightCoverage;
+    }
+
+    return leftCoverage * (1.0 - rightCoverage);
+}
+
 void main(void)
 {
     float leftCoverage = readMaskCoverage(uLeftTexture, vLeftCoord, uLeftClamp);
     float rightCoverage = readMaskCoverage(uTexture, vTextureCoord, uInputClamp);
-    float coverage = uOperateOnInverseCoverage == 1.0
-        ? ${inverseCoverageExpressionByOperator[operator]}
-        : ${coverageExpressionByOperator[operator]};
+    float coverage = applyMaskBooleanOperator(leftCoverage, rightCoverage);
+
+    if (uOperateOnInverseCoverage == 1.0) {
+        coverage = 1.0 - applyMaskBooleanOperator(
+            1.0 - leftCoverage,
+            1.0 - rightCoverage
+        );
+    }
 
     finalColor = vec4(coverage, coverage, coverage, coverage);
 }
-`;
+`,
+  name: "mask-boolean-blend-filter",
+});
+
+function getOperatorUniformValue(operator: MaskBooleanOperator): number {
+  switch (operator) {
+    case "union":
+      return 0;
+    case "intersect":
+      return 1;
+    case "subtract":
+      return 2;
+  }
 }
 
 type MaskBooleanFilterUniforms = UniformGroup<{
   uLeftFilterMatrix: { value: Matrix; type: "mat3x3<f32>" };
   uLeftClamp: { value: Float32Array; type: "vec4<f32>" };
+  uOperator: { value: number; type: "f32" };
   uOperateOnInverseCoverage: { value: number; type: "f32" };
 }>;
 
@@ -112,11 +133,7 @@ export class MaskBooleanBlendFilter extends Filter {
 
   constructor(operator: MaskBooleanOperator, referenceSprite: Sprite) {
     super({
-      glProgram: GlProgram.from({
-        vertex: defaultVertex,
-        fragment: createFragmentSource(operator),
-        name: `mask-boolean-${operator}-blend-filter`,
-      }),
+      glProgram: SHARED_MASK_BOOLEAN_BLEND_PROGRAM,
       resources: {
         filterUniforms: new UniformGroup({
           uLeftFilterMatrix: {
@@ -126,6 +143,10 @@ export class MaskBooleanBlendFilter extends Filter {
           uLeftClamp: {
             value: new Float32Array([0, 0, 1, 1]),
             type: "vec4<f32>",
+          },
+          uOperator: {
+            value: getOperatorUniformValue(operator),
+            type: "f32",
           },
           uOperateOnInverseCoverage: {
             value: 0,

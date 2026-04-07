@@ -32,10 +32,10 @@ import { createMaskCoverageBoostFilter } from "../../transformations/catalogue/m
 import { createMaskCoverageInvertFilter } from "../../transformations/catalogue/mask/maskCoverageInvertFilter";
 import { createMaskRedToAlphaFilter } from "../../transformations/catalogue/mask/maskRedToAlphaFilter";
 import { drawMaskBaseShape } from "../model/maskFactory";
+import type { MaskBooleanExpressionAnalysis } from "../model/maskBooleanExpression";
 import {
-  collectMaskBooleanExpressionMaskIds,
+  analyzeMaskBooleanExpression,
   collectUnionMaskIds,
-  countMaskBooleanOperationNodes,
   getMaskLocalId,
   resolveRenderableMaskBooleanExpression,
 } from "../model/maskBooleanExpression";
@@ -234,8 +234,11 @@ export class SpriteClipMaskController {
       parentClip.type === "mask"
         ? null
         : resolveRenderableMaskBooleanExpression(parentClip, maskClips);
+    const resolvedMaskExpressionAnalysis = analyzeMaskBooleanExpression(
+      resolvedMaskExpression,
+    );
     const referencedMaskIds = new Set(
-      collectMaskBooleanExpressionMaskIds(resolvedMaskExpression),
+      resolvedMaskExpressionAnalysis.maskIds,
     );
     const referencedMaskClips = maskClips.filter((clip) => {
       const maskId = getMaskLocalId(clip);
@@ -388,13 +391,10 @@ export class SpriteClipMaskController {
       (sharedMaskCompositeState.feather?.amount ?? 0) > 0;
     const hasCompositeInvert = sharedMaskCompositeState.compositeInvert;
     const hasInvertedMask = activeMaskClips.some((maskClip) => maskClip.maskInverted);
-    const canUseLegacySimpleUnionFastPath =
-      parentClip.type !== "mask" &&
-      parentClip.maskBooleanExpression === undefined;
     const simpleUnionMasks =
-      hasSharedEdgeOps || hasCompositeInvert || !canUseLegacySimpleUnionFastPath
-      ? null
-      : this.resolveSimpleUnionMaskClips(
+      hasSharedEdgeOps || hasCompositeInvert
+        ? null
+        : this.resolveSimpleUnionMaskClips(
           resolvedMaskExpression,
           maskClipByLocalId,
         );
@@ -420,6 +420,7 @@ export class SpriteClipMaskController {
       ) {
         const renderedTexture = this.renderMaskBooleanExpressionToTexture(
           resolvedMaskExpression,
+          resolvedMaskExpressionAnalysis,
           maskClipByLocalId,
           clipContentSize,
           sharedMaskCompositeState,
@@ -760,17 +761,23 @@ export class SpriteClipMaskController {
         return;
       }
 
-      this.renderMaskSubsetToTexture(new Set<string>([maskClip.id]), leafTexture, transform);
       if (!maskClip.maskInverted) {
+        this.renderMaskSubsetToTexture(
+          new Set<string>([maskClip.id]),
+          leafTexture,
+          transform,
+        );
         return;
       }
 
-      this.renderTextureToTarget(leafTexture, perMaskRenderTexture, {
-        clear: true,
-        filters: [this.getMaskCoverageInvertFilter()],
-      });
+      this.renderMaskSubsetToTexture(
+        new Set<string>([maskClip.id]),
+        perMaskRenderTexture,
+        transform,
+      );
       this.renderTextureToTarget(perMaskRenderTexture, leafTexture, {
         clear: true,
+        filters: [this.getMaskCoverageInvertFilter()],
       });
     });
   }
@@ -845,6 +852,7 @@ export class SpriteClipMaskController {
 
   private renderMaskBooleanExpressionToTexture(
     expression: MaskBooleanExpression,
+    expressionAnalysis: MaskBooleanExpressionAnalysis,
     maskClipByLocalId: Map<string, MaskTimelineClip>,
     contentSize: { width: number; height: number },
     compositeState: ResolvedMaskCompositeState,
@@ -853,9 +861,7 @@ export class SpriteClipMaskController {
       return null;
     }
 
-    const referencedMaskIds = [
-      ...new Set(collectMaskBooleanExpressionMaskIds(expression)),
-    ];
+    const referencedMaskIds = expressionAnalysis.maskIds;
     if (referencedMaskIds.length === 0) {
       return null;
     }
@@ -866,7 +872,7 @@ export class SpriteClipMaskController {
     this.ensurePresentationMaskRenderTexture(contentSize);
     this.reconcileLeafMaskRenderTextures(referencedMaskIds, contentSize);
     this.ensureExpressionRenderTextureCount(
-      countMaskBooleanOperationNodes(expression),
+      expressionAnalysis.operationCount,
       contentSize,
     );
 
@@ -1578,12 +1584,6 @@ export class SpriteClipMaskController {
     maskIds.forEach((maskId) => {
       const existing = this.leafMaskRenderTextures.get(maskId);
       if (existing) {
-        if (
-          existing.width !== contentSize.width ||
-          existing.height !== contentSize.height
-        ) {
-          existing.resize(contentSize.width, contentSize.height);
-        }
         return;
       }
 

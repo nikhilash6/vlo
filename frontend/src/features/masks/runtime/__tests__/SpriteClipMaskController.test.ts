@@ -326,8 +326,9 @@ describe("SpriteClipMaskController mask composition", () => {
 
     expect(alphaMaskEffect).not.toBeNull();
     expect(alphaMaskEffect?.inverse).toBe(false);
-    // Fill full mask + render inverted union + erase union + present red->alpha.
-    expect(renderSpy).toHaveBeenCalledTimes(4);
+    // Render the inverted leaf through the shared scratch target, then present
+    // the final red->alpha mask.
+    expect(renderSpy).toHaveBeenCalledTimes(3);
 
     controller.dispose();
     warnSpy.mockRestore();
@@ -383,9 +384,9 @@ describe("SpriteClipMaskController mask composition", () => {
     expect(alphaMaskEffect).not.toBeNull();
     expect(alphaMaskEffect?.inverse).toBe(false);
 
-    // Render each referenced leaf once, invert the inverted leaf in-place,
-    // then run one shader-based boolean combine and present the final mask.
-    expect(renderSpy).toHaveBeenCalledTimes(6);
+    // Render each referenced leaf once, using the shared scratch target for
+    // the inverted leaf before the boolean combine and final presentation.
+    expect(renderSpy).toHaveBeenCalledTimes(5);
     expect(
       renderSnapshots.some(
         (call) =>
@@ -520,9 +521,9 @@ describe("SpriteClipMaskController mask composition", () => {
       new Map<string, Asset>(),
     );
 
-    // Render each inverted leaf, invert both leaf textures, then run one
-    // shader-based intersection before presenting red->alpha.
-    expect(renderSpy).toHaveBeenCalledTimes(8);
+    // Render each inverted leaf through the shared scratch target, then run
+    // one shader-based intersection before presenting red->alpha.
+    expect(renderSpy).toHaveBeenCalledTimes(6);
     expect(
       renderSnapshots.filter((call) => call.transform !== undefined).length,
     ).toBe(2);
@@ -692,6 +693,66 @@ describe("SpriteClipMaskController mask composition", () => {
           call.filters.includes(unionFilter),
       ),
     ).toBe(true);
+
+    controller.dispose();
+    warnSpy.mockRestore();
+  });
+
+  it("keeps explicit all-union vector expressions on the simple union fast path", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const renderSpy = vi.fn();
+    const renderer = {
+      render: renderSpy,
+    } as unknown as Renderer;
+    const sprite = new Sprite();
+    const root = new Container();
+    const controller = new SpriteClipMaskController(sprite, renderer, root);
+
+    const parent = {
+      ...createParentClip(),
+      maskBooleanExpression: {
+        kind: "operation",
+        operator: "union",
+        left: {
+          kind: "mask_ref",
+          maskId: "mask_a",
+        },
+        right: {
+          kind: "mask_ref",
+          maskId: "mask_b",
+        },
+      },
+    } as TimelineClip;
+    const maskA = createMaskClip("mask_a");
+    const maskB = createMaskClip("mask_b", {
+      maskType: "circle",
+    });
+
+    await controller.syncMaskClips(
+      [maskA, maskB],
+      parent,
+      { width: 1920, height: 1080 },
+      10,
+      new Map<string, Asset>(),
+    );
+
+    expect(renderSpy).not.toHaveBeenCalled();
+    expect(
+      (
+        controller as unknown as {
+          currentMaskMode: "none" | "regular" | "alpha";
+          maskBooleanBlendFilters: Partial<Record<"union", unknown>>;
+        }
+      ).currentMaskMode,
+    ).toBe("regular");
+    expect(
+      (
+        controller as unknown as {
+          currentMaskMode: "none" | "regular" | "alpha";
+          maskBooleanBlendFilters: Partial<Record<"union", unknown>>;
+        }
+      ).maskBooleanBlendFilters.union,
+    ).toBeUndefined();
 
     controller.dispose();
     warnSpy.mockRestore();

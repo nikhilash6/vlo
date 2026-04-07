@@ -15,6 +15,11 @@ const MASK_BOOLEAN_OPERATOR_ORDER: MaskBooleanOperator[] = [
 
 export type MaskBooleanExpressionPath = Array<"left" | "right">;
 
+export interface MaskBooleanExpressionAnalysis {
+  maskIds: string[];
+  operationCount: number;
+}
+
 function areExpressionPathsEqual(
   left: MaskBooleanExpressionPath,
   right: MaskBooleanExpressionPath,
@@ -52,11 +57,27 @@ function filterMaskBooleanExpression(
   predicate: (maskId: string) => boolean,
 ): MaskBooleanExpression | null {
   if (expression.kind === "mask_ref") {
-    return predicate(expression.maskId) ? structuredClone(expression) : null;
+    return predicate(expression.maskId) ? expression : null;
   }
 
   const left = filterMaskBooleanExpression(expression.left, predicate);
   const right = filterMaskBooleanExpression(expression.right, predicate);
+
+  if (!left && !right) {
+    return null;
+  }
+
+  if (!left) {
+    return right;
+  }
+
+  if (!right) {
+    return left;
+  }
+
+  if (left === expression.left && right === expression.right) {
+    return expression;
+  }
 
   if (left && right) {
     return {
@@ -67,7 +88,7 @@ function filterMaskBooleanExpression(
     };
   }
 
-  return left ?? right ?? null;
+  return null;
 }
 
 export function createMaskBooleanMaskRef(maskId: string): MaskBooleanExpression {
@@ -127,32 +148,46 @@ export function getMaskLocalId(
 export function collectMaskBooleanExpressionMaskIds(
   expression: MaskBooleanExpression | null | undefined,
 ): string[] {
-  if (!expression) {
-    return [];
-  }
-
-  if (expression.kind === "mask_ref") {
-    return [expression.maskId];
-  }
-
-  return [
-    ...collectMaskBooleanExpressionMaskIds(expression.left),
-    ...collectMaskBooleanExpressionMaskIds(expression.right),
-  ];
+  return analyzeMaskBooleanExpression(expression).maskIds;
 }
 
 export function countMaskBooleanOperationNodes(
   expression: MaskBooleanExpression | null | undefined,
 ): number {
+  return analyzeMaskBooleanExpression(expression).operationCount;
+}
+
+export function analyzeMaskBooleanExpression(
+  expression: MaskBooleanExpression | null | undefined,
+): MaskBooleanExpressionAnalysis {
   if (!expression || expression.kind !== "operation") {
-    return 0;
+    return {
+      maskIds:
+        expression?.kind === "mask_ref" ? [expression.maskId] : [],
+      operationCount: 0,
+    };
   }
 
-  return (
-    1 +
-    countMaskBooleanOperationNodes(expression.left) +
-    countMaskBooleanOperationNodes(expression.right)
-  );
+  const maskIds = new Set<string>();
+  let operationCount = 0;
+
+  const visit = (node: MaskBooleanExpression) => {
+    if (node.kind === "mask_ref") {
+      maskIds.add(node.maskId);
+      return;
+    }
+
+    operationCount += 1;
+    visit(node.left);
+    visit(node.right);
+  };
+
+  visit(expression);
+
+  return {
+    maskIds: [...maskIds],
+    operationCount,
+  };
 }
 
 export function sanitizeMaskBooleanExpression(
@@ -180,26 +215,27 @@ export function pruneMaskBooleanExpression(
 export function resolveLegacyMaskBooleanExpression(
   maskClips: readonly MaskTimelineClip[],
 ): MaskBooleanExpression | null {
-  const applyMaskRefs = maskClips
-    .filter((maskClip) => maskClip.maskMode === "apply")
-    .map((maskClip) => getMaskLocalId(maskClip))
-    .filter((maskId): maskId is string => !!maskId)
-    .map((maskId) => {
-      const maskClip = maskClips.find(
-        (candidate) => getMaskLocalId(candidate) === maskId,
-      );
-      return {
-        maskId,
-        maskClip,
-      };
-    });
+  const regularMasks: MaskBooleanExpression[] = [];
+  const invertedMasks: MaskBooleanExpression[] = [];
 
-  const regularMasks = applyMaskRefs
-    .filter(({ maskClip }) => !maskClip?.maskInverted)
-    .map(({ maskId }) => createMaskBooleanMaskRef(maskId));
-  const invertedMasks = applyMaskRefs
-    .filter(({ maskClip }) => maskClip?.maskInverted)
-    .map(({ maskId }) => createMaskBooleanMaskRef(maskId));
+  maskClips.forEach((maskClip) => {
+    if (maskClip.maskMode !== "apply") {
+      return;
+    }
+
+    const maskId = getMaskLocalId(maskClip);
+    if (!maskId) {
+      return;
+    }
+
+    const maskRef = createMaskBooleanMaskRef(maskId);
+    if (maskClip.maskInverted) {
+      invertedMasks.push(maskRef);
+      return;
+    }
+
+    regularMasks.push(maskRef);
+  });
 
   const regularExpression = foldMaskExpressions(regularMasks, "union");
   if (regularExpression) {
