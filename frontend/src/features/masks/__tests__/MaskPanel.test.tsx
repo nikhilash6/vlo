@@ -629,4 +629,137 @@ describe("MaskPanel", () => {
       },
     });
   });
+
+  it("does not render dedicated swap, delete, or clear equation buttons", () => {
+    vi.mocked(useMaskPanel).mockReturnValue({
+      ...baseHookValue,
+      masks: [
+        createMaskClip("clip_1", "mask_1", "circle"),
+        createMaskClip("clip_1", "mask_2", "rectangle"),
+      ],
+      maskBooleanExpression: {
+        kind: "operation",
+        operator: "union",
+        left: {
+          kind: "mask_ref",
+          maskId: "mask_1",
+        },
+        right: {
+          kind: "mask_ref",
+          maskId: "mask_2",
+        },
+      },
+    });
+
+    render(<MaskPanel />);
+
+    expect(screen.queryByTestId("mask-equation-swap")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("mask-equation-delete")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("mask-equation-clear")).not.toBeInTheDocument();
+  });
+
+  it("swaps two equation mask chips when dragging one onto the other", () => {
+    vi.mocked(useMaskPanel).mockReturnValue({
+      ...baseHookValue,
+      masks: [
+        createMaskClip("clip_1", "mask_1", "circle"),
+        createMaskClip("clip_1", "mask_2", "rectangle"),
+      ],
+      maskBooleanExpression: {
+        kind: "operation",
+        operator: "union",
+        left: {
+          kind: "mask_ref",
+          maskId: "mask_1",
+        },
+        right: {
+          kind: "mask_ref",
+          maskId: "mask_2",
+        },
+      },
+    });
+
+    render(<MaskPanel />);
+
+    const leftChip = screen.getByTestId("mask-equation-mask-left");
+    const rightChip = screen.getByTestId("mask-equation-mask-right");
+
+    fireEvent.dragStart(leftChip, {
+      dataTransfer: {
+        effectAllowed: "",
+        setData: vi.fn(),
+      },
+    });
+    fireEvent.dragOver(rightChip, {
+      dataTransfer: {
+        dropEffect: "",
+      },
+    });
+    fireEvent.drop(rightChip);
+
+    expect(mockSetMaskBooleanExpression).toHaveBeenCalledWith({
+      kind: "operation",
+      operator: "union",
+      left: {
+        kind: "mask_ref",
+        maskId: "mask_2",
+      },
+      right: {
+        kind: "mask_ref",
+        maskId: "mask_1",
+      },
+    });
+  });
+
+  it("removes the selected mask chip when Delete is pressed", () => {
+    vi.mocked(useMaskPanel).mockReturnValue({
+      ...baseHookValue,
+      masks: [
+        createMaskClip("clip_1", "mask_1", "circle"),
+        createMaskClip("clip_1", "mask_2", "rectangle"),
+      ],
+      maskBooleanExpression: {
+        kind: "operation",
+        operator: "union",
+        left: {
+          kind: "mask_ref",
+          maskId: "mask_1",
+        },
+        right: {
+          kind: "mask_ref",
+          maskId: "mask_2",
+        },
+      },
+    });
+
+    render(<MaskPanel />);
+
+    const leftChip = screen.getByTestId("mask-equation-mask-left");
+    fireEvent.click(leftChip);
+    fireEvent.keyDown(leftChip, { key: "Delete" });
+
+    expect(mockSetMaskBooleanExpression).toHaveBeenCalledWith({
+      kind: "mask_ref",
+      maskId: "mask_2",
+    });
+  });
+
+  it("clears the equation when Delete removes the final selected mask", () => {
+    vi.mocked(useMaskPanel).mockReturnValue({
+      ...baseHookValue,
+      masks: [createMaskClip("clip_1", "mask_1", "circle")],
+      maskBooleanExpression: {
+        kind: "mask_ref",
+        maskId: "mask_1",
+      },
+    });
+
+    render(<MaskPanel />);
+
+    const rootChip = screen.getByTestId("mask-equation-mask-root");
+    fireEvent.click(rootChip);
+    fireEvent.keyDown(rootChip, { key: "Delete" });
+
+    expect(mockSetMaskBooleanExpression).toHaveBeenCalledWith(null);
+  });
 });

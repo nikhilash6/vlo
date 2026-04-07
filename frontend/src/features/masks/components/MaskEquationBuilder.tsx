@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Box, Button, Chip, IconButton, Typography } from "@mui/material";
 import {
-  BackspaceOutlined,
-  ClearOutlined,
-  EditOutlined,
-  SwapHorizOutlined,
-} from "@mui/icons-material";
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
+import { Box, Chip, IconButton, Typography } from "@mui/material";
+import { EditOutlined } from "@mui/icons-material";
 import type {
   MaskBooleanExpression,
   MaskBooleanOperator,
@@ -19,11 +20,10 @@ import {
   createMaskBooleanMaskRef,
   getMaskBooleanExpressionAtPath,
   getMaskLocalId,
-  isMaskBooleanOperationExpression,
   removeMaskBooleanExpressionAtPath,
   replaceMaskBooleanExpressionAtPath,
   setMaskBooleanExpressionOperatorAtPath,
-  swapMaskBooleanExpressionOperandsAtPath,
+  swapMaskBooleanExpressionNodes,
 } from "../model/maskBooleanExpression";
 
 interface MaskEquationBuilderProps {
@@ -78,6 +78,9 @@ export function MaskEquationBuilder({
 }: MaskEquationBuilderProps) {
   const [selectedPath, setSelectedPath] = useState<MaskBooleanExpressionPath>(
     [],
+  );
+  const [draggedPath, setDraggedPath] = useState<MaskBooleanExpressionPath | null>(
+    null,
   );
 
   useEffect(() => {
@@ -162,8 +165,8 @@ export function MaskEquationBuilder({
     setSelectedPath(targetPath);
   };
 
-  const handleDeleteSelected = () => {
-    if (!expression) {
+  const handleDeleteSelectedMask = () => {
+    if (!expression || selectedNode?.kind !== "mask_ref") {
       return;
     }
 
@@ -175,21 +178,50 @@ export function MaskEquationBuilder({
     setSelectedPath(selectedPath.slice(0, -1));
   };
 
-  const handleSwapSelected = () => {
-    if (!expression || !isMaskBooleanOperationExpression(selectedNode)) {
+  const handleSwapMasks = (
+    firstPath: MaskBooleanExpressionPath,
+    secondPath: MaskBooleanExpressionPath,
+  ) => {
+    if (!expression) {
       return;
     }
 
-    onExpressionChange(
-      swapMaskBooleanExpressionOperandsAtPath(expression, selectedPath),
-    );
+    onExpressionChange(swapMaskBooleanExpressionNodes(expression, firstPath, secondPath));
+    setSelectedPath(secondPath);
+  };
+
+  const handleEquationKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (
+      event.key !== "Delete" &&
+      event.key !== "Backspace"
+    ) {
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (
+      target &&
+      (target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable)
+    ) {
+      return;
+    }
+
+    if (selectedNode?.kind !== "mask_ref") {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    handleDeleteSelectedMask();
   };
 
   const helperText = !expression
     ? "Click a mask chip to start the equation."
     : selectedNode?.kind === "operation"
       ? "Click a mask chip to union it into the selected group. Click the operator chip to cycle it."
-      : "Select a mask or group, then click another mask chip to union it into that part of the equation.";
+      : "Select a mask chip, press Delete to remove it, or drag it onto another mask chip to swap them.";
 
   const renderNode = (
     node: MaskBooleanExpression,
@@ -198,6 +230,10 @@ export function MaskEquationBuilder({
     const isSelected = arePathsEqual(path, selectedPath);
 
     if (node.kind === "mask_ref") {
+      const isDropTarget =
+        !!draggedPath &&
+        !arePathsEqual(draggedPath, path);
+
       return (
         <Chip
           data-testid={`mask-equation-mask-${path.join("-") || "root"}`}
@@ -209,7 +245,40 @@ export function MaskEquationBuilder({
             event.stopPropagation();
             handleSelectPath(path);
           }}
-          sx={{ height: 24 }}
+          draggable
+          onDragStart={(event) => {
+            event.stopPropagation();
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData(
+              "text/plain",
+              path.join("/") || "root",
+            );
+            setDraggedPath(path);
+            handleSelectPath(path);
+          }}
+          onDragOver={(event) => {
+            if (!draggedPath || arePathsEqual(draggedPath, path)) {
+              return;
+            }
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!draggedPath || arePathsEqual(draggedPath, path)) {
+              return;
+            }
+            handleSwapMasks(draggedPath, path);
+            setDraggedPath(null);
+          }}
+          onDragEnd={() => {
+            setDraggedPath(null);
+          }}
+          sx={{
+            height: 24,
+            borderStyle: isDropTarget ? "dashed" : "solid",
+          }}
         />
       );
     }
@@ -329,6 +398,7 @@ export function MaskEquationBuilder({
         {expression ? (
           <Box
             data-testid="mask-equation"
+            onKeyDown={handleEquationKeyDown}
             sx={{
               display: "flex",
               flexWrap: "wrap",
@@ -350,45 +420,6 @@ export function MaskEquationBuilder({
       </Box>
 
       <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        <Box sx={{ display: "flex", gap: 1 }}>
-          <Button
-            data-testid="mask-equation-swap"
-            variant="outlined"
-            size="small"
-            startIcon={<SwapHorizOutlined fontSize="small" />}
-            disabled={!isMaskBooleanOperationExpression(selectedNode)}
-            onClick={handleSwapSelected}
-            sx={{ textTransform: "none", flex: 1 }}
-          >
-            Swap
-          </Button>
-          <Button
-            data-testid="mask-equation-delete"
-            variant="outlined"
-            size="small"
-            startIcon={<BackspaceOutlined fontSize="small" />}
-            disabled={!expression}
-            onClick={handleDeleteSelected}
-            sx={{ textTransform: "none", flex: 1 }}
-          >
-            Delete Selected
-          </Button>
-          <Button
-            data-testid="mask-equation-clear"
-            variant="outlined"
-            size="small"
-            startIcon={<ClearOutlined fontSize="small" />}
-            disabled={!expression}
-            onClick={() => {
-              onExpressionChange(null);
-              setSelectedPath([]);
-            }}
-            sx={{ textTransform: "none", flex: 1 }}
-          >
-            Clear
-          </Button>
-        </Box>
-
         <Typography variant="caption" sx={{ color: "text.secondary" }}>
           {helperText}
         </Typography>

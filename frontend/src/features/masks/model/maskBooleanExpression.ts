@@ -15,6 +15,16 @@ const MASK_BOOLEAN_OPERATOR_ORDER: MaskBooleanOperator[] = [
 
 export type MaskBooleanExpressionPath = Array<"left" | "right">;
 
+function areExpressionPathsEqual(
+  left: MaskBooleanExpressionPath,
+  right: MaskBooleanExpressionPath,
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((segment, index) => segment === right[index])
+  );
+}
+
 function foldMaskExpressions(
   expressions: readonly MaskBooleanExpression[],
   operator: MaskBooleanOperator,
@@ -366,6 +376,48 @@ export function swapMaskBooleanExpressionOperandsAtPath(
       };
     }) ?? structuredClone(expression)
   );
+}
+
+export function swapMaskBooleanExpressionNodes(
+  expression: MaskBooleanExpression,
+  firstPath: MaskBooleanExpressionPath,
+  secondPath: MaskBooleanExpressionPath,
+): MaskBooleanExpression {
+  if (areExpressionPathsEqual(firstPath, secondPath)) {
+    return structuredClone(expression);
+  }
+
+  const firstNode = getMaskBooleanExpressionAtPath(expression, firstPath);
+  const secondNode = getMaskBooleanExpressionAtPath(expression, secondPath);
+  if (!firstNode || !secondNode) {
+    return structuredClone(expression);
+  }
+
+  const swapNodes = (
+    node: MaskBooleanExpression,
+    path: MaskBooleanExpressionPath,
+  ): MaskBooleanExpression => {
+    if (areExpressionPathsEqual(path, firstPath)) {
+      return structuredClone(secondNode);
+    }
+
+    if (areExpressionPathsEqual(path, secondPath)) {
+      return structuredClone(firstNode);
+    }
+
+    if (node.kind !== "operation") {
+      return structuredClone(node);
+    }
+
+    return {
+      kind: "operation",
+      operator: node.operator,
+      left: swapNodes(node.left, [...path, "left"]),
+      right: swapNodes(node.right, [...path, "right"]),
+    };
+  };
+
+  return swapNodes(expression, []);
 }
 
 export function collectUnionMaskIds(
