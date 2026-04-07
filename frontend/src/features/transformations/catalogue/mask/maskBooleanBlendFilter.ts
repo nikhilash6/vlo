@@ -53,6 +53,12 @@ const coverageExpressionByOperator: Record<MaskBooleanOperator, string> = {
   subtract: "leftCoverage * (1.0 - rightCoverage)",
 };
 
+const inverseCoverageExpressionByOperator: Record<MaskBooleanOperator, string> = {
+  union: "1.0 - max(1.0 - leftCoverage, 1.0 - rightCoverage)",
+  intersect: "1.0 - ((1.0 - leftCoverage) * (1.0 - rightCoverage))",
+  subtract: "1.0 - ((1.0 - leftCoverage) * rightCoverage)",
+};
+
 function createFragmentSource(operator: MaskBooleanOperator): string {
   return `
 in vec2 vTextureCoord;
@@ -63,6 +69,7 @@ uniform sampler2D uTexture;
 uniform sampler2D uLeftTexture;
 uniform vec4 uInputClamp;
 uniform vec4 uLeftClamp;
+uniform float uOperateOnInverseCoverage;
 
 float readMaskCoverage(sampler2D maskTexture, vec2 uv, vec4 clampFrame)
 {
@@ -79,7 +86,9 @@ void main(void)
 {
     float leftCoverage = readMaskCoverage(uLeftTexture, vLeftCoord, uLeftClamp);
     float rightCoverage = readMaskCoverage(uTexture, vTextureCoord, uInputClamp);
-    float coverage = ${coverageExpressionByOperator[operator]};
+    float coverage = uOperateOnInverseCoverage == 1.0
+        ? ${inverseCoverageExpressionByOperator[operator]}
+        : ${coverageExpressionByOperator[operator]};
 
     finalColor = vec4(coverage, coverage, coverage, coverage);
 }
@@ -89,6 +98,7 @@ void main(void)
 type MaskBooleanFilterUniforms = UniformGroup<{
   uLeftFilterMatrix: { value: Matrix; type: "mat3x3<f32>" };
   uLeftClamp: { value: Float32Array; type: "vec4<f32>" };
+  uOperateOnInverseCoverage: { value: number; type: "f32" };
 }>;
 
 /**
@@ -117,6 +127,10 @@ export class MaskBooleanBlendFilter extends Filter {
             value: new Float32Array([0, 0, 1, 1]),
             type: "vec4<f32>",
           },
+          uOperateOnInverseCoverage: {
+            value: 0,
+            type: "f32",
+          },
         }),
         uLeftTexture: Texture.EMPTY.source,
       },
@@ -127,6 +141,12 @@ export class MaskBooleanBlendFilter extends Filter {
 
   public setLeftTexture(texture: Texture) {
     this.leftTexture = texture;
+  }
+
+  public setOperateOnInverseCoverage(value: boolean) {
+    const filterUniforms = this.resources
+      .filterUniforms as MaskBooleanFilterUniforms;
+    filterUniforms.uniforms.uOperateOnInverseCoverage = value ? 1 : 0;
   }
 
   public apply(

@@ -399,6 +399,81 @@ describe("SpriteClipMaskController mask composition", () => {
     warnSpy.mockRestore();
   });
 
+  it("treats shared inverse masking as a composited hole-space union", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const renderSnapshots: Array<{
+      clear?: boolean;
+      transform?: unknown;
+      filters?: unknown;
+    }> = [];
+    const renderSpy = vi.fn((args: unknown) => {
+      const renderArgs = args as {
+        clear?: boolean;
+        transform?: unknown;
+        container?: { filters?: unknown };
+      };
+      renderSnapshots.push({
+        clear: renderArgs.clear,
+        transform: renderArgs.transform,
+        filters: renderArgs.container?.filters,
+      });
+    });
+    const renderer = {
+      render: renderSpy,
+    } as unknown as Renderer;
+    const sprite = new Sprite();
+    const root = new Container();
+    const controller = new SpriteClipMaskController(sprite, renderer, root);
+
+    const parent = {
+      ...createParentClip(),
+      maskCompositeTransformations: [
+        {
+          id: "grow_1",
+          type: "mask_grow",
+          isEnabled: true,
+          parameters: {
+            amount: 0,
+            invert: true,
+          },
+        },
+      ],
+    } as TimelineClip;
+    const maskA = createMaskClip("mask_a");
+    const maskB = createMaskClip("mask_b", {
+      maskType: "circle",
+    });
+
+    await controller.syncMaskClips(
+      [maskA, maskB],
+      parent,
+      { width: 1920, height: 1080 },
+      10,
+      new Map<string, Asset>(),
+    );
+
+    const alphaMaskEffect = (sprite.effects?.find(
+      (effect) => effect instanceof AlphaMask,
+    ) ?? null) as AlphaMask | null;
+
+    expect(alphaMaskEffect).not.toBeNull();
+    expect(alphaMaskEffect?.inverse).toBe(false);
+    expect(renderSpy).toHaveBeenCalledTimes(4);
+    expect(
+      renderSnapshots.filter((call) => call.transform !== undefined).length,
+    ).toBe(2);
+    expect(
+      renderSnapshots.filter(
+        (call) =>
+          call.clear === true &&
+          Array.isArray(call.filters),
+      ).length,
+    ).toBeGreaterThanOrEqual(2);
+
+    controller.dispose();
+    warnSpy.mockRestore();
+  });
+
   it("renders multiple inverted masks as one erased union pass", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const renderSnapshots: Array<{

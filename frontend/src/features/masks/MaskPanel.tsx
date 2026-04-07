@@ -10,8 +10,15 @@ import {
   Divider,
   Chip,
   FormControlLabel,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
-import { DeleteOutline, Add, ArrowBack } from "@mui/icons-material";
+import {
+  DeleteOutline,
+  Add,
+  ArrowBack,
+  InfoOutlined,
+} from "@mui/icons-material";
 import { MASK_TYPES } from "./model/maskFactory";
 import { useMaskPanel } from "./hooks/useMaskPanel";
 import {
@@ -67,12 +74,11 @@ function isSharedMaskEdgeTransform(transform: ClipTransform): boolean {
 
 function getSharedMaskEdgeInvertState(
   transforms: ClipTransform[],
-  fallbackValue: boolean,
 ) {
   const edgeTransforms = transforms.filter(isSharedMaskEdgeTransform);
   if (edgeTransforms.length === 0) {
     return {
-      checked: fallbackValue,
+      checked: false,
       indeterminate: false,
     };
   }
@@ -257,8 +263,8 @@ export const MaskPanel = memo(function MaskPanel() {
     [growDefinitions, featherDefinitions],
   );
   const sharedMaskEdgeInvertState = useMemo(
-    () => getSharedMaskEdgeInvertState(sharedMaskTransforms, maskInverted),
-    [maskInverted, sharedMaskTransforms],
+    () => getSharedMaskEdgeInvertState(sharedMaskTransforms),
+    [sharedMaskTransforms],
   );
 
   // SAM2 masks are point-based and don't use shape transformation sections.
@@ -564,6 +570,42 @@ export const MaskPanel = memo(function MaskPanel() {
             >
               Clip Masks
             </Typography>
+            {sharedMaskContextId && (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 1,
+                  mb: 1,
+                }}
+              >
+                <FormControlLabel
+                  sx={{ mr: 0 }}
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={sharedMaskEdgeInvertState.checked}
+                      indeterminate={sharedMaskEdgeInvertState.indeterminate}
+                      onChange={handleSharedMaskEdgeInvertChange}
+                    />
+                  }
+                  label="Inverse Masking"
+                />
+                <Tooltip
+                  title="Inverse masking performs operations on the mask 'holes', which is useful for inpainting, intuitively allowing union and intersection of areas to be replaced. Normal masking acts on opaque areas, which is useful for intuitively stacking parts which we want to remain visible."
+                  placement="top"
+                >
+                  <IconButton
+                    size="small"
+                    aria-label="Inverse masking information"
+                    sx={{ color: "text.secondary" }}
+                  >
+                    <InfoOutlined sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            )}
             <Menu
               data-testid="mask-add-menu"
               anchorEl={addMenuAnchorEl}
@@ -640,18 +682,6 @@ export const MaskPanel = memo(function MaskPanel() {
                   >
                     Shared Mask Edges
                   </Typography>
-                  <FormControlLabel
-                    sx={{ mr: 0 }}
-                    control={
-                      <Checkbox
-                        size="small"
-                        checked={sharedMaskEdgeInvertState.checked}
-                        indeterminate={sharedMaskEdgeInvertState.indeterminate}
-                        onChange={handleSharedMaskEdgeInvertChange}
-                      />
-                    }
-                    label="Apply To Inverse"
-                  />
                 </Box>
 
                 <DefaultTransformationSections

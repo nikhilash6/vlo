@@ -69,6 +69,7 @@ interface AssetMaskNode {
 type MaskApplicationMode = "none" | "regular" | "alpha";
 
 interface ResolvedMaskCompositeState {
+  compositeInvert: boolean;
   growAmount: number;
   growInvert: boolean;
   feather:
@@ -385,11 +386,13 @@ export class SpriteClipMaskController {
     const hasSharedEdgeOps =
       sharedMaskCompositeState.growAmount > 0 ||
       (sharedMaskCompositeState.feather?.amount ?? 0) > 0;
+    const hasCompositeInvert = sharedMaskCompositeState.compositeInvert;
     const hasInvertedMask = activeMaskClips.some((maskClip) => maskClip.maskInverted);
     const canUseLegacySimpleUnionFastPath =
       parentClip.type !== "mask" &&
       parentClip.maskBooleanExpression === undefined;
-    const simpleUnionMasks = hasSharedEdgeOps || !canUseLegacySimpleUnionFastPath
+    const simpleUnionMasks =
+      hasSharedEdgeOps || hasCompositeInvert || !canUseLegacySimpleUnionFastPath
       ? null
       : this.resolveSimpleUnionMaskClips(
           resolvedMaskExpression,
@@ -397,7 +400,7 @@ export class SpriteClipMaskController {
         );
     const shouldUseCompositedAlphaMask =
       this.renderer !== null &&
-      (hasSharedEdgeOps || simpleUnionMasks === null);
+      (hasSharedEdgeOps || hasCompositeInvert || simpleUnionMasks === null);
     this.sanitizeAssetMaskSpriteVisibility();
 
     if (this.maskSprite && shouldUseCompositedAlphaMask) {
@@ -432,7 +435,12 @@ export class SpriteClipMaskController {
     } else if (simpleUnionMasks) {
       const inverse = false;
       this.applyMaskEffect(this.maskContainer, inverse, false);
-    } else if (activeAssetMasks.length > 0 || hasInvertedMask || hasSharedEdgeOps) {
+    } else if (
+      activeAssetMasks.length > 0 ||
+      hasInvertedMask ||
+      hasSharedEdgeOps ||
+      hasCompositeInvert
+    ) {
       // No renderer / no maskSprite (test fallback): Container-based AlphaMask
       const inverse = singleMask ? (singleMask.maskInverted ?? false) : false;
       this.applyMaskEffect(this.maskContainer, inverse, true);
@@ -643,12 +651,22 @@ export class SpriteClipMaskController {
     rawTimeTicks: number,
   ): ResolvedMaskCompositeState {
     if (parentClip.type === "mask") {
-      return { growAmount: 0, growInvert: false, feather: null };
+      return {
+        compositeInvert: false,
+        growAmount: 0,
+        growInvert: false,
+        feather: null,
+      };
     }
 
     const transforms = parentClip.maskCompositeTransformations ?? [];
     if (transforms.length === 0) {
-      return { growAmount: 0, growInvert: false, feather: null };
+      return {
+        compositeInvert: false,
+        growAmount: 0,
+        growInvert: false,
+        feather: null,
+      };
     }
 
     const state: TransformState = {
@@ -670,7 +688,12 @@ export class SpriteClipMaskController {
       });
     });
 
+    const compositeInvert = transforms.some(
+      (transform) => transform.parameters.invert === true,
+    );
+
     return {
+      compositeInvert,
       growAmount: state.maskGrow?.amount ?? 0,
       growInvert: state.maskGrow?.invert ?? false,
       feather: state.feather ?? null,
@@ -755,6 +778,7 @@ export class SpriteClipMaskController {
   private evaluateMaskBooleanExpression(
     expression: MaskBooleanExpression,
     operationTextureIndex: { current: number },
+    compositeInvert: boolean,
   ): Texture | null {
     if (expression.kind === "mask_ref") {
       return this.leafMaskRenderTextures.get(expression.maskId) ?? null;
@@ -763,10 +787,12 @@ export class SpriteClipMaskController {
     const leftTexture = this.evaluateMaskBooleanExpression(
       expression.left,
       operationTextureIndex,
+      compositeInvert,
     );
     const rightTexture = this.evaluateMaskBooleanExpression(
       expression.right,
       operationTextureIndex,
+      compositeInvert,
     );
     const targetTexture =
       this.expressionRenderTextures[operationTextureIndex.current];
@@ -781,6 +807,7 @@ export class SpriteClipMaskController {
       rightTexture,
       targetTexture,
       expression.operator,
+      compositeInvert,
     );
     return targetTexture;
   }
@@ -790,6 +817,7 @@ export class SpriteClipMaskController {
     rightTexture: Texture,
     targetTexture: RenderTexture,
     operator: "union" | "intersect" | "subtract",
+    compositeInvert: boolean,
   ) {
     if (!this.renderer) {
       return;
@@ -799,6 +827,7 @@ export class SpriteClipMaskController {
 
     const booleanBlendFilter = this.getMaskBooleanBlendFilter(operator);
     booleanBlendFilter.setLeftTexture(leftTexture);
+    booleanBlendFilter.setOperateOnInverseCoverage(compositeInvert);
 
     maskBooleanSprite.texture = rightTexture;
     maskBooleanSprite.position.set(0, 0);
@@ -848,7 +877,7 @@ export class SpriteClipMaskController {
     this.renderLeafMaskTextures(referencedMaskIds, maskClipByLocalId, contentSize);
     const evaluatedTexture = this.evaluateMaskBooleanExpression(expression, {
       current: 0,
-    });
+    }, compositeState.compositeInvert);
     if (!evaluatedTexture) {
       return null;
     }

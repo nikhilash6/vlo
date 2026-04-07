@@ -389,7 +389,7 @@ describe("MaskPanel", () => {
     render(<MaskPanel />);
 
     fireEvent.click(
-      screen.getByRole("checkbox", { name: "Apply To Inverse" }),
+      screen.getByRole("checkbox", { name: "Inverse Masking" }),
     );
 
     expect(mockSetSharedMaskTransforms).toHaveBeenCalledWith([
@@ -419,7 +419,7 @@ describe("MaskPanel", () => {
     render(<MaskPanel />);
 
     fireEvent.click(
-      screen.getByRole("checkbox", { name: "Apply To Inverse" }),
+      screen.getByRole("checkbox", { name: "Inverse Masking" }),
     );
 
     expect(mockSetSharedMaskTransforms).toHaveBeenCalledWith([
