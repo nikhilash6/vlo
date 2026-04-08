@@ -53,6 +53,23 @@ class WorkflowRuleWidgetEntry(WorkflowRuleBaseModel):
     default: Any | None = None
     value_type: Literal["int", "float", "string", "boolean", "enum", "unknown"] | None = None
     options: list[str | int | float | bool] | None = None
+    default_overrides: list["WorkflowRuleWidgetDefaultOverride"] | None = None
+
+
+class WorkflowRuleWidgetInputPresenceCondition(WorkflowRuleBaseModel):
+    kind: Literal["input_presence"] = "input_presence"
+    inputs: list[str] = Field(default_factory=list)
+    match: Literal[
+        "all_present",
+        "all_missing",
+        "any_present",
+        "any_missing",
+    ] = "all_present"
+
+
+class WorkflowRuleWidgetDefaultOverride(WorkflowRuleBaseModel):
+    when: WorkflowRuleWidgetInputPresenceCondition
+    value: Any | None = None
 
 
 class WorkflowRuleSelectionConfig(WorkflowRuleBaseModel):

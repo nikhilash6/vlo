@@ -118,6 +118,101 @@ def _find_references_to_node(
     return refs
 
 
+def _normalize_provided_input_ids(
+    provided_input_ids: set[str] | None,
+) -> set[str]:
+    return {
+        str(input_id).strip()
+        for input_id in (provided_input_ids or set())
+        if str(input_id).strip()
+    }
+
+
+def _matches_input_presence_condition(
+    raw_condition: Any,
+    provided_input_ids: set[str],
+) -> bool:
+    if not isinstance(raw_condition, dict):
+        return False
+
+    if raw_condition.get("kind") != "input_presence":
+        return False
+
+    raw_inputs = raw_condition.get("inputs")
+    if not isinstance(raw_inputs, list):
+        return False
+
+    inputs = [
+        str(input_id).strip()
+        for input_id in raw_inputs
+        if str(input_id).strip()
+    ]
+    if not inputs:
+        return False
+
+    match_mode = raw_condition.get("match")
+    if not isinstance(match_mode, str):
+        match_mode = "all_present"
+
+    if match_mode == "all_present":
+        return all(input_id in provided_input_ids for input_id in inputs)
+    if match_mode == "all_missing":
+        return all(input_id not in provided_input_ids for input_id in inputs)
+    if match_mode == "any_present":
+        return any(input_id in provided_input_ids for input_id in inputs)
+    if match_mode == "any_missing":
+        return any(input_id not in provided_input_ids for input_id in inputs)
+    return False
+
+
+def _apply_widget_default_overrides(
+    workflow: WorkflowPrompt,
+    node_rules: dict[str, Any],
+    provided_input_ids: set[str],
+) -> None:
+    for node_id, node_rule in node_rules.items():
+        if not isinstance(node_rule, dict):
+            continue
+
+        widgets = node_rule.get("widgets")
+        if not isinstance(widgets, dict):
+            continue
+
+        workflow_node = workflow.get(node_id)
+        if not isinstance(workflow_node, dict):
+            continue
+
+        inputs = workflow_node.get("inputs")
+        if not isinstance(inputs, dict):
+            continue
+
+        for param, widget_rule in widgets.items():
+            if not isinstance(param, str) or not param:
+                continue
+            if not isinstance(widget_rule, dict):
+                continue
+            if param not in inputs:
+                continue
+
+            current_value = inputs.get(param)
+            if isinstance(current_value, list) and len(current_value) == 2:
+                continue
+
+            raw_overrides = widget_rule.get("default_overrides")
+            if not isinstance(raw_overrides, list):
+                continue
+
+            for raw_override in raw_overrides:
+                if not isinstance(raw_override, dict):
+                    continue
+                if not _matches_input_presence_condition(
+                    raw_override.get("when"), provided_input_ids
+                ):
+                    continue
+                inputs[param] = raw_override.get("value")
+                break
+
+
 def find_unsatisfied_input_conditions(
     rules: WorkflowRules | None,
     provided_input_ids: set[str] | None,
@@ -125,11 +220,7 @@ def find_unsatisfied_input_conditions(
     if not isinstance(rules, dict):
         return []
 
-    normalized_provided = {
-        str(input_id).strip()
-        for input_id in (provided_input_ids or set())
-        if str(input_id).strip()
-    }
+    normalized_provided = _normalize_provided_input_ids(provided_input_ids)
     raw_conditions = rules.get("input_conditions")
     if not isinstance(raw_conditions, list):
         return []
@@ -281,15 +372,16 @@ def apply_rules_to_workflow(
     node_rules = normalized_rules.get("nodes", {})
     ignored_nodes: set[str] = set()
     if isinstance(node_rules, dict):
+        normalized_provided_inputs = _normalize_provided_input_ids(provided_input_ids)
+        _apply_widget_default_overrides(
+            next_workflow,
+            node_rules,
+            normalized_provided_inputs,
+        )
+
         for node_id, node_rule in node_rules.items():
             if isinstance(node_rule, dict) and _to_bool(node_rule.get("ignore"), False):
                 ignored_nodes.add(str(node_id))
-
-        normalized_provided_inputs = {
-            input_id.strip()
-            for input_id in (provided_input_ids or set())
-            if isinstance(input_id, str) and input_id.strip()
-        }
         for node_id, node_rule in node_rules.items():
             if not isinstance(node_rule, dict):
                 continue

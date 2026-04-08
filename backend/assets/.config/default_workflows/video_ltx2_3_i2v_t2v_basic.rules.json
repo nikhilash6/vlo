@@ -1,0 +1,52 @@
+{
+  "version": 2,
+  "name": "LTX2.3 Basic I2V / T2V",
+  "nodes": {
+    "167": {
+      "present": {
+        "label": "Source image"
+      }
+    },
+    "290": {
+      "widgets": {
+        "value": {
+          "label": "Text to Video",
+          "hidden": true,
+          "value_type": "boolean",
+          "default_overrides": [
+            {
+              "when": {
+                "kind": "input_presence",
+                "inputs": [
+                  "167"
+                ],
+                "match": "all_missing"
+              },
+              "value": true
+            },
+            {
+              "when": {
+                "kind": "input_presence",
+                "inputs": [
+                  "167"
+                ],
+                "match": "all_present"
+              },
+              "value": false
+            }
+          ]
+        }
+      }
+    }
+  },
+  "validation": {
+    "inputs": [
+      {
+        "kind": "optional",
+        "input": {
+          "node_id": "167"
+        }
+      }
+    ]
+  }
+}

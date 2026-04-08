@@ -919,7 +919,7 @@ def test_real_ltx_flf2v_core_workflow_exposes_optional_custom_audio():
     )
 
 
-def test_real_ltx_i2v_default_workflow_exposes_t2v_toggle_and_waives_image_requirement():
+def test_real_ltx_i2v_default_workflow_hides_t2v_toggle_and_waives_image_requirement():
     base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
     workflow_path = base / "video_ltx2_3_i2v.json"
     workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
@@ -938,12 +938,86 @@ def test_real_ltx_i2v_default_workflow_exposes_t2v_toggle_and_waives_image_requi
         "required": False,
         "label": "Source image",
     }
+    assert rules["nodes"]["267"]["widgets"]["value_1"] == {
+        "control_after_generate": False,
+        "value_type": "boolean",
+        "hidden": True,
+        "default_overrides": [
+            {
+                "when": {
+                    "kind": "input_presence",
+                    "inputs": ["269"],
+                    "match": "all_missing",
+                },
+                "value": True,
+            },
+            {
+                "when": {
+                    "kind": "input_presence",
+                    "inputs": ["269"],
+                    "match": "all_present",
+                },
+                "value": False,
+            },
+        ],
+    }
     assert rules["nodes"]["267:201"]["widgets"]["value"] == {
         "label": "Text to Video",
         "control_after_generate": False,
         "value_type": "boolean",
+        "hidden": True,
     }
     assert rules["validation"]["inputs"] == []
+
+
+def test_real_ltx_basic_i2v_core_workflow_auto_toggles_t2v_without_pruning_image_branch():
+    base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
+    workflow_path = base / "video_ltx2_3_i2v_t2v_basic.json"
+    workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+
+    set_object_info_cache(None)
+    try:
+        rules_model, warnings = load_rules_model_for_workflow(base, workflow_path.name)
+        assert warnings == []
+        rules_model = enrich_rules_with_object_info(rules_model, workflow)
+        rules = dump_resolved_rules(rules_model)
+    finally:
+        set_object_info_cache(None)
+
+    assert rules["name"] == "LTX2.3 Basic I2V / T2V"
+    assert rules["nodes"]["167"]["present"] == {
+        "label": "Source image",
+    }
+    assert rules["nodes"]["290"]["widgets"]["value"] == {
+        "label": "Text to Video",
+        "control_after_generate": False,
+        "value_type": "boolean",
+        "hidden": True,
+        "default_overrides": [
+            {
+                "when": {
+                    "kind": "input_presence",
+                    "inputs": ["167"],
+                    "match": "all_missing",
+                },
+                "value": True,
+            },
+            {
+                "when": {
+                    "kind": "input_presence",
+                    "inputs": ["167"],
+                    "match": "all_present",
+                },
+                "value": False,
+            },
+        ],
+    }
+    assert rules["validation"]["inputs"] == [
+        {
+            "kind": "optional",
+            "input": "167",
+        }
+    ]
 
 
 def test_real_video_wan_default_workflow_sidecar_requires_video_and_derives_denoise():
@@ -983,7 +1057,7 @@ def test_real_video_wan_default_workflow_sidecar_requires_video_and_derives_deno
         "min": 1,
         "message": "Provide at least one frame input.",
     } in validation_inputs
-    assert {"kind": "required", "input": "77", "message": "Video is required."} in (
+    assert {"kind": "required", "input": "89", "message": "Video is required."} in (
         validation_inputs
     )
     assert not any(
@@ -2623,6 +2697,62 @@ def test_apply_rules_disconnects_missing_optional_inputs_and_prunes_nodes():
     assert "62" not in rewritten
     assert rewritten["67"]["inputs"]["start_image"] == ["68", 0]
     assert "end_image" not in rewritten["67"]["inputs"]
+
+
+def test_apply_rules_applies_widget_default_overrides_from_input_presence():
+    workflow = {
+        "267": {
+            "class_type": "TemplateSubgraph",
+            "inputs": {
+                "value_1": False,
+            },
+        }
+    }
+    rules = {
+        "version": 2,
+        "nodes": {
+            "267": {
+                "widgets": {
+                    "value_1": {
+                        "default_overrides": [
+                            {
+                                "when": {
+                                    "kind": "input_presence",
+                                    "inputs": ["269"],
+                                    "match": "all_missing",
+                                },
+                                "value": True,
+                            },
+                            {
+                                "when": {
+                                    "kind": "input_presence",
+                                    "inputs": ["269"],
+                                    "match": "all_present",
+                                },
+                                "value": False,
+                            },
+                        ]
+                    }
+                }
+            }
+        },
+    }
+
+    rewritten_missing, warnings_missing = apply_rules_to_workflow(
+        workflow,
+        rules,
+        provided_input_ids=set(),
+    )
+    assert warnings_missing == []
+    assert rewritten_missing["267"]["inputs"]["value_1"] is True
+
+    rewritten_present, warnings_present = apply_rules_to_workflow(
+        workflow,
+        rules,
+        provided_input_ids={"269"},
+    )
+    assert warnings_present == []
+    assert rewritten_present["267"]["inputs"]["value_1"] is False
 
 
 def test_find_unsatisfied_input_conditions_requires_at_least_one_input():

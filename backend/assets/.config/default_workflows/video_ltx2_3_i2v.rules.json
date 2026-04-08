@@ -1,6 +1,6 @@
 {
+  "version": 2,
   "name": "LTX2.3 I2V / T2V",
-  "version": 1,
   "nodes": {
     "269": {
       "present": {
@@ -8,30 +8,72 @@
         "label": "Source image"
       }
     },
+    "267": {
+      "widgets": {
+        "value_1": {
+          "hidden": true,
+          "value_type": "boolean",
+          "default_overrides": [
+            {
+              "when": {
+                "kind": "input_presence",
+                "inputs": [
+                  "269"
+                ],
+                "match": "all_missing"
+              },
+              "value": true
+            },
+            {
+              "when": {
+                "kind": "input_presence",
+                "inputs": [
+                  "269"
+                ],
+                "match": "all_present"
+              },
+              "value": false
+            }
+          ]
+        }
+      }
+    },
     "267:201": {
       "widgets": {
         "value": {
-          "label": "Text to Video"
+          "label": "Text to Video",
+          "hidden": true
         }
       }
     }
   },
-  "aspect_ratio_processing": {
-    "enabled": true,
-    "stride": 32,
-    "resolutions": [480, 720, 1080],
-    "search_steps": 2,
-    "target_nodes": [
-      {
-        "node_id": "267",
-        "width_param": "value_2",
-        "height_param": "value_3"
-      }
-    ],
-    "postprocess": {
+  "pipeline": [
+    {
+      "kind": "mask_cropping",
+      "mode": "crop"
+    },
+    {
+      "kind": "aspect_ratio",
       "enabled": true,
-      "mode": "stretch_exact",
-      "apply_to": "all_visual_outputs"
+      "stride": 32,
+      "resolutions": [
+        480,
+        720,
+        1080
+      ],
+      "search_steps": 2,
+      "target_nodes": [
+        {
+          "node_id": "267",
+          "width_param": "value_2",
+          "height_param": "value_3"
+        }
+      ],
+      "postprocess": {
+        "enabled": true,
+        "mode": "stretch_exact",
+        "apply_to": "all_visual_outputs"
+      }
     }
-  }
+  ]
 }

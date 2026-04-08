@@ -17,7 +17,8 @@
       "name": "Core",
       "order": 1,
       "workflow_ids": [
-        "video_ltx2_3_flf2v.json"
+        "video_ltx2_3_flf2v.json",
+        "video_ltx2_3_i2v_t2v_basic.json"
       ]
     }
   ]
