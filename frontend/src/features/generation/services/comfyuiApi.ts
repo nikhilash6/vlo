@@ -256,6 +256,9 @@ export async function generate(
   if (request.graphData) {
     formData.append("graph_data", JSON.stringify(request.graphData));
   }
+  if (request.workflowRules) {
+    formData.append("workflow_rules", JSON.stringify(request.workflowRules));
+  }
   formData.append("target_aspect_ratio", request.targetAspectRatio);
   formData.append("target_resolution", String(request.targetResolution));
 

@@ -517,6 +517,41 @@ describe("useGenerationStore pipeline phases", () => {
     );
   });
 
+  it("submits the active resolved workflow rules with the generate request", async () => {
+    makeReadyStoreState();
+    useGenerationStore.setState({
+      activeWorkflowRules: makeWorkflowRules({
+        nodes: {
+          "167": {
+            present: {
+              label: "Source image",
+              required: false,
+            },
+          },
+        },
+      }),
+    });
+
+    await useGenerationStore.getState().submitGeneration({});
+
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+    expect(mockGenerate.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        workflowId: "wf.json",
+        workflowRules: expect.objectContaining({
+          nodes: expect.objectContaining({
+            "167": expect.objectContaining({
+              present: expect.objectContaining({
+                label: "Source image",
+                required: false,
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
   it("cancels preprocess locally, ignores stale completion, and leaves no error job", async () => {
     makeReadyStoreState();
     const preprocessDeferred = createDeferred<{

@@ -34,6 +34,7 @@ class BackendPipelineContext:
         graph_data: dict[str, Any] | None = None,
         rules: dict[str, Any] | None = None,
         rules_model: ResolvedWorkflowRules | None = None,
+        rules_override_provided: bool = False,
         warnings: list[dict[str, Any]] | None = None,
         provided_input_ids: set[str] | None = None,
         applied_widget_values: dict[str, str] | None = None,
@@ -58,6 +59,7 @@ class BackendPipelineContext:
         self.widget_modes = dict(widget_modes or {})
         self.buffered_videos = dict(buffered_videos or {})
         self.graph_data = graph_data
+        self.rules_override_provided = rules_override_provided
         self.warnings = list(warnings or [])
         self.provided_input_ids = set(provided_input_ids or set())
         self.applied_widget_values = dict(applied_widget_values or {})

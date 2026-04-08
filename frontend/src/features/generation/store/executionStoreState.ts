@@ -62,10 +62,11 @@ function buildGenerationPlanFromState(
   derivedWidgetInputs: Record<string, string>,
 ): GenerationPlan {
   const workflowId =
-    state.selectedWorkflowId === TEMP_WORKFLOW_ID ||
+    state.rulesWorkflowSourceId ??
+    (state.selectedWorkflowId === TEMP_WORKFLOW_ID ||
     isTemporaryWorkflowPersistenceId(state.selectedWorkflowId)
-      ? state.rulesWorkflowSourceId
-      : state.selectedWorkflowId;
+      ? null
+      : state.selectedWorkflowId);
   const workflowName = resolveWorkflowDisplayName(
     state.availableWorkflows,
     state.selectedWorkflowId,
@@ -165,9 +166,15 @@ export function buildExecutionStoreState(
         return null;
       }
 
-      const response = await comfyApi.generate(prepared.request, {
-        signal: preprocessAbortController.signal,
-      });
+      const response = await comfyApi.generate(
+        {
+          ...prepared.request,
+          workflowRules: state.activeWorkflowRules ?? undefined,
+        },
+        {
+          signal: preprocessAbortController.signal,
+        },
+      );
       if (get().pipelineRunToken !== pipelineRunToken) {
         return null;
       }

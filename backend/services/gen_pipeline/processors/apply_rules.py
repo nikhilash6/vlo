@@ -19,8 +19,9 @@ class _ApplyRulesProcessor:
     async def execute(self, ctx: BackendPipelineContext) -> None:
         ctx.workflow, rule_apply_warnings = apply_rules_to_workflow(
             ctx.workflow,
-            ctx.rules,
+            ctx.rules_model,
             provided_input_ids=ctx.provided_input_ids,
+            rules_already_resolved=True,
         )
         ctx.warnings.extend(rule_apply_warnings)
 

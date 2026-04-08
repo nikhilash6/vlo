@@ -736,6 +736,27 @@ async def generate(request: Request):
         except json.JSONDecodeError:
             pass
 
+    workflow_rules: dict[str, Any] | None = None
+    workflow_rules_json = form.get("workflow_rules")
+    if isinstance(workflow_rules_json, str) and workflow_rules_json.strip():
+        try:
+            parsed_workflow_rules = json.loads(workflow_rules_json)
+        except json.JSONDecodeError:
+            return error_response(
+                400,
+                "invalid_workflow_rules_payload",
+                "Workflow rules payload must be valid JSON",
+                retryable=False,
+            )
+        if not isinstance(parsed_workflow_rules, dict):
+            return error_response(
+                400,
+                "invalid_workflow_rules_payload",
+                "Workflow rules payload must be an object",
+                retryable=False,
+            )
+        workflow_rules = parsed_workflow_rules
+
     # --- Collect injections from form fields ---
     injections: dict[str, dict[str, Any]] = {}
     workflow_warnings: list[dict[str, Any]] = []
@@ -946,6 +967,8 @@ async def generate(request: Request):
         client_id=client_id,
         workflow=workflow,
         workflow_id=workflow_id,
+        rules=workflow_rules,
+        rules_override_provided=workflow_rules is not None,
         target_aspect_ratio=target_aspect_ratio,
         target_resolution_raw=target_resolution_raw,
         mask_crop_dilation=mask_crop_dilation,

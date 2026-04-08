@@ -41,6 +41,8 @@ class GenerationInput:
     client_id: str
     workflow: dict
     workflow_id: str | None = None
+    rules: dict[str, Any] | None = None
+    rules_override_provided: bool = False
     target_aspect_ratio: str | None = None
     target_resolution_raw: Any = None
     mask_crop_dilation: float | None = None
@@ -239,6 +241,8 @@ def build_backend_context(
         client_id=gen_input.client_id,
         workflow=gen_input.workflow,
         workflow_id=gen_input.workflow_id,
+        rules=gen_input.rules,
+        rules_override_provided=gen_input.rules_override_provided,
         target_aspect_ratio=gen_input.target_aspect_ratio,
         target_resolution=gen_input.target_resolution_raw,
         mask_crop_dilation=gen_input.mask_crop_dilation,

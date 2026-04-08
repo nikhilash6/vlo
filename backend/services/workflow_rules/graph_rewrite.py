@@ -2,6 +2,8 @@ from collections import deque
 from copy import deepcopy
 from typing import Any
 
+from pydantic import ValidationError
+
 from services.workflow_rules.normalize import (
     WorkflowPrompt,
     WorkflowRuleWarning,
@@ -11,6 +13,7 @@ from services.workflow_rules.normalize import (
     _warning,
     normalize_rules,
 )
+from services.workflow_rules.schema import ResolvedWorkflowRules, dump_resolved_rules
 
 
 def _is_output_link_to(value: Any, target_node_id: str, target_output_index: int) -> bool:
@@ -263,6 +266,8 @@ def apply_rules_to_workflow(
     workflow: WorkflowPrompt,
     rules: WorkflowRules | None,
     provided_input_ids: set[str] | None = None,
+    *,
+    rules_already_resolved: bool = False,
 ) -> tuple[WorkflowPrompt, list[WorkflowRuleWarning]]:
     if not isinstance(workflow, dict):
         return workflow, [
@@ -272,8 +277,26 @@ def apply_rules_to_workflow(
             )
         ]
 
-    normalized_rules, normalize_warnings = normalize_rules(rules)
-    warnings: list[WorkflowRuleWarning] = list(normalize_warnings)
+    warnings: list[WorkflowRuleWarning] = []
+    if rules_already_resolved:
+        try:
+            resolved_rules = (
+                rules
+                if isinstance(rules, ResolvedWorkflowRules)
+                else ResolvedWorkflowRules.model_validate(rules or {})
+            )
+            normalized_rules = dump_resolved_rules(resolved_rules)
+        except ValidationError as exc:
+            return deepcopy(workflow), [
+                _warning(
+                    "invalid_resolved_rules_payload",
+                    "Resolved workflow rules payload is invalid; manual rules were skipped",
+                    details={"errors": exc.errors()},
+                )
+            ]
+    else:
+        normalized_rules, normalize_warnings = normalize_rules(rules)
+        warnings.extend(normalize_warnings)
     next_workflow = deepcopy(workflow)
 
     output_injections = normalized_rules.get("output_injections", {})

@@ -12,7 +12,10 @@ import type {
   GeneratedCreationMetadata,
 } from "../../../types/Asset";
 import type { TimelineSelection } from "../../../types/TimelineTypes";
-import type { WorkflowRuleWarning } from "../services/workflowRules";
+import type {
+  WorkflowRuleWarning,
+  WorkflowRules,
+} from "../services/workflowRules";
 
 // ---------------------------------------------------------------------------
 // Derived mask metadata
@@ -168,6 +171,7 @@ export interface GenerationRequest {
   workflow: Record<string, unknown> | null;
   graphData: Record<string, unknown> | null;
   workflowId: string | null;
+  workflowRules?: WorkflowRules | null;
   targetAspectRatio: string;
   exactAspectRatio: boolean;
   targetResolution: number;

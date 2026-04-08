@@ -3943,6 +3943,95 @@ async def test_generate_rejects_when_input_condition_is_unsatisfied(
 
 
 @pytest.mark.anyio
+async def test_generate_uses_provided_workflow_rules_to_prune_missing_optional_image(
+    tmp_path: Path,
+    monkeypatch,
+    fake_comfy_client,
+):
+    monkeypatch.setattr(comfyui, "WORKFLOWS_DIR", tmp_path)
+
+    workflow = {
+        "167": {"class_type": "LoadImage", "inputs": {"image": "egyptian_queen.png"}},
+        "290": {"class_type": "PrimitiveBoolean", "inputs": {"value": False}},
+        "999": {
+            "class_type": "Consumer",
+            "inputs": {
+                "image": ["167", 0],
+                "text_to_video": ["290", 0],
+            },
+        },
+    }
+    workflow_rules = {
+        "nodes": {
+            "167": {
+                "ignore": False,
+                "present": {
+                    "label": "Source image",
+                    "required": False,
+                },
+                "widgets": {},
+            },
+            "290": {
+                "ignore": False,
+                "widgets": {
+                    "value": {
+                        "label": "Text to Video",
+                        "control_after_generate": False,
+                        "hidden": True,
+                        "value_type": "boolean",
+                        "default_overrides": [
+                            {
+                                "when": {
+                                    "kind": "input_presence",
+                                    "inputs": ["167"],
+                                    "match": "all_missing",
+                                },
+                                "value": True,
+                            }
+                        ],
+                    }
+                },
+            },
+        },
+        "validation": {
+            "inputs": [
+                {
+                    "kind": "optional",
+                    "input": "167",
+                }
+            ]
+        },
+        "derived_widgets": [],
+        "output_injections": {},
+        "slots": {},
+        "mask_cropping": {"mode": "full"},
+        "postprocessing": {
+            "mode": "auto",
+            "panel_preview": "raw_outputs",
+            "on_failure": "fallback_raw",
+        },
+    }
+
+    response = await comfyui.generate(
+        _as_request(
+            FormData(
+                [
+                    ("workflow", json.dumps(workflow)),
+                    ("workflow_rules", json.dumps(workflow_rules)),
+                ]
+            )
+        )
+    )
+
+    assert response.status_code == 200
+    prompt = fake_comfy_client.prompt_payload["prompt"]
+    assert "167" not in prompt
+    assert prompt["290"]["inputs"]["value"] is True
+    assert "image" not in prompt["999"]["inputs"]
+    assert prompt["999"]["inputs"]["text_to_video"] == ["290", 0]
+
+
+@pytest.mark.anyio
 async def test_generate_rejects_when_explicit_validation_rule_fails(
     tmp_path: Path,
     monkeypatch,

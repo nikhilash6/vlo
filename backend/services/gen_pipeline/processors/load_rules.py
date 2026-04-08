@@ -26,6 +26,9 @@ class _LoadRulesProcessor:
         return True
 
     async def execute(self, ctx: BackendPipelineContext) -> None:
+        if ctx.rules_override_provided:
+            return
+
         rules_model, rule_load_warnings = load_rules_model_for_workflow(
             self._workflows_dir,
             ctx.workflow_id,
