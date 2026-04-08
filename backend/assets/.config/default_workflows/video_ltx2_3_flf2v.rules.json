@@ -44,11 +44,23 @@
     },
     "232": {
       "present": {
-        "label": "Custom audio",
+        "label": "Custom audio (optional)",
         "group_id": "audio",
         "group_title": "Audio",
         "group_order": 0,
         "required": false
+      }
+    },
+    "239": {
+      "widgets": {
+        "switch": {
+          "label": "Voice only",
+          "value_type": "boolean",
+          "default": false,
+          "group_id": "audio",
+          "group_title": "Audio",
+          "group_order": 1
+        }
       }
     }
   },

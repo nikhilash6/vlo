@@ -5187,7 +5187,7 @@
         {
           "name": "audio",
           "type": "AUDIO",
-          "link": 318
+          "link": 332
         },
         {
           "label": "Audio VAE",
@@ -5252,7 +5252,8 @@
           "type": "AUDIO",
           "links": [
             312,
-            323
+            323,
+            330
           ]
         }
       ],
@@ -5328,7 +5329,7 @@
           "name": "vocals",
           "type": "AUDIO",
           "links": [
-            318
+            331
           ]
         },
         {
@@ -5348,6 +5349,53 @@
         }
       },
       "widgets_values": []
+    },
+    {
+      "id": 239,
+      "type": "ComfySwitchNode",
+      "pos": [
+        796.0,
+        4951.0
+      ],
+      "size": [
+        313.25546875,
+        91.69542099724458
+      ],
+      "flags": {},
+      "order": 124,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "on_false",
+          "type": "AUDIO",
+          "link": 330
+        },
+        {
+          "name": "on_true",
+          "type": "AUDIO",
+          "link": 331
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "AUDIO",
+          "links": [
+            332
+          ]
+        }
+      ],
+      "title": "Voice Only = true | Full Audio = false",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.9.1",
+        "Node name for S&R": "ComfySwitchNode"
+      },
+      "widgets_values": [
+        false
+      ],
+      "color": "#422342",
+      "bgcolor": "rgba(24,24,27,.9)"
     },
     {
       "id": 233,
@@ -6946,14 +6994,6 @@
       "MASK"
     ],
     [
-      318,
-      231,
-      0,
-      228,
-      0,
-      "AUDIO"
-    ],
-    [
       319,
       227,
       0,
@@ -6991,6 +7031,30 @@
       0,
       231,
       1,
+      "AUDIO"
+    ],
+    [
+      330,
+      229,
+      0,
+      239,
+      0,
+      "AUDIO"
+    ],
+    [
+      331,
+      231,
+      0,
+      239,
+      1,
+      "AUDIO"
+    ],
+    [
+      332,
+      239,
+      0,
+      228,
+      0,
       "AUDIO"
     ],
     [

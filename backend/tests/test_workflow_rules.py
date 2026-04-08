@@ -918,11 +918,20 @@ def test_real_ltx_flf2v_core_workflow_exposes_optional_custom_audio():
         "default": 0,
     }
     assert rules["nodes"]["232"]["present"] == {
-        "label": "Custom audio",
+        "label": "Custom audio (optional)",
         "group_id": "audio",
         "group_title": "Audio",
         "group_order": 0,
         "required": False,
+    }
+    assert rules["nodes"]["239"]["widgets"]["switch"] == {
+        "label": "Voice only",
+        "control_after_generate": False,
+        "value_type": "boolean",
+        "default": False,
+        "group_id": "audio",
+        "group_title": "Audio",
+        "group_order": 1,
     }
 
     validation_inputs = rules["validation"]["inputs"]
