@@ -21,6 +21,20 @@ def _to_positive_int(value: Any) -> int | None:
     return None
 
 
+def _normalize_param_ref(value: Any) -> tuple[str, str] | None:
+    if not isinstance(value, dict):
+        return None
+    node_id = value.get("node_id")
+    param = value.get("param")
+    if not isinstance(node_id, str) or not isinstance(param, str):
+        return None
+    normalized_node_id = node_id.strip()
+    normalized_param = param.strip()
+    if not normalized_node_id or not normalized_param:
+        return None
+    return normalized_node_id, normalized_param
+
+
 def _parse_aspect_ratio(value: str | None) -> tuple[float, float] | None:
     if not isinstance(value, str):
         return None
@@ -298,10 +312,75 @@ def apply_aspect_ratio_processing(
         )
         return None, warnings
 
-    applied_nodes: list[dict[str, str]] = []
+    applied_nodes: list[dict[str, Any]] = []
     for node_cfg in target_nodes:
         if not isinstance(node_cfg, dict):
             continue
+
+        width_ref = _normalize_param_ref(node_cfg.get("width"))
+        height_ref = _normalize_param_ref(node_cfg.get("height"))
+        if width_ref is not None and height_ref is not None:
+            width_node_id, width_param = width_ref
+            height_node_id, height_param = height_ref
+
+            width_node = workflow.get(width_node_id)
+            if not isinstance(width_node, dict):
+                warnings.append(
+                    pipeline_warning(
+                        "aspect_ratio_processing_target_node_missing",
+                        "Configured aspect_ratio_processing width target was not found in workflow",
+                        details={"node_id": width_node_id, "axis": "width"},
+                    )
+                )
+                continue
+            width_inputs = width_node.get("inputs")
+            if not isinstance(width_inputs, dict):
+                warnings.append(
+                    pipeline_warning(
+                        "aspect_ratio_processing_target_node_inputs_missing",
+                        "Configured width target does not expose an inputs object",
+                        details={"node_id": width_node_id, "axis": "width"},
+                    )
+                )
+                continue
+
+            height_node = workflow.get(height_node_id)
+            if not isinstance(height_node, dict):
+                warnings.append(
+                    pipeline_warning(
+                        "aspect_ratio_processing_target_node_missing",
+                        "Configured aspect_ratio_processing height target was not found in workflow",
+                        details={"node_id": height_node_id, "axis": "height"},
+                    )
+                )
+                continue
+            height_inputs = height_node.get("inputs")
+            if not isinstance(height_inputs, dict):
+                warnings.append(
+                    pipeline_warning(
+                        "aspect_ratio_processing_target_node_inputs_missing",
+                        "Configured height target does not expose an inputs object",
+                        details={"node_id": height_node_id, "axis": "height"},
+                    )
+                )
+                continue
+
+            width_inputs[width_param] = best["width"]
+            height_inputs[height_param] = best["height"]
+            applied_nodes.append(
+                {
+                    "width": {
+                        "node_id": width_node_id,
+                        "param": width_param,
+                    },
+                    "height": {
+                        "node_id": height_node_id,
+                        "param": height_param,
+                    },
+                }
+            )
+            continue
+
         node_id = node_cfg.get("node_id")
         width_param = node_cfg.get("width_param")
         height_param = node_cfg.get("height_param")

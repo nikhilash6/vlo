@@ -271,6 +271,48 @@ describe("GenerationInputs", () => {
     expect(screen.getByText("80%")).toBeInTheDocument();
   });
 
+  it("renders numeric slider widgets using their unit instead of percent", () => {
+    render(
+      <GenerationInputs
+        inputs={[]}
+        textValues={{}}
+        onTextValueCommit={vi.fn()}
+        mediaInputs={{}}
+        onInputDrop={vi.fn()}
+        onExternalInputDrop={vi.fn()}
+        onInputClear={vi.fn()}
+        onSwapMediaInputs={vi.fn()}
+        onClickSelect={vi.fn()}
+        widgetInputs={[
+          {
+            nodeId: "291",
+            param: "value",
+            currentValue: 10,
+            config: {
+              label: "Duration",
+              control: "slider",
+              controlAfterGenerate: false,
+              min: 1 / 3,
+              max: 20,
+              step: 1 / 3,
+              sliderDisplay: "number",
+              unit: "s",
+              valueType: "float",
+            },
+          },
+        ]}
+        widgetValues={{}}
+        randomizeToggles={{}}
+        onWidgetChange={vi.fn()}
+        onToggleRandomize={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Duration")).toBeInTheDocument();
+    expect(screen.getByRole("slider")).toBeInTheDocument();
+    expect(screen.getByText("10 s")).toBeInTheDocument();
+  });
+
   it("renders the exact aspect ratio toggle beside the aspect ratio widget", () => {
     const handleExactAspectRatioChange = vi.fn();
 

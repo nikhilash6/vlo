@@ -5,9 +5,11 @@
 // Do not edit it manually.
 
 export interface AspectRatioTargetNode {
-  node_id: string;
-  width_param: string;
-  height_param: string;
+  node_id?: string | null;
+  width_param?: string | null;
+  height_param?: string | null;
+  width?: WorkflowParamReference | null;
+  height?: WorkflowParamReference | null;
 }
 
 export interface NodeOutputSource {
@@ -128,20 +130,36 @@ export interface WorkflowRuleSlot {
   max_frames?: number | null;
 }
 
+export interface WorkflowRuleWidgetDefaultOverride {
+  when: WorkflowRuleWidgetInputPresenceCondition;
+  value?: unknown | null;
+}
+
 export interface WorkflowRuleWidgetEntry {
   label?: string | null;
   control_after_generate?: boolean;
   default_randomize?: boolean | null;
   frontend_only?: boolean | null;
   hidden?: boolean | null;
+  control?: "slider" | null;
+  slider_display?: "percent" | "number" | null;
+  unit?: string | null;
   group_id?: string | null;
   group_title?: string | null;
   group_order?: number | null;
   min?: number | null;
   max?: number | null;
+  step?: number | null;
   default?: unknown | null;
   value_type?: "int" | "float" | "string" | "boolean" | "enum" | "unknown" | null;
   options?: Array<string | number | boolean> | null;
+  default_overrides?: Array<WorkflowRuleWidgetDefaultOverride> | null;
+}
+
+export interface WorkflowRuleWidgetInputPresenceCondition {
+  kind?: "input_presence";
+  inputs?: Array<string>;
+  match?: "all_present" | "all_missing" | "any_present" | "any_missing";
 }
 
 export interface WorkflowValidationConfig {

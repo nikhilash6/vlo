@@ -198,6 +198,40 @@ describe("resolvePresentedInputs", () => {
     expect(rules.aspect_ratio_processing?.enabled).toBe(true);
   });
 
+  it("normalizes split aspect ratio targets", () => {
+    const { rules } = normalizeWorkflowRules({
+      version: 1,
+      aspect_ratio_processing: {
+        enabled: true,
+        target_nodes: [
+          {
+            width: {
+              node_id: "292",
+              param: "value",
+            },
+            height: {
+              node_id: "293",
+              param: "value",
+            },
+          },
+        ],
+      },
+    });
+
+    expect(rules.aspect_ratio_processing?.target_nodes).toEqual([
+      {
+        width: {
+          node_id: "292",
+          param: "value",
+        },
+        height: {
+          node_id: "293",
+          param: "value",
+        },
+      },
+    ]);
+  });
+
   it("normalizes optional input presentation and input conditions", () => {
     const { rules } = normalizeWorkflowRules({
       version: 1,
@@ -988,5 +1022,44 @@ describe("resolvePresentedInputs", () => {
     expect(widgets[0]?.config.min).toBe(0.1);
     expect(widgets[0]?.config.step).toBe(0.1);
     expect(widgets[0]?.currentValue).toBe(0.8);
+  });
+
+  it("preserves raw slider widget metadata for numeric controls", () => {
+    const widgets = resolveWidgetInputs(
+      {
+        "291": {
+          inputs: {
+            value: 10,
+          },
+        },
+      },
+      {
+        version: 1,
+        nodes: {
+          "291": {
+            widgets: {
+              value: {
+                label: "Duration",
+                value_type: "float",
+                control: "slider",
+                slider_display: "number",
+                unit: "s",
+                min: 1 / 3,
+                max: 20,
+                step: 1 / 3,
+              },
+            },
+          },
+        },
+        output_injections: {},
+        slots: {},
+      },
+    );
+
+    expect(widgets).toHaveLength(1);
+    expect(widgets[0]?.config.control).toBe("slider");
+    expect(widgets[0]?.config.sliderDisplay).toBe("number");
+    expect(widgets[0]?.config.unit).toBe("s");
+    expect(widgets[0]?.config.step).toBeCloseTo(1 / 3);
   });
 });

@@ -73,6 +73,13 @@ SUPPORTED_WIDGET_VALUE_TYPES = {
     "enum",
     "unknown",
 }
+SUPPORTED_WIDGET_CONTROLS = {
+    "slider",
+}
+SUPPORTED_WIDGET_SLIDER_DISPLAYS = {
+    "percent",
+    "number",
+}
 SUPPORTED_DERIVED_WIDGET_KINDS = {
     "dual_sampler_denoise",
 }
@@ -511,6 +518,41 @@ def _normalize_rules_dict(raw: Any) -> tuple[WorkflowRules, list[WorkflowRuleWar
                     widget_rule["frontend_only"] = raw_widget["frontend_only"]
                 if isinstance(raw_widget.get("hidden"), bool):
                     widget_rule["hidden"] = raw_widget["hidden"]
+                raw_control = raw_widget.get("control")
+                if isinstance(raw_control, str):
+                    control = raw_control.strip().lower()
+                    if control in SUPPORTED_WIDGET_CONTROLS:
+                        widget_rule["control"] = control
+                    elif control:
+                        warnings.append(
+                            _warning(
+                                "invalid_widget_control",
+                                "Widget control is invalid; expected slider",
+                                node_id=node_id,
+                                details={"widget": widget_name, "control": raw_control},
+                            )
+                        )
+                raw_slider_display = raw_widget.get("slider_display")
+                if isinstance(raw_slider_display, str):
+                    slider_display = raw_slider_display.strip().lower()
+                    if slider_display in SUPPORTED_WIDGET_SLIDER_DISPLAYS:
+                        widget_rule["slider_display"] = slider_display
+                    elif slider_display:
+                        warnings.append(
+                            _warning(
+                                "invalid_widget_slider_display",
+                                "Widget slider_display is invalid; expected percent|number",
+                                node_id=node_id,
+                                details={
+                                    "widget": widget_name,
+                                    "slider_display": raw_slider_display,
+                                },
+                            )
+                        )
+                if isinstance(raw_widget.get("unit"), str):
+                    unit = raw_widget["unit"].strip()
+                    if unit:
+                        widget_rule["unit"] = unit
                 if isinstance(raw_widget.get("group_id"), str):
                     group_id = raw_widget["group_id"].strip()
                     if group_id:
@@ -523,7 +565,7 @@ def _normalize_rules_dict(raw: Any) -> tuple[WorkflowRules, list[WorkflowRuleWar
                 if isinstance(group_order, int) and not isinstance(group_order, bool):
                     if group_order >= 0:
                         widget_rule["group_order"] = group_order
-                for num_key in ("min", "max"):
+                for num_key in ("min", "max", "step"):
                     val = raw_widget.get(num_key)
                     if isinstance(val, (int, float)) and not isinstance(val, bool):
                         widget_rule[num_key] = val
@@ -989,7 +1031,7 @@ def _normalize_rules_dict(raw: Any) -> tuple[WorkflowRules, list[WorkflowRuleWar
     raw_target_nodes = raw_aspect_ratio_processing.get("target_nodes", [])
     if raw_target_nodes is None:
         raw_target_nodes = []
-    normalized_target_nodes: list[dict[str, str]] = []
+    normalized_target_nodes: list[dict[str, Any]] = []
     if isinstance(raw_target_nodes, list):
         for index, raw_target_node in enumerate(raw_target_nodes):
             if not isinstance(raw_target_node, dict):
@@ -999,6 +1041,17 @@ def _normalize_rules_dict(raw: Any) -> tuple[WorkflowRules, list[WorkflowRuleWar
                         "aspect_ratio_processing.target_nodes entries must be objects",
                         details={"index": index},
                     )
+                )
+                continue
+
+            width_ref = _normalize_param_ref(raw_target_node.get("width"))
+            height_ref = _normalize_param_ref(raw_target_node.get("height"))
+            if width_ref is not None and height_ref is not None:
+                normalized_target_nodes.append(
+                    {
+                        "width": width_ref,
+                        "height": height_ref,
+                    }
                 )
                 continue
 
@@ -1016,7 +1069,7 @@ def _normalize_rules_dict(raw: Any) -> tuple[WorkflowRules, list[WorkflowRuleWar
                 warnings.append(
                     _warning(
                         "invalid_aspect_ratio_processing_target_node",
-                        "Each aspect_ratio_processing.target_nodes entry requires node_id, width_param, and height_param",
+                        "Each aspect_ratio_processing.target_nodes entry requires node_id/width_param/height_param or width/height param references",
                         details={"index": index, "entry": raw_target_node},
                     )
                 )

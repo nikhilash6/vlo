@@ -171,6 +171,50 @@ function formatSliderPercent(value: number): string {
   return `${percentage.toFixed(1)}%`;
 }
 
+function inferSliderPrecision(step: number | undefined): number {
+  if (typeof step !== "number" || !Number.isFinite(step) || step <= 0) {
+    return 2;
+  }
+
+  const normalized = step.toString();
+  if (!normalized.includes(".")) {
+    return 0;
+  }
+
+  return Math.min(4, normalized.split(".")[1]?.length ?? 0);
+}
+
+function formatSliderNumber(
+  value: number,
+  step: number | undefined,
+  unit: string | undefined,
+): string {
+  const precision = inferSliderPrecision(step);
+  const roundedValue =
+    precision === 0 ? Math.round(value) : Number(value.toFixed(precision));
+  const formatted =
+    precision === 0
+      ? String(roundedValue)
+      : roundedValue.toFixed(precision).replace(/\.?0+$/, "");
+  return unit ? `${formatted} ${unit}` : formatted;
+}
+
+function formatSliderValue(
+  widget: WorkflowWidgetInput,
+  value: number,
+): string {
+  if (
+    widget.config.sliderDisplay === "percent" ||
+    (widget.config.sliderDisplay == null &&
+      widget.kind === "derived" &&
+      widget.deriveKind === "dual_sampler_denoise")
+  ) {
+    return formatSliderPercent(value);
+  }
+
+  return formatSliderNumber(value, widget.config.step, widget.config.unit);
+}
+
 function parseEnumValue(
   raw: string,
   options: Array<string | number | boolean> | undefined,
@@ -664,7 +708,7 @@ function WidgetRow({
             variant="caption"
             sx={{ color: "text.secondary", display: "block" }}
           >
-            {formatSliderPercent(sliderValue)}
+            {formatSliderValue(widget, sliderValue)}
           </Typography>
         </Box>
         <Slider
@@ -673,7 +717,7 @@ function WidgetRow({
           max={max}
           step={step}
           valueLabelDisplay="off"
-          valueLabelFormat={(nextValue) => formatSliderPercent(nextValue)}
+          valueLabelFormat={(nextValue) => formatSliderValue(widget, nextValue)}
           onChange={(_, nextValue) => {
             if (typeof nextValue !== "number") return;
             onWidgetChange(widget.nodeId, widget.param, nextValue);

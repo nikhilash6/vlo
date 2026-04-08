@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationError,
 
 WidgetsMode = Literal["control_after_generate", "all"]
 DerivedWidgetKind = Literal["dual_sampler_denoise"]
+WidgetControl = Literal["slider"]
+WidgetSliderDisplay = Literal["percent", "number"]
 MaskCroppingMode = Literal["crop", "full"]
 PostprocessingMode = Literal["auto", "stitch_frames_with_audio", "none"]
 PostprocessingPanelPreview = Literal["raw_outputs", "replace_outputs"]
@@ -45,11 +47,15 @@ class WorkflowRuleWidgetEntry(WorkflowRuleBaseModel):
     default_randomize: bool | None = None
     frontend_only: bool | None = None
     hidden: bool | None = None
+    control: WidgetControl | None = None
+    slider_display: WidgetSliderDisplay | None = None
+    unit: str | None = None
     group_id: str | None = None
     group_title: str | None = None
     group_order: int | None = None
     min: int | float | None = None
     max: int | float | None = None
+    step: int | float | None = None
     default: Any | None = None
     value_type: Literal["int", "float", "string", "boolean", "enum", "unknown"] | None = None
     options: list[str | int | float | bool] | None = None
@@ -183,9 +189,29 @@ class ResolvedOutputInjectionRule(WorkflowRuleBaseModel):
 
 
 class AspectRatioTargetNode(WorkflowRuleBaseModel):
-    node_id: str
-    width_param: str
-    height_param: str
+    node_id: str | None = None
+    width_param: str | None = None
+    height_param: str | None = None
+    width: WorkflowParamReference | None = None
+    height: WorkflowParamReference | None = None
+
+    @model_validator(mode="after")
+    def validate_target_shape(self) -> "AspectRatioTargetNode":
+        has_single_node_pair = (
+            isinstance(self.node_id, str)
+            and bool(self.node_id.strip())
+            and isinstance(self.width_param, str)
+            and bool(self.width_param.strip())
+            and isinstance(self.height_param, str)
+            and bool(self.height_param.strip())
+        )
+        has_split_refs = self.width is not None and self.height is not None
+        if not has_single_node_pair and not has_split_refs:
+            raise ValueError(
+                "Aspect ratio targets require either node_id/width_param/height_param "
+                "or width/height param references"
+            )
+        return self
 
 
 class WorkflowAspectRatioPostprocessConfig(WorkflowRuleBaseModel):

@@ -55,6 +55,11 @@ export interface AspectRatioProcessingRequested {
   height: number;
 }
 
+export interface AspectRatioProcessingParamRef {
+  node_id: string;
+  param: string;
+}
+
 export interface AspectRatioProcessingStrided {
   width: number;
   height: number;
@@ -66,9 +71,11 @@ export interface AspectRatioProcessingStrided {
 }
 
 export interface AspectRatioProcessingAppliedNode {
-  node_id: string;
-  width_param: string;
-  height_param: string;
+  node_id?: string;
+  width_param?: string;
+  height_param?: string;
+  width?: AspectRatioProcessingParamRef;
+  height?: AspectRatioProcessingParamRef;
 }
 
 export interface AspectRatioProcessingPostprocess {
@@ -211,6 +218,7 @@ export type WidgetValueType =
   | "unknown";
 
 export type WidgetControlType = "slider";
+export type WidgetSliderDisplay = "percent" | "number";
 
 export interface WidgetInputConfig {
   label: string;
@@ -222,6 +230,8 @@ export interface WidgetInputConfig {
   max?: number;
   step?: number;
   defaultValue?: unknown;
+  sliderDisplay?: WidgetSliderDisplay;
+  unit?: string;
   nodeTitle?: string;
   groupId?: string;
   groupTitle?: string;

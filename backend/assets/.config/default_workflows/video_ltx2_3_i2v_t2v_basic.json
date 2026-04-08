@@ -2077,14 +2077,14 @@
     },
     {
       "id": 291,
-      "type": "INTConstant",
+      "type": "PrimitiveFloat",
       "pos": [
         -1076.6131465721123,
         4821.5606676345205
       ],
       "size": [
         210,
-        58
+        61.42105412153796
       ],
       "flags": {},
       "order": 23,
@@ -2092,8 +2092,8 @@
       "inputs": [],
       "outputs": [
         {
-          "name": "value",
-          "type": "INT",
+          "name": "FLOAT",
+          "type": "FLOAT",
           "links": [
             532
           ]
@@ -2101,9 +2101,9 @@
       ],
       "title": "LENGTH (in seconds)",
       "properties": {
-        "cnr_id": "comfyui-kjnodes",
-        "ver": "c6ce76d00bb8177d1b0286cad891df08eff5226e",
-        "Node name for S&R": "INTConstant"
+        "cnr_id": "comfy-core",
+        "ver": "0.10.0",
+        "Node name for S&R": "PrimitiveFloat"
       },
       "widgets_values": [
         10
@@ -3325,83 +3325,6 @@
       "bgcolor": "rgba(24,24,27,.9)"
     },
     {
-      "id": 345,
-      "type": "UnetLoaderGGUF",
-      "pos": [
-        -1954.1078798289639,
-        4626.151733503134
-      ],
-      "size": [
-        355.55555555555475,
-        60.44444444444434
-      ],
-      "flags": {
-        "collapsed": true
-      },
-      "order": 41,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "MODEL",
-          "type": "MODEL",
-          "links": null
-        }
-      ],
-      "properties": {
-        "cnr_id": "ComfyUI-GGUF",
-        "ver": "6ea2651e7df66d7585f6ffee804b20e92fb38b8a",
-        "Node name for S&R": "UnetLoaderGGUF"
-      },
-      "widgets_values": [
-        "LTXvideo\\LTX-2\\quantstack\\LTX-2.3-distilled-Q4_K_S.gguf"
-      ],
-      "color": "#1f1f48",
-      "bgcolor": "rgba(24,24,27,.9)",
-      "ndSuperSelectorEnabled": false,
-      "ndPowerEnabled": false
-    },
-    {
-      "id": 346,
-      "type": "DualCLIPLoaderGGUF",
-      "pos": [
-        -1955.0207016598533,
-        4676.255544147464
-      ],
-      "size": [
-        346.517577185067,
-        107.25438651123113
-      ],
-      "flags": {
-        "collapsed": true
-      },
-      "order": 42,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "CLIP",
-          "type": "CLIP",
-          "links": null
-        }
-      ],
-      "title": "CLIP GGUF (Gemma + text projection)",
-      "properties": {
-        "cnr_id": "ComfyUI-GGUF",
-        "ver": "6ea2651e7df66d7585f6ffee804b20e92fb38b8a",
-        "Node name for S&R": "DualCLIPLoaderGGUF"
-      },
-      "widgets_values": [
-        "gemma-3-12b-it-Q2_K.gguf",
-        "ltx-2.3_text_projection_bf16.safetensors",
-        "sdxl"
-      ],
-      "color": "#1f1f48",
-      "bgcolor": "rgba(24,24,27,.9)",
-      "ndSuperSelectorEnabled": false,
-      "ndPowerEnabled": false
-    },
-    {
       "id": 250,
       "type": "MarkdownNote",
       "pos": [
@@ -3474,115 +3397,10 @@
       "title": "Prompt Enhancer (Optional)",
       "properties": {},
       "widgets_values": [
-        "This automagically enhances your prompt using the already loaded Gemma model. But it can be a bit sensitive to having correct Gemma if using GGUF models. Alternatively you can bypass/disable  this feature "
+        "This automagically enhances your prompt using the already loaded Gemma model. If you prefer, you can bypass or disable this feature."
       ],
       "color": "#222",
       "bgcolor": "#000"
-    },
-    {
-      "id": 301,
-      "type": "Power Lora Loader (rgthree)",
-      "pos": [
-        -618.350941377553,
-        3595.209643050053
-      ],
-      "size": [
-        386.66127530410665,
-        118
-      ],
-      "flags": {},
-      "order": 95,
-      "mode": 0,
-      "inputs": [
-        {
-          "dir": 3,
-          "name": "model",
-          "type": "MODEL",
-          "link": 613
-        },
-        {
-          "dir": 3,
-          "name": "clip",
-          "type": "CLIP",
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "dir": 4,
-          "name": "MODEL",
-          "shape": 3,
-          "type": "MODEL",
-          "links": [
-            590
-          ]
-        },
-        {
-          "dir": 4,
-          "name": "CLIP",
-          "shape": 3,
-          "type": "CLIP",
-          "links": null
-        }
-      ],
-      "properties": {
-        "cnr_id": "rgthree-comfy",
-        "ver": "8ff50e4521881eca1fe26aec9615fc9362474931",
-        "Show Strengths": "Single Strength"
-      },
-      "widgets_values": [
-        {},
-        {
-          "type": "PowerLoraLoaderHeaderWidget"
-        },
-        {},
-        ""
-      ],
-      "color": "#006691",
-      "bgcolor": "rgba(24,24,27,.9)"
-    },
-    {
-      "id": 351,
-      "type": "easy showAnything",
-      "pos": [
-        -616.5295595599073,
-        3965.2339030876074
-      ],
-      "size": [
-        384.57024766590257,
-        173.7354955908063
-      ],
-      "flags": {
-        "collapsed": false
-      },
-      "order": 101,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "anything",
-          "shape": 7,
-          "type": "*",
-          "link": 631
-        }
-      ],
-      "outputs": [
-        {
-          "name": "output",
-          "type": "*",
-          "links": null
-        }
-      ],
-      "title": "Enhanced Prompt",
-      "properties": {
-        "cnr_id": "comfyui-easy-use",
-        "ver": "b11c63487243d183a967261bdf019c5afcec2cf7",
-        "Node name for S&R": "easy showAnything"
-      },
-      "widgets_values": [
-        "Style: realistic - cinematic - A beautiful blonde woman smiles towards the viewer. She speaks in a soft female British voice, \"What is it I hear? Useless? And bad teeth?\". She shakes her head in disbelief. Before she smiles. Finally, she says, \"Pearly whites, keep them clean,\" and then laughs, showing a love symbol with her fingers."
-      ],
-      "color": "#008181",
-      "bgcolor": "rgba(24,24,27,.9)"
     },
     {
       "id": 121,
@@ -3720,7 +3538,6 @@
           "name": "generated_text",
           "type": "STRING",
           "links": [
-            631,
             637
           ]
         }
@@ -3762,7 +3579,7 @@
           "name": "model",
           "type": "MODEL",
           "links": [
-            613
+            590
           ]
         }
       ],
@@ -5567,7 +5384,7 @@
       0,
       287,
       2,
-      "INT"
+      "FLOAT"
     ],
     [
       533,
@@ -5643,7 +5460,7 @@
     ],
     [
       590,
-      301,
+      332,
       0,
       303,
       0,
@@ -5672,14 +5489,6 @@
       331,
       0,
       "VAE"
-    ],
-    [
-      613,
-      332,
-      0,
-      301,
-      0,
-      "MODEL"
     ],
     [
       617,
@@ -5758,14 +5567,6 @@
       350,
       0,
       347,
-      0,
-      "STRING"
-    ],
-    [
-      631,
-      349,
-      0,
-      351,
       0,
       "STRING"
     ],

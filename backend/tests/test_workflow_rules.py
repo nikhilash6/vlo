@@ -1012,12 +1012,95 @@ def test_real_ltx_basic_i2v_core_workflow_auto_toggles_t2v_without_pruning_image
             },
         ],
     }
+    assert rules["nodes"]["291"]["widgets"]["value"] == {
+        "label": "Duration",
+        "control_after_generate": False,
+        "control": "slider",
+        "slider_display": "number",
+        "unit": "s",
+        "group_id": "video_generation",
+        "group_title": "Video Generation",
+        "group_order": 0,
+        "min": 0.3333333333,
+        "max": 20,
+        "step": 0.3333333333,
+        "value_type": "float",
+    }
+    assert rules["nodes"]["292"]["widgets"]["value"] == {
+        "label": "Width",
+        "control_after_generate": False,
+        "group_id": "video_generation",
+        "group_title": "Video Generation",
+        "group_order": 1,
+        "min": -18446744073709551615,
+        "max": 18446744073709551615,
+        "default": 0,
+        "value_type": "int",
+    }
+    assert rules["nodes"]["293"]["widgets"]["value"] == {
+        "label": "Height",
+        "control_after_generate": False,
+        "group_id": "video_generation",
+        "group_title": "Video Generation",
+        "group_order": 2,
+        "min": -18446744073709551615,
+        "max": 18446744073709551615,
+        "default": 0,
+        "value_type": "int",
+    }
+    assert rules["aspect_ratio_processing"]["enabled"] is True
+    assert rules["aspect_ratio_processing"]["stride"] == 32
+    assert rules["aspect_ratio_processing"]["search_steps"] == 2
+    assert rules["aspect_ratio_processing"]["resolutions"] == [480, 720, 1080]
+    assert {
+        "width": {
+            "node_id": "292",
+            "param": "value",
+        },
+        "height": {
+            "node_id": "293",
+            "param": "value",
+        },
+    } in rules["aspect_ratio_processing"]["target_nodes"]
+    assert rules["aspect_ratio_processing"]["postprocess"] == {
+        "enabled": True,
+        "mode": "stretch_exact",
+        "apply_to": "all_visual_outputs",
+    }
     assert rules["validation"]["inputs"] == [
         {
             "kind": "optional",
             "input": "167",
         }
     ]
+
+
+def test_core_ltx_workflows_do_not_include_gguf_or_debug_only_nodes():
+    base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
+
+    basic_workflow = json.loads(
+        (base / "video_ltx2_3_i2v_t2v_basic.json").read_text(encoding="utf-8")
+    )
+    basic_types = {
+        node.get("type")
+        for node in basic_workflow.get("nodes", [])
+        if isinstance(node, dict)
+    }
+    assert "UnetLoaderGGUF" not in basic_types
+    assert "DualCLIPLoaderGGUF" not in basic_types
+    assert "easy showAnything" not in basic_types
+    assert "Power Lora Loader (rgthree)" not in basic_types
+
+    flf_workflow = json.loads(
+        (base / "video_ltx2_3_flf2v.json").read_text(encoding="utf-8")
+    )
+    flf_types = {
+        node.get("type")
+        for node in flf_workflow.get("nodes", [])
+        if isinstance(node, dict)
+    }
+    assert "UnetLoaderGGUF" not in flf_types
+    assert "DualCLIPLoaderGGUF" not in flf_types
 
 
 def test_real_video_wan_default_workflow_sidecar_requires_video_and_derives_denoise():
@@ -1977,6 +2060,53 @@ def test_load_rules_for_workflow_normalizes_aspect_ratio_processing(tmp_path: Pa
     }
 
 
+def test_load_rules_for_workflow_normalizes_aspect_ratio_processing_split_refs(
+    tmp_path: Path,
+):
+    workflow_path = tmp_path / "example.json"
+    workflow_path.write_text("{}")
+    sidecar_path = tmp_path / "example.rules.json"
+    sidecar_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "aspect_ratio_processing": {
+                    "enabled": True,
+                    "stride": 32,
+                    "search_steps": 3,
+                    "target_nodes": [
+                        {
+                            "width": {
+                                "node_id": "292",
+                                "param": "value",
+                            },
+                            "height": {
+                                "node_id": "293",
+                                "param": "value",
+                            },
+                        }
+                    ],
+                },
+            }
+        )
+    )
+
+    rules, warnings = load_rules_for_workflow(tmp_path, "example.json")
+    assert warnings == []
+    assert rules["aspect_ratio_processing"]["target_nodes"] == [
+        {
+            "width": {
+                "node_id": "292",
+                "param": "value",
+            },
+            "height": {
+                "node_id": "293",
+                "param": "value",
+            },
+        }
+    ]
+
+
 def test_load_rules_for_workflow_reports_invalid_aspect_ratio_processing(tmp_path: Path):
     workflow_path = tmp_path / "example.json"
     workflow_path.write_text("{}")
@@ -2492,6 +2622,71 @@ def test_apply_aspect_ratio_processing_uses_provided_target_aspect_ratio():
     assert metadata["requested"]["height"] == 720
     assert workflow["49"]["inputs"]["width"] == metadata["strided"]["width"]
     assert workflow["49"]["inputs"]["height"] == metadata["strided"]["height"]
+
+
+def test_apply_aspect_ratio_processing_applies_split_width_and_height_targets():
+    workflow = {
+        "292": {
+            "class_type": "INTConstant",
+            "inputs": {
+                "value": 1280,
+            },
+        },
+        "293": {
+            "class_type": "INTConstant",
+            "inputs": {
+                "value": 720,
+            },
+        },
+    }
+    rules = {
+        "aspect_ratio_processing": {
+            "enabled": True,
+            "stride": 32,
+            "search_steps": 2,
+            "target_nodes": [
+                {
+                    "width": {
+                        "node_id": "292",
+                        "param": "value",
+                    },
+                    "height": {
+                        "node_id": "293",
+                        "param": "value",
+                    },
+                }
+            ],
+            "postprocess": {
+                "enabled": True,
+                "mode": "stretch_exact",
+                "apply_to": "all_visual_outputs",
+            },
+        }
+    }
+
+    metadata, warnings = apply_aspect_ratio_processing(
+        workflow,
+        rules,
+        "16:9",
+        1080,
+    )
+
+    assert warnings == []
+    assert isinstance(metadata, dict)
+    assert workflow["292"]["inputs"]["value"] == metadata["strided"]["width"]
+    assert workflow["293"]["inputs"]["value"] == metadata["strided"]["height"]
+    assert metadata["applied_nodes"] == [
+        {
+            "width": {
+                "node_id": "292",
+                "param": "value",
+            },
+            "height": {
+                "node_id": "293",
+                "param": "value",
+            },
+        }
+    ]
 
 
 def test_apply_aspect_ratio_processing_normalizes_resize_image_mask_node_targets():

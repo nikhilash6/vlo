@@ -287,6 +287,19 @@ function normalizeNodeRules(
         if (typeof rawWidget.hidden === "boolean") {
           entry.hidden = rawWidget.hidden;
         }
+        if (rawWidget.control === "slider") {
+          entry.control = "slider";
+        }
+        if (
+          rawWidget.slider_display === "percent" ||
+          rawWidget.slider_display === "number"
+        ) {
+          entry.slider_display = rawWidget.slider_display;
+        }
+        if (typeof rawWidget.unit === "string") {
+          const unit = rawWidget.unit.trim();
+          if (unit.length > 0) entry.unit = unit;
+        }
         if (typeof rawWidget.group_id === "string") {
           const groupId = rawWidget.group_id.trim();
           if (groupId.length > 0) entry.group_id = groupId;
@@ -303,6 +316,7 @@ function normalizeNodeRules(
         }
         if (typeof rawWidget.min === "number") entry.min = rawWidget.min;
         if (typeof rawWidget.max === "number") entry.max = rawWidget.max;
+        if (typeof rawWidget.step === "number") entry.step = rawWidget.step;
         if ("default" in rawWidget) entry.default = rawWidget.default;
         const valueType = toWidgetValueType(rawWidget.value_type);
         if (valueType) entry.value_type = valueType;
@@ -687,8 +701,30 @@ function normalizeAspectRatioProcessing(
   const targetNodes: WorkflowAspectRatioProcessingConfig["target_nodes"] = [];
   if (Array.isArray(rawArp.target_nodes)) {
     for (const targetNode of rawArp.target_nodes) {
+      if (!isRecord(targetNode)) continue;
+
       if (
-        isRecord(targetNode) &&
+        isRecord(targetNode.width) &&
+        typeof targetNode.width.node_id === "string" &&
+        typeof targetNode.width.param === "string" &&
+        isRecord(targetNode.height) &&
+        typeof targetNode.height.node_id === "string" &&
+        typeof targetNode.height.param === "string"
+      ) {
+        targetNodes.push({
+          width: {
+            node_id: targetNode.width.node_id,
+            param: targetNode.width.param,
+          },
+          height: {
+            node_id: targetNode.height.node_id,
+            param: targetNode.height.param,
+          },
+        });
+        continue;
+      }
+
+      if (
         typeof targetNode.node_id === "string" &&
         typeof targetNode.width_param === "string" &&
         typeof targetNode.height_param === "string"

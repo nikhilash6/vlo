@@ -37,8 +37,77 @@
           ]
         }
       }
+    },
+    "291": {
+      "widgets": {
+        "value": {
+          "label": "Duration",
+          "value_type": "float",
+          "control": "slider",
+          "slider_display": "number",
+          "unit": "s",
+          "min": 0.3333333333,
+          "max": 20,
+          "step": 0.3333333333,
+          "group_id": "video_generation",
+          "group_title": "Video Generation",
+          "group_order": 0
+        }
+      }
+    },
+    "292": {
+      "widgets": {
+        "value": {
+          "label": "Width",
+          "value_type": "int",
+          "group_id": "video_generation",
+          "group_title": "Video Generation",
+          "group_order": 1
+        }
+      }
+    },
+    "293": {
+      "widgets": {
+        "value": {
+          "label": "Height",
+          "value_type": "int",
+          "group_id": "video_generation",
+          "group_title": "Video Generation",
+          "group_order": 2
+        }
+      }
     }
   },
+  "pipeline": [
+    {
+      "kind": "aspect_ratio",
+      "enabled": true,
+      "stride": 32,
+      "search_steps": 2,
+      "resolutions": [
+        480,
+        720,
+        1080
+      ],
+      "target_nodes": [
+        {
+          "width": {
+            "node_id": "292",
+            "param": "value"
+          },
+          "height": {
+            "node_id": "293",
+            "param": "value"
+          }
+        }
+      ],
+      "postprocess": {
+        "enabled": true,
+        "mode": "stretch_exact",
+        "apply_to": "all_visual_outputs"
+      }
+    }
+  ],
   "validation": {
     "inputs": [
       {
