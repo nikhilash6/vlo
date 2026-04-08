@@ -8,6 +8,104 @@
         "required": false
       }
     },
+    "160": {
+      "ignore_overrides": [
+        {
+          "when": {
+            "kind": "input_presence",
+            "inputs": [
+              "167"
+            ],
+            "match": "all_missing"
+          },
+          "value": true
+        }
+      ]
+    },
+    "161": {
+      "ignore_overrides": [
+        {
+          "when": {
+            "kind": "input_presence",
+            "inputs": [
+              "167"
+            ],
+            "match": "all_missing"
+          },
+          "value": true
+        }
+      ]
+    },
+    "209": {
+      "ignore_overrides": [
+        {
+          "when": {
+            "kind": "input_presence",
+            "inputs": [
+              "167"
+            ],
+            "match": "all_missing"
+          },
+          "value": true
+        }
+      ]
+    },
+    "211": {
+      "ignore_overrides": [
+        {
+          "when": {
+            "kind": "input_presence",
+            "inputs": [
+              "167"
+            ],
+            "match": "all_missing"
+          },
+          "value": true
+        }
+      ]
+    },
+    "233": {
+      "ignore_overrides": [
+        {
+          "when": {
+            "kind": "input_presence",
+            "inputs": [
+              "167"
+            ],
+            "match": "all_missing"
+          },
+          "value": true
+        }
+      ]
+    },
+    "234": {
+      "ignore_overrides": [
+        {
+          "when": {
+            "kind": "input_presence",
+            "inputs": [
+              "167"
+            ],
+            "match": "all_missing"
+          },
+          "value": true
+        }
+      ]
+    },
+    "248": {
+      "ignore_overrides": [
+        {
+          "when": {
+            "kind": "input_presence",
+            "inputs": [
+              "167"
+            ],
+            "match": "all_missing"
+          },
+          "value": true
+        }
+      ]
+    },
     "290": {
       "widgets": {
         "value": {
@@ -38,6 +136,20 @@
           ]
         }
       }
+    },
+    "349": {
+      "ignore_overrides": [
+        {
+          "when": {
+            "kind": "input_presence",
+            "inputs": [
+              "167"
+            ],
+            "match": "all_missing"
+          },
+          "value": true
+        }
+      ]
     },
     "291": {
       "widgets": {
@@ -79,6 +191,88 @@
       }
     }
   },
+  "output_injections": [
+    {
+      "target_node_id": "160",
+      "target_output_index": 0,
+      "source": {
+        "kind": "node_output",
+        "node_id": "118",
+        "output_index": 0
+      },
+      "when": {
+        "kind": "input_presence",
+        "inputs": [
+          "167"
+        ],
+        "match": "all_missing"
+      }
+    },
+    {
+      "target_node_id": "161",
+      "target_output_index": 0,
+      "source": {
+        "kind": "node_output",
+        "node_id": "108",
+        "output_index": 0
+      },
+      "when": {
+        "kind": "input_presence",
+        "inputs": [
+          "167"
+        ],
+        "match": "all_missing"
+      }
+    },
+    {
+      "target_node_id": "236",
+      "target_output_index": 0,
+      "source": {
+        "kind": "node_output",
+        "node_id": "243",
+        "output_index": 0
+      },
+      "when": {
+        "kind": "input_presence",
+        "inputs": [
+          "167"
+        ],
+        "match": "all_missing"
+      }
+    },
+    {
+      "target_node_id": "237",
+      "target_output_index": 0,
+      "source": {
+        "kind": "node_output",
+        "node_id": "244",
+        "output_index": 0
+      },
+      "when": {
+        "kind": "input_presence",
+        "inputs": [
+          "167"
+        ],
+        "match": "all_missing"
+      }
+    },
+    {
+      "target_node_id": "349",
+      "target_output_index": 0,
+      "source": {
+        "kind": "node_output",
+        "node_id": "352",
+        "output_index": 0
+      },
+      "when": {
+        "kind": "input_presence",
+        "inputs": [
+          "167"
+        ],
+        "match": "all_missing"
+      }
+    }
+  ],
   "pipeline": [
     {
       "kind": "aspect_ratio",

@@ -47,7 +47,6 @@ def _rewrite_output_links(
     return rewrites
 
 
-
 def _disconnect_output_links_from_node(
     workflow: WorkflowPrompt,
     target_node_id: str,
@@ -166,6 +165,26 @@ def _matches_input_presence_condition(
     if match_mode == "any_missing":
         return any(input_id not in provided_input_ids for input_id in inputs)
     return False
+
+
+def _resolve_conditional_bool(
+    default_value: bool,
+    raw_overrides: Any,
+    provided_input_ids: set[str],
+) -> bool:
+    if not isinstance(raw_overrides, list):
+        return default_value
+
+    for raw_override in raw_overrides:
+        if not isinstance(raw_override, dict):
+            continue
+        if not _matches_input_presence_condition(
+            raw_override.get("when"), provided_input_ids
+        ):
+            continue
+        return _to_bool(raw_override.get("value"), default_value)
+
+    return default_value
 
 
 def _apply_widget_default_overrides(
@@ -298,6 +317,7 @@ def apply_rules_to_workflow(
         normalized_rules, normalize_warnings = normalize_rules(rules)
         warnings.extend(normalize_warnings)
     next_workflow = deepcopy(workflow)
+    normalized_provided_inputs = _normalize_provided_input_ids(provided_input_ids)
 
     output_injections = normalized_rules.get("output_injections", {})
     if isinstance(output_injections, dict):
@@ -311,6 +331,11 @@ def apply_rules_to_workflow(
             ):
                 injection_rule = target_outputs.get(output_index_key, {})
                 if not isinstance(injection_rule, dict):
+                    continue
+                raw_when = injection_rule.get("when")
+                if raw_when is not None and not _matches_input_presence_condition(
+                    raw_when, normalized_provided_inputs
+                ):
                     continue
                 output_index = _to_int(output_index_key)
                 if output_index is None:
@@ -395,7 +420,6 @@ def apply_rules_to_workflow(
     node_rules = normalized_rules.get("nodes", {})
     ignored_nodes: set[str] = set()
     if isinstance(node_rules, dict):
-        normalized_provided_inputs = _normalize_provided_input_ids(provided_input_ids)
         _apply_widget_default_overrides(
             next_workflow,
             node_rules,
@@ -403,7 +427,14 @@ def apply_rules_to_workflow(
         )
 
         for node_id, node_rule in node_rules.items():
-            if isinstance(node_rule, dict) and _to_bool(node_rule.get("ignore"), False):
+            if not isinstance(node_rule, dict):
+                continue
+            should_ignore = _resolve_conditional_bool(
+                _to_bool(node_rule.get("ignore"), False),
+                node_rule.get("ignore_overrides"),
+                normalized_provided_inputs,
+            )
+            if should_ignore:
                 ignored_nodes.add(str(node_id))
         for node_id, node_rule in node_rules.items():
             if not isinstance(node_rule, dict):

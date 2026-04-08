@@ -20,10 +20,12 @@ export interface NodeOutputSource {
 
 export interface ResolvedOutputInjectionRule {
   source: NodeOutputSource;
+  when?: WorkflowRuleWidgetInputPresenceCondition | null;
 }
 
 export interface WorkflowRuleNode {
   ignore?: boolean;
+  ignore_overrides?: Array<WorkflowRuleBooleanOverride> | null;
   present?: WorkflowRuleNodePresent | null;
   widgets_mode?: "control_after_generate" | "all" | null;
   widgets?: Record<string, WorkflowRuleWidgetEntry>;
@@ -100,6 +102,11 @@ export interface WorkflowRequiredInputValidationRule {
   kind: "required";
   input: string;
   message?: string | null;
+}
+
+export interface WorkflowRuleBooleanOverride {
+  when: WorkflowRuleWidgetInputPresenceCondition;
+  value?: boolean;
 }
 
 export interface WorkflowRuleNodePresent {

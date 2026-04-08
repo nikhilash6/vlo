@@ -78,6 +78,11 @@ class WorkflowRuleWidgetDefaultOverride(WorkflowRuleBaseModel):
     value: Any | None = None
 
 
+class WorkflowRuleBooleanOverride(WorkflowRuleBaseModel):
+    when: WorkflowRuleWidgetInputPresenceCondition
+    value: bool = True
+
+
 class WorkflowRuleSelectionConfig(WorkflowRuleBaseModel):
     export_fps: int | None = None
     frame_step: int | None = None
@@ -86,6 +91,7 @@ class WorkflowRuleSelectionConfig(WorkflowRuleBaseModel):
 
 class WorkflowRuleNodeBase(WorkflowRuleBaseModel):
     ignore: bool = False
+    ignore_overrides: list[WorkflowRuleBooleanOverride] | None = None
     present: WorkflowRuleNodePresent | None = None
     widgets_mode: WidgetsMode | None = None
     widgets: dict[str, WorkflowRuleWidgetEntry] = Field(default_factory=dict)
@@ -186,6 +192,7 @@ class NodeOutputSource(WorkflowRuleBaseModel):
 
 class ResolvedOutputInjectionRule(WorkflowRuleBaseModel):
     source: NodeOutputSource
+    when: WorkflowRuleWidgetInputPresenceCondition | None = None
 
 
 class AspectRatioTargetNode(WorkflowRuleBaseModel):
@@ -359,6 +366,7 @@ class OutputInjectionRuleV2(WorkflowRuleBaseModel):
     target_node_id: str
     target_output_index: int = 0
     source: NodeOutputSourceV2
+    when: WorkflowRuleWidgetInputPresenceCondition | None = None
 
 
 class MaskCroppingPipelineStageV2(WorkflowRuleBaseModel):
@@ -537,7 +545,7 @@ def _compile_v2_output_injections(
         )
         compiled.setdefault(injection.target_node_id, {})[
             str(injection.target_output_index)
-        ] = ResolvedOutputInjectionRule(source=source)
+        ] = ResolvedOutputInjectionRule(source=source, when=injection.when)
     return compiled
 
 
@@ -667,6 +675,7 @@ def migrate_authored_v1_to_v2(
                         node_id=source.node_id,
                         output_index=source.output_index,
                     ),
+                    when=injection_rule.when,
                 )
             )
 

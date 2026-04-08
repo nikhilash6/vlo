@@ -1013,6 +1013,26 @@ def test_real_ltx_basic_i2v_core_workflow_exposes_optional_image_and_auto_toggle
             },
         ],
     }
+    assert rules["nodes"]["160"]["ignore_overrides"] == [
+        {
+            "when": {
+                "kind": "input_presence",
+                "inputs": ["167"],
+                "match": "all_missing",
+            },
+            "value": True,
+        }
+    ]
+    assert rules["nodes"]["349"]["ignore_overrides"] == [
+        {
+            "when": {
+                "kind": "input_presence",
+                "inputs": ["167"],
+                "match": "all_missing",
+            },
+            "value": True,
+        }
+    ]
     assert rules["nodes"]["291"]["widgets"]["value"] == {
         "label": "Duration",
         "control_after_generate": False,
@@ -1068,6 +1088,30 @@ def test_real_ltx_basic_i2v_core_workflow_exposes_optional_image_and_auto_toggle
         "mode": "stretch_exact",
         "apply_to": "all_visual_outputs",
     }
+    assert rules["output_injections"]["160"]["0"] == {
+        "source": {
+            "kind": "node_output",
+            "node_id": "118",
+            "output_index": 0,
+        },
+        "when": {
+            "kind": "input_presence",
+            "inputs": ["167"],
+            "match": "all_missing",
+        },
+    }
+    assert rules["output_injections"]["349"]["0"] == {
+        "source": {
+            "kind": "node_output",
+            "node_id": "352",
+            "output_index": 0,
+        },
+        "when": {
+            "kind": "input_presence",
+            "inputs": ["167"],
+            "match": "all_missing",
+        },
+    }
     assert rules["validation"]["inputs"] == [
         {
             "kind": "optional",
@@ -1105,11 +1149,132 @@ def test_real_ltx_basic_i2v_core_workflow_prunes_missing_source_image_and_flips_
         provided_input_ids=set(),
     )
 
-    assert warnings == []
+    assert all(
+        warning["code"] in {"ignored_node_missing", "injection_target_missing"}
+        for warning in warnings
+    )
     assert "167" not in rewritten
     assert rewritten["290"]["inputs"]["value"] is True
     assert "image" not in rewritten["999"]["inputs"]
     assert rewritten["999"]["inputs"]["text_to_video"] == ["290", 0]
+
+
+def test_real_ltx_basic_i2v_core_workflow_rewrites_full_t2v_branch_when_image_missing():
+    base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
+    rules_path = base / "video_ltx2_3_i2v_t2v_basic.rules.json"
+    rules = json.loads(rules_path.read_text(encoding="utf-8"))
+
+    workflow = {
+        "108": {
+            "class_type": "EmptyLTXVLatentVideo",
+            "inputs": {
+                "width": ["236", 0],
+                "height": ["237", 0],
+            },
+        },
+        "109": {
+            "class_type": "LTXVConcatAVLatent",
+            "inputs": {"video_latent": ["161", 0]},
+        },
+        "117": {
+            "class_type": "LTXVConcatAVLatent",
+            "inputs": {"video_latent": ["160", 0]},
+        },
+        "118": {"class_type": "LTXVLatentUpsampler", "inputs": {}},
+        "121": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": ["349", 0]},
+        },
+        "160": {
+            "class_type": "LTXVImgToVideoInplace",
+            "inputs": {
+                "image": ["212", 0],
+                "latent": ["118", 0],
+            },
+        },
+        "161": {
+            "class_type": "LTXVImgToVideoInplace",
+            "inputs": {
+                "image": ["162", 0],
+                "latent": ["108", 0],
+            },
+        },
+        "162": {
+            "class_type": "LTXVPreprocess",
+            "inputs": {"image": ["210", 0]},
+        },
+        "165": {
+            "class_type": "ImageResizeKJv2",
+            "inputs": {
+                "image": ["167", 0],
+                "width": ["243", 0],
+                "height": ["244", 0],
+            },
+        },
+        "167": {"class_type": "LoadImage", "inputs": {"image": "egyptian_queen.png"}},
+        "209": {"class_type": "SetNode", "inputs": {"IMAGE": ["246", 0]}},
+        "210": {"class_type": "GetNode", "inputs": {}},
+        "211": {"class_type": "SetNode", "inputs": {"IMAGE": ["162", 0]}},
+        "212": {"class_type": "GetNode", "inputs": {}},
+        "233": {"class_type": "SetNode", "inputs": {"INT": ["163", 0]}},
+        "234": {"class_type": "SetNode", "inputs": {"INT": ["163", 1]}},
+        "236": {"class_type": "GetNode", "inputs": {}},
+        "237": {"class_type": "GetNode", "inputs": {}},
+        "243": {"class_type": "GetNode", "inputs": {}},
+        "244": {"class_type": "GetNode", "inputs": {}},
+        "246": {
+            "class_type": "ResizeImagesByLongerEdge",
+            "inputs": {"images": ["165", 0]},
+        },
+        "248": {"class_type": "SetNode", "inputs": {"IMAGE": ["164", 0]}},
+        "290": {"class_type": "PrimitiveBoolean", "inputs": {"value": False}},
+        "349": {
+            "class_type": "TextGenerateLTX2Prompt",
+            "inputs": {
+                "image": ["165", 0],
+                "prompt": ["352", 0],
+            },
+        },
+        "352": {"class_type": "PrimitiveStringMultiline", "inputs": {}},
+        "163": {"class_type": "GetImageSize", "inputs": {"image": ["164", 0]}},
+        "164": {
+            "class_type": "ResizeImageMaskNode",
+            "inputs": {"input": ["165", 0]},
+        },
+    }
+
+    rewritten, warnings = apply_rules_to_workflow(
+        workflow,
+        rules,
+        provided_input_ids=set(),
+    )
+
+    assert warnings == []
+    assert rewritten["290"]["inputs"]["value"] is True
+    assert rewritten["121"]["inputs"]["text"] == ["352", 0]
+    assert rewritten["108"]["inputs"]["width"] == ["243", 0]
+    assert rewritten["108"]["inputs"]["height"] == ["244", 0]
+    assert rewritten["109"]["inputs"]["video_latent"] == ["108", 0]
+    assert rewritten["117"]["inputs"]["video_latent"] == ["118", 0]
+    for node_id in (
+        "160",
+        "161",
+        "162",
+        "163",
+        "164",
+        "165",
+        "167",
+        "209",
+        "210",
+        "211",
+        "212",
+        "233",
+        "234",
+        "246",
+        "248",
+        "349",
+    ):
+        assert node_id not in rewritten
 
 
 def test_core_ltx_workflows_do_not_include_gguf_or_debug_only_nodes():
@@ -2862,6 +3027,58 @@ def test_apply_rules_ignore_removes_node_after_rewrite():
     assert warnings == []
     assert "1" not in rewritten
     assert rewritten["2"]["inputs"]["input"] == ["9", 0]
+
+
+def test_apply_rules_conditionally_rewrites_and_prunes_missing_input_branches():
+    workflow = {
+        "1": {"class_type": "LoadImage", "inputs": {"image": "placeholder.png"}},
+        "2": {"class_type": "Resize", "inputs": {"image": ["1", 0]}},
+        "3": {"class_type": "PromptEnhancer", "inputs": {"image": ["2", 0]}},
+        "4": {"class_type": "Consumer", "inputs": {"text": ["3", 0]}},
+        "9": {"class_type": "RawPrompt", "inputs": {}},
+    }
+    rules = {
+        "version": 2,
+        "nodes": {
+            "1": {"present": {"required": False}},
+            "3": {
+                "ignore_overrides": [
+                    {
+                        "when": {
+                            "kind": "input_presence",
+                            "inputs": ["1"],
+                            "match": "all_missing",
+                        },
+                        "value": True,
+                    }
+                ]
+            },
+        },
+        "output_injections": [
+            {
+                "target_node_id": "3",
+                "target_output_index": 0,
+                "source": {
+                    "kind": "node_output",
+                    "node_id": "9",
+                    "output_index": 0,
+                },
+                "when": {
+                    "kind": "input_presence",
+                    "inputs": ["1"],
+                    "match": "all_missing",
+                },
+            }
+        ],
+    }
+
+    rewritten, warnings = apply_rules_to_workflow(workflow, rules, provided_input_ids=set())
+
+    assert warnings == []
+    assert rewritten["4"]["inputs"]["text"] == ["9", 0]
+    assert "1" not in rewritten
+    assert "2" not in rewritten
+    assert "3" not in rewritten
 
 
 def test_apply_rules_ignore_fallback_when_referenced():

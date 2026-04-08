@@ -92,6 +92,17 @@
       "properties": {
         "source": {
           "$ref": "#/$defs/NodeOutputSource"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowRuleWidgetInputPresenceCondition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -118,6 +129,21 @@
           "default": false,
           "title": "Ignore",
           "type": "boolean"
+        },
+        "ignore_overrides": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/WorkflowRuleBooleanOverride"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ignore Overrides"
         },
         "node_title": {
           "anyOf": [
@@ -547,6 +573,23 @@
         "input"
       ],
       "title": "WorkflowRequiredInputValidationRule",
+      "type": "object"
+    },
+    "WorkflowRuleBooleanOverride": {
+      "properties": {
+        "value": {
+          "default": true,
+          "title": "Value",
+          "type": "boolean"
+        },
+        "when": {
+          "$ref": "#/$defs/WorkflowRuleWidgetInputPresenceCondition"
+        }
+      },
+      "required": [
+        "when"
+      ],
+      "title": "WorkflowRuleBooleanOverride",
       "type": "object"
     },
     "WorkflowRuleNodePresent": {
