@@ -77,6 +77,7 @@ function buildGenerationPlanFromState(
     workflow: state.syncedWorkflow,
     graphData: state.syncedGraphData,
     workflowId,
+    workflowRules: state.activeWorkflowRules,
     workflowInputs: state.workflowInputs,
     workflowName,
     mediaInputs: state.mediaInputs,
@@ -169,7 +170,7 @@ export function buildExecutionStoreState(
       const response = await comfyApi.generate(
         {
           ...prepared.request,
-          workflowRules: state.activeWorkflowRules ?? undefined,
+          workflowRules: plan.workflow.workflowRules ?? undefined,
         },
         {
           signal: preprocessAbortController.signal,

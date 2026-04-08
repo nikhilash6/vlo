@@ -1,6 +1,9 @@
 import type { GenerationMediaInputValue, WorkflowInput } from "../types";
 import type { PromptResponse } from "../services/comfyuiApi";
-import type { WorkflowRuleWarning } from "../services/workflowRules";
+import type {
+  WorkflowRuleWarning,
+  WorkflowRules,
+} from "../services/workflowRules";
 import {
   buildGeneratedCreationMetadata,
   findPreparedMaskFallback,
@@ -19,6 +22,7 @@ interface CreateGenerationPlanOptions {
   workflow: Record<string, unknown> | null;
   graphData: Record<string, unknown> | null;
   workflowId: string | null;
+  workflowRules: WorkflowRules | null;
   workflowInputs: WorkflowInput[];
   workflowName: string;
   mediaInputs: Record<string, GenerationMediaInputValue | null>;
@@ -183,6 +187,7 @@ export function createGenerationPlan(
       workflow: cloneSerializableRecord(options.workflow),
       graphData: cloneSerializableRecord(options.graphData),
       workflowId: options.workflowId,
+      workflowRules: cloneSerializableValue(options.workflowRules),
       workflowInputs: cloneSerializableValue(options.workflowInputs),
     },
     preprocess: {

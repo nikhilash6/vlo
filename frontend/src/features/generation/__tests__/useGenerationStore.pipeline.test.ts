@@ -552,6 +552,89 @@ describe("useGenerationStore pipeline phases", () => {
     );
   });
 
+  it("dispatches queued generations with the workflow rules captured at queue time", async () => {
+    makeReadyStoreState();
+
+    const queuedRules = makeWorkflowRules({
+      nodes: {
+        "235": {
+          widgets: {
+            switch: {
+              label: "Use custom audio",
+              hidden: true,
+              value_type: "boolean",
+            },
+          },
+        },
+      },
+    });
+    const switchedRules = makeWorkflowRules({
+      nodes: {
+        "269": {
+          present: {
+            label: "Source image",
+            required: false,
+          },
+        },
+      },
+    });
+
+    useGenerationStore.setState({
+      selectedWorkflowId: "video_ltx2_3_flf2v.json",
+      availableWorkflows: [
+        { id: "video_ltx2_3_flf2v.json", name: "LTX2.3 FLF2V" },
+        { id: "video_ltx2_3_i2v.json", name: "LTX2.3 I2V / T2V" },
+      ],
+      activeWorkflowRules: queuedRules,
+      rulesWorkflowSourceId: "video_ltx2_3_flf2v.json",
+      jobs: new Map([
+        [
+          "active-job",
+          {
+            ...makeQueuedJob("active-job"),
+            status: "running",
+          },
+        ],
+      ]),
+      activeJobId: "active-job",
+    });
+
+    await useGenerationStore.getState().queueGeneration({});
+
+    expect(mockGenerate).not.toHaveBeenCalled();
+    expect(useGenerationStore.getState().generationQueue).toHaveLength(1);
+
+    useGenerationStore.setState({
+      selectedWorkflowId: "video_ltx2_3_i2v.json",
+      activeWorkflowRules: switchedRules,
+      rulesWorkflowSourceId: "video_ltx2_3_i2v.json",
+      activeJobId: null,
+    });
+
+    await useGenerationStore.getState().processGenerationQueue();
+
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+    expect(mockGenerate.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        workflowId: "video_ltx2_3_flf2v.json",
+        workflowRules: expect.objectContaining({
+          nodes: expect.objectContaining({
+            "235": expect.objectContaining({
+              widgets: expect.objectContaining({
+                switch: expect.objectContaining({
+                  label: "Use custom audio",
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
+    expect(
+      mockGenerate.mock.calls[0]?.[0]?.workflowRules?.nodes,
+    ).not.toHaveProperty("269");
+  });
+
   it("cancels preprocess locally, ignores stale completion, and leaves no error job", async () => {
     makeReadyStoreState();
     const preprocessDeferred = createDeferred<{

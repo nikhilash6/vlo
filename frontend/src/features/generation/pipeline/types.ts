@@ -101,6 +101,7 @@ export interface GenerationWorkflowSnapshot {
   workflow: Record<string, unknown> | null;
   graphData: Record<string, unknown> | null;
   workflowId: string | null;
+  workflowRules: WorkflowRules | null;
   workflowInputs: WorkflowInput[];
 }
 
