@@ -1081,6 +1081,7 @@ def test_real_ltx_basic_i2v_core_workflow_exposes_optional_image_and_auto_toggle
     assert rules["nodes"]["292"]["widgets"]["value"] == {
         "label": "Width",
         "control_after_generate": False,
+        "hidden": True,
         "group_id": "video_generation",
         "group_title": "Video Generation",
         "group_order": 1,
@@ -1092,6 +1093,7 @@ def test_real_ltx_basic_i2v_core_workflow_exposes_optional_image_and_auto_toggle
     assert rules["nodes"]["293"]["widgets"]["value"] == {
         "label": "Height",
         "control_after_generate": False,
+        "hidden": True,
         "group_id": "video_generation",
         "group_title": "Video Generation",
         "group_order": 2,
