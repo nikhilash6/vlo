@@ -917,6 +917,16 @@
           "default": null,
           "title": "Default Randomize"
         },
+        "false_value": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "False Value"
+        },
         "frontend_only": {
           "anyOf": [
             {
@@ -1077,6 +1087,16 @@
           ],
           "default": null,
           "title": "Step"
+        },
+        "true_value": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "True Value"
         },
         "unit": {
           "anyOf": [

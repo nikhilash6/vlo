@@ -160,6 +160,8 @@ export interface WorkflowRuleWidgetEntry {
   default?: unknown | null;
   value_type?: "int" | "float" | "string" | "boolean" | "enum" | "unknown" | null;
   options?: Array<string | number | boolean> | null;
+  true_value?: unknown | null;
+  false_value?: unknown | null;
   default_overrides?: Array<WorkflowRuleWidgetDefaultOverride> | null;
 }
 

@@ -985,6 +985,26 @@ def test_real_ltx_basic_i2v_core_workflow_exposes_optional_image_and_auto_toggle
         set_object_info_cache(None)
 
     assert rules["name"] == "LTX2.3 Basic I2V / T2V"
+    assert rules["nodes"]["114"]["widgets"]["noise_seed"] == {
+        "label": "Upscale noise seed",
+        "control_after_generate": True,
+        "hidden": True,
+        "value_type": "int",
+        "min": 0,
+        "max": 18446744073709551615,
+        "default": 0,
+    }
+    assert rules["nodes"]["115"]["widgets"]["noise_seed"] == {
+        "label": "Noise seed",
+        "control_after_generate": True,
+        "value_type": "int",
+        "group_id": "video_generation",
+        "group_title": "Video Generation",
+        "group_order": 3,
+        "min": 0,
+        "max": 18446744073709551615,
+        "default": 0,
+    }
     assert rules["nodes"]["167"]["present"] == {
         "label": "Source image",
         "required": False,
@@ -1023,6 +1043,17 @@ def test_real_ltx_basic_i2v_core_workflow_exposes_optional_image_and_auto_toggle
             "value": True,
         }
     ]
+    assert rules["nodes"]["349"]["widgets"]["sampling_mode"] == {
+        "label": "Enable prompt enhancer",
+        "control_after_generate": False,
+        "default": False,
+        "false_value": "off",
+        "group_id": "prompt",
+        "group_order": 0,
+        "group_title": "Prompt",
+        "true_value": "on",
+        "value_type": "boolean",
+    }
     assert rules["nodes"]["349"]["ignore_overrides"] == [
         {
             "when": {

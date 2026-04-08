@@ -59,6 +59,8 @@ class WorkflowRuleWidgetEntry(WorkflowRuleBaseModel):
     default: Any | None = None
     value_type: Literal["int", "float", "string", "boolean", "enum", "unknown"] | None = None
     options: list[str | int | float | bool] | None = None
+    true_value: Any | None = None
+    false_value: Any | None = None
     default_overrides: list["WorkflowRuleWidgetDefaultOverride"] | None = None
 
 

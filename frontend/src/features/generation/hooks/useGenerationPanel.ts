@@ -92,6 +92,21 @@ function parseStoredWidgetValue(
   const valueType = widget.config.valueType;
   const fallbackValue = widget.currentValue;
 
+  if (valueType === "boolean") {
+    if (
+      widget.config.trueValue !== undefined &&
+      storedValue === String(widget.config.trueValue)
+    ) {
+      return true;
+    }
+    if (
+      widget.config.falseValue !== undefined &&
+      storedValue === String(widget.config.falseValue)
+    ) {
+      return false;
+    }
+  }
+
   if (
     valueType === "int" ||
     valueType === "float" ||
@@ -718,7 +733,15 @@ export function useGenerationPanel(mode: "smart" | "manual" = "smart") {
         continue;
       }
       if (value !== undefined && value !== null) {
-        widgetOverrides[`widget_${w.nodeId}_${w.param}`] = String(value);
+        let storedValue: unknown = value;
+        if (w.config.valueType === "boolean") {
+          if (value === true && w.config.trueValue !== undefined) {
+            storedValue = w.config.trueValue;
+          } else if (value === false && w.config.falseValue !== undefined) {
+            storedValue = w.config.falseValue;
+          }
+        }
+        widgetOverrides[`widget_${w.nodeId}_${w.param}`] = String(storedValue);
       }
     }
 

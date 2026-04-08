@@ -318,6 +318,8 @@ function normalizeNodeRules(
         if (typeof rawWidget.max === "number") entry.max = rawWidget.max;
         if (typeof rawWidget.step === "number") entry.step = rawWidget.step;
         if ("default" in rawWidget) entry.default = rawWidget.default;
+        if ("true_value" in rawWidget) entry.true_value = rawWidget.true_value;
+        if ("false_value" in rawWidget) entry.false_value = rawWidget.false_value;
         const valueType = toWidgetValueType(rawWidget.value_type);
         if (valueType) entry.value_type = valueType;
         const options = toWidgetOptions(rawWidget.options);

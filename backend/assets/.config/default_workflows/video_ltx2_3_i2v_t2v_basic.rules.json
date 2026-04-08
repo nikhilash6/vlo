@@ -2,6 +2,28 @@
   "version": 2,
   "name": "LTX2.3 Basic I2V / T2V",
   "nodes": {
+    "114": {
+      "widgets": {
+        "noise_seed": {
+          "label": "Upscale noise seed",
+          "control_after_generate": true,
+          "value_type": "int",
+          "hidden": true
+        }
+      }
+    },
+    "115": {
+      "widgets": {
+        "noise_seed": {
+          "label": "Noise seed",
+          "control_after_generate": true,
+          "value_type": "int",
+          "group_id": "video_generation",
+          "group_title": "Video Generation",
+          "group_order": 3
+        }
+      }
+    },
     "167": {
       "present": {
         "label": "Source image",
@@ -149,7 +171,19 @@
           },
           "value": true
         }
-      ]
+      ],
+      "widgets": {
+        "sampling_mode": {
+          "label": "Enable prompt enhancer",
+          "value_type": "boolean",
+          "default": false,
+          "true_value": "on",
+          "false_value": "off",
+          "group_id": "prompt",
+          "group_title": "Prompt",
+          "group_order": 0
+        }
+      }
     },
     "291": {
       "widgets": {

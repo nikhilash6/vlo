@@ -50,6 +50,26 @@ function toOptionalBoolean(
   return value ?? undefined;
 }
 
+function valuesMatch(left: unknown, right: unknown): boolean {
+  return Object.is(left, right);
+}
+
+function mapStoredWidgetValue(
+  value: unknown,
+  config: Pick<WidgetInputConfig, "valueType" | "trueValue" | "falseValue">,
+): unknown {
+  if (config.valueType !== "boolean") {
+    return value;
+  }
+  if (config.trueValue !== undefined && valuesMatch(value, config.trueValue)) {
+    return true;
+  }
+  if (config.falseValue !== undefined && valuesMatch(value, config.falseValue)) {
+    return false;
+  }
+  return value;
+}
+
 function hasOwnKey(record: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(record, key);
 }
@@ -215,6 +235,8 @@ export function resolveWidgetInputsFromRules(
         max: toOptionalNumber(entry.max),
         step: toOptionalNumber(entry.step),
         defaultValue: entry.default,
+        trueValue: entry.true_value,
+        falseValue: entry.false_value,
         sliderDisplay: entry.slider_display ?? undefined,
         unit: toOptionalString(entry.unit),
         nodeTitle: toOptionalString(nodeRule.node_title),
@@ -229,7 +251,10 @@ export function resolveWidgetInputsFromRules(
         nodeId,
         param,
         config,
-        currentValue: rawValue ?? config.defaultValue ?? null,
+        currentValue: mapStoredWidgetValue(
+          rawValue ?? config.defaultValue ?? null,
+          config,
+        ),
       });
     }
   }

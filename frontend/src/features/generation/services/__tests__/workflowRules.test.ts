@@ -847,6 +847,90 @@ describe("resolvePresentedInputs", () => {
     expect(widgets[0]?.currentValue).toBe("euler");
   });
 
+  it("maps stored boolean widget values to custom workflow values", () => {
+    const widgets = resolveWidgetInputs(
+      {
+        "349": {
+          inputs: {
+            sampling_mode: "off",
+          },
+        },
+      },
+      {
+        version: 1,
+        nodes: {
+          "349": {
+            widgets: {
+              sampling_mode: {
+                label: "Enable prompt enhancer",
+                value_type: "boolean",
+                default: false,
+                true_value: "on",
+                false_value: "off",
+              },
+            },
+          },
+        },
+        output_injections: {},
+        slots: {},
+      },
+    );
+
+    expect(widgets).toHaveLength(1);
+    expect(widgets[0]?.config.valueType).toBe("boolean");
+    expect(widgets[0]?.config.trueValue).toBe("on");
+    expect(widgets[0]?.config.falseValue).toBe("off");
+    expect(widgets[0]?.currentValue).toBe(false);
+  });
+
+  it("omits hidden noise widgets while keeping the visible generation seed", () => {
+    const widgets = resolveWidgetInputs(
+      {
+        "114": {
+          inputs: {
+            noise_seed: 42,
+          },
+        },
+        "115": {
+          inputs: {
+            noise_seed: 43,
+          },
+        },
+      },
+      {
+        version: 1,
+        nodes: {
+          "114": {
+            widgets: {
+              noise_seed: {
+                label: "Upscale noise seed",
+                control_after_generate: true,
+                value_type: "int",
+                hidden: true,
+              },
+            },
+          },
+          "115": {
+            widgets: {
+              noise_seed: {
+                label: "Noise seed",
+                control_after_generate: true,
+                value_type: "int",
+              },
+            },
+          },
+        },
+        output_injections: {},
+        slots: {},
+      },
+    );
+
+    expect(widgets).toHaveLength(1);
+    expect(widgets[0]?.nodeId).toBe("115");
+    expect(widgets[0]?.param).toBe("noise_seed");
+    expect(widgets[0]?.currentValue).toBe(43);
+  });
+
   it("preserves widget grouping metadata for proxy-backed controls", () => {
     const widgets = resolveWidgetInputs(
       {

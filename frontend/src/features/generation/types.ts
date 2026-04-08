@@ -239,6 +239,8 @@ export interface WidgetInputConfig {
   control?: WidgetControlType;
   valueType?: WidgetValueType;
   options?: Array<string | number | boolean>;
+  trueValue?: unknown;
+  falseValue?: unknown;
 }
 
 export interface WorkflowParamReference {
