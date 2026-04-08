@@ -882,9 +882,9 @@ def test_real_wan_default_workflow_sidecar_waives_default_required_inputs():
     )
 
 
-def test_real_ltx_flf2v_custom_audio_default_workflow_sidecar_waives_default_required_inputs():
+def test_real_ltx_flf2v_core_workflow_exposes_optional_custom_audio():
     base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
-    workflow_path = base / "video_ltx2_3_flf2v_custom_audio.json"
+    workflow_path = base / "video_ltx2_3_flf2v.json"
     workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
 
     set_object_info_cache(None)
@@ -896,7 +896,14 @@ def test_real_ltx_flf2v_custom_audio_default_workflow_sidecar_waives_default_req
     finally:
         set_object_info_cache(None)
 
-    assert rules["name"] == "LTX2.3 FLF2V Custom Audio"
+    assert rules["name"] == "LTX2.3 FLF2V"
+    assert rules["nodes"]["232"]["present"] == {
+        "label": "Custom audio",
+        "group_id": "audio",
+        "group_title": "Audio",
+        "group_order": 0,
+        "required": False,
+    }
 
     validation_inputs = rules["validation"]["inputs"]
     assert {
@@ -906,7 +913,7 @@ def test_real_ltx_flf2v_custom_audio_default_workflow_sidecar_waives_default_req
         "message": "Provide at least one frame input.",
     } in validation_inputs
     assert not any(
-        rule.get("kind") == "required" and rule.get("input") in {"45", "47"}
+        rule.get("kind") == "required" and rule.get("input") in {"45", "47", "232"}
         for rule in validation_inputs
         if isinstance(rule, dict)
     )

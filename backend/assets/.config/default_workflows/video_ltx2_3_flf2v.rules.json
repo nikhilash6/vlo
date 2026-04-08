@@ -1,5 +1,5 @@
 {
-  "name": "LTX2.3 FLF2V Custom Audio",
+  "name": "LTX2.3 FLF2V",
   "version": 1,
   "nodes": {
     "45": {
@@ -17,6 +17,15 @@
         "group_id": "frames",
         "group_title": "Frames",
         "group_order": 1,
+        "required": false
+      }
+    },
+    "232": {
+      "present": {
+        "label": "Custom audio",
+        "group_id": "audio",
+        "group_title": "Audio",
+        "group_order": 0,
         "required": false
       }
     }
