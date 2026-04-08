@@ -898,21 +898,21 @@ def test_real_ltx_flf2v_core_workflow_exposes_optional_custom_audio():
 
     assert rules["name"] == "LTX2.3 FLF2V"
     assert rules["nodes"]["14"]["widgets"]["noise_seed"] == {
+        "label": "Upscale noise seed",
+        "control_after_generate": True,
+        "hidden": True,
+        "value_type": "int",
+        "min": 0,
+        "max": 18446744073709551615,
+        "default": 0,
+    }
+    assert rules["nodes"]["15"]["widgets"]["noise_seed"] == {
         "label": "Noise seed",
         "control_after_generate": True,
         "value_type": "int",
         "group_id": "video_generation",
         "group_title": "Video Generation",
         "group_order": 0,
-        "min": 0,
-        "max": 18446744073709551615,
-        "default": 0,
-    }
-    assert rules["nodes"]["15"]["widgets"]["noise_seed"] == {
-        "label": "Upscale noise seed",
-        "control_after_generate": True,
-        "hidden": True,
-        "value_type": "int",
         "min": 0,
         "max": 18446744073709551615,
         "default": 0,

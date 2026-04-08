@@ -5063,6 +5063,13 @@
         "cnr_id": "ComfyUI-MelBandRoFormer",
         "ver": "b40e263224778ec417114d91d8b3b39934e30de5",
         "Node name for S&R": "MelBandRoFormerModelLoader",
+        "models": [
+          {
+            "name": "MelBandRoformer_fp16.safetensors",
+            "url": "https://huggingface.co/Kijai/MelBandRoFormer_comfy/resolve/main/MelBandRoformer_fp16.safetensors",
+            "directory": "diffusion_models"
+          }
+        ],
         "ue_properties": {
           "widget_ue_connectable": {},
           "version": "7.5.2",
