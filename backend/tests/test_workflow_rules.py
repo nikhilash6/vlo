@@ -970,7 +970,7 @@ def test_real_ltx_i2v_default_workflow_hides_t2v_toggle_and_waives_image_require
     assert rules["validation"]["inputs"] == []
 
 
-def test_real_ltx_basic_i2v_core_workflow_auto_toggles_t2v_without_pruning_image_branch():
+def test_real_ltx_basic_i2v_core_workflow_exposes_optional_image_and_auto_toggles_t2v():
     base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
     workflow_path = base / "video_ltx2_3_i2v_t2v_basic.json"
     workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
@@ -987,6 +987,7 @@ def test_real_ltx_basic_i2v_core_workflow_auto_toggles_t2v_without_pruning_image
     assert rules["name"] == "LTX2.3 Basic I2V / T2V"
     assert rules["nodes"]["167"]["present"] == {
         "label": "Source image",
+        "required": False,
     }
     assert rules["nodes"]["290"]["widgets"]["value"] == {
         "label": "Text to Video",
@@ -1073,6 +1074,42 @@ def test_real_ltx_basic_i2v_core_workflow_auto_toggles_t2v_without_pruning_image
             "input": "167",
         }
     ]
+
+
+def test_real_ltx_basic_i2v_core_workflow_prunes_missing_source_image_and_flips_t2v():
+    base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
+    rules_path = base / "video_ltx2_3_i2v_t2v_basic.rules.json"
+    rules = json.loads(rules_path.read_text(encoding="utf-8"))
+
+    workflow = {
+        "167": {
+            "class_type": "LoadImage",
+            "inputs": {"image": "egyptian_queen.png"},
+        },
+        "290": {
+            "class_type": "PrimitiveBoolean",
+            "inputs": {"value": False},
+        },
+        "999": {
+            "class_type": "Consumer",
+            "inputs": {
+                "image": ["167", 0],
+                "text_to_video": ["290", 0],
+            },
+        },
+    }
+
+    rewritten, warnings = apply_rules_to_workflow(
+        workflow,
+        rules,
+        provided_input_ids=set(),
+    )
+
+    assert warnings == []
+    assert "167" not in rewritten
+    assert rewritten["290"]["inputs"]["value"] is True
+    assert "image" not in rewritten["999"]["inputs"]
+    assert rewritten["999"]["inputs"]["text_to_video"] == ["290", 0]
 
 
 def test_core_ltx_workflows_do_not_include_gguf_or_debug_only_nodes():

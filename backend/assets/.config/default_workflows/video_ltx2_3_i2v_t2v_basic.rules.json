@@ -4,7 +4,8 @@
   "nodes": {
     "167": {
       "present": {
-        "label": "Source image"
+        "label": "Source image",
+        "required": false
       }
     },
     "290": {
