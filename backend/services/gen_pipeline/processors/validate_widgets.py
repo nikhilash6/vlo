@@ -52,10 +52,23 @@ def _normalize_widget_value(
         return coerced, None
 
     if value_type == "boolean":
+        true_value = widget_rule.get("true_value")
+        false_value = widget_rule.get("false_value")
+        if true_value is not None or false_value is not None:
+            if true_value is not None and (
+                value == true_value or str(value) == str(true_value)
+            ):
+                return true_value, None
+            if false_value is not None and (
+                value == false_value or str(value) == str(false_value)
+            ):
+                return false_value, None
         coerced = coerce_bool(value)
         if coerced is None:
             return None, "Value must be true or false."
-        return coerced, None
+        if coerced:
+            return (true_value if true_value is not None else coerced), None
+        return (false_value if false_value is not None else coerced), None
 
     if value_type == "enum":
         matched = match_enum_value(value, widget_rule.get("options"))

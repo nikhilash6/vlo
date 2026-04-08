@@ -4439,6 +4439,67 @@ async def test_generate_allows_widget_override_without_rule_when_workflow_has_pa
 
 
 @pytest.mark.anyio
+async def test_generate_accepts_boolean_widget_with_custom_stored_values(
+    tmp_path: Path,
+    monkeypatch,
+    fake_comfy_client,
+):
+    workflow_id = "workflow_boolean_widget_mapping.json"
+    workflow_path = tmp_path / workflow_id
+    workflow_path.write_text("{}")
+    sidecar_path = tmp_path / "workflow_boolean_widget_mapping.rules.json"
+    sidecar_path.write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "nodes": {
+                    "349": {
+                        "widgets": {
+                            "sampling_mode": {
+                                "label": "Enable prompt enhancer",
+                                "value_type": "boolean",
+                                "default": False,
+                                "true_value": "on",
+                                "false_value": "off",
+                            }
+                        }
+                    }
+                },
+            }
+        )
+    )
+    monkeypatch.setattr(comfyui, "WORKFLOWS_DIR", tmp_path)
+
+    workflow = {
+        "349": {
+            "class_type": "TextGenerateLTX2Prompt",
+            "inputs": {
+                "sampling_mode": "off",
+            },
+        },
+    }
+
+    response = await comfyui.generate(
+        _as_request(
+            FormData(
+                [
+                    ("workflow", json.dumps(workflow)),
+                    ("workflow_id", workflow_id),
+                    ("widget_349_sampling_mode", "on"),
+                ]
+            )
+        )
+    )
+
+    assert response.status_code == 200
+    payload = _response_json(response)
+    assert payload["applied_widget_values"]["349:sampling_mode"] == "on"
+    assert fake_comfy_client.prompt_payload is not None
+    prompt = fake_comfy_client.prompt_payload["prompt"]
+    assert prompt["349"]["inputs"]["sampling_mode"] == "on"
+
+
+@pytest.mark.anyio
 async def test_generate_ignores_widget_randomize_without_rule(
     tmp_path: Path,
     monkeypatch,
