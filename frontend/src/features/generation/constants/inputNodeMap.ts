@@ -18,7 +18,8 @@ export type InputNodeMap = Record<string, InputNodeMapEntry[]>;
 
 /**
  * Static fallback map for node types that cannot be auto-detected from
- * object_info metadata (e.g. VHS_LoadVideo lacks a ``video_upload`` flag).
+ * object_info metadata (for example VHS video-loader nodes that do not expose
+ * a ``video_upload`` flag in object_info).
  *
  * At runtime this is merged with the dynamic map built from object_info by
  * the backend's ``/object_info/sync`` endpoint.
@@ -29,6 +30,7 @@ export const INPUT_NODE_MAP: InputNodeMap = {
   LoadAudio: [{ inputType: "audio", param: "audio", label: "Audio" }],
   LoadVideo: [{ inputType: "video", param: "file", label: "Video" }],
   VHS_LoadVideo: [{ inputType: "video", param: "video", label: "Video" }],
+  VHS_LoadVideoFFmpeg: [{ inputType: "video", param: "video", label: "Video" }],
 };
 
 /**

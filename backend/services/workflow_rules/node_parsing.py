@@ -39,6 +39,14 @@ _INPUT_NODE_FALLBACKS: dict[str, list[dict[str, Any]]] = {
             "description": None,
         }
     ],
+    "VHS_LoadVideoFFmpeg": [
+        {
+            "input_type": "video",
+            "param": "video",
+            "label": "Video",
+            "description": None,
+        }
+    ],
 }
 
 _TEXT_PARAM_LABELS = {

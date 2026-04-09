@@ -1480,14 +1480,22 @@ def test_real_ltx_retake_rules_define_dual_masks_and_primary_seed():
     assert rules["nodes"]["689"]["binary_derived_mask_of"] == "644"
     assert rules["nodes"]["691"]["binary_audio_derived_mask_of"] == "644"
     assert rules["nodes"]["691"]["audio_derived_mask_fps"] == 25
+    assert rules["nodes"]["644"]["present"]["input_type"] == "video"
+    assert rules["nodes"]["644"]["present"]["param"] == "video"
+    assert rules["nodes"]["644"].get("widgets", {}) == {}
+    assert rules["nodes"]["626"]["present"]["enabled"] is False
 
     sampler_widgets = rules["nodes"]["115"]["widgets"]
     upscale_widgets = rules["nodes"]["243"]["widgets"]
     prompt_widgets = rules["nodes"]["594"]["widgets"]
+    hidden_start_widgets = rules["nodes"]["661"]["widgets"]
+    hidden_end_widgets = rules["nodes"]["662"]["widgets"]
     assert sampler_widgets["noise_seed"]["control_after_generate"] is True
     assert sampler_widgets["noise_seed"].get("hidden") is not True
     assert upscale_widgets["noise_seed"]["hidden"] is True
     assert prompt_widgets["value"]["default"] is False
+    assert hidden_start_widgets["value"]["hidden"] is True
+    assert hidden_end_widgets["value"]["hidden"] is True
 
 
 def test_real_ltx_single_stage_discovers_resize_image_mask_node_as_ar_target():

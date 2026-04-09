@@ -31,6 +31,7 @@ INPUT_NODE_MAP = {
     "LoadAudio": {"input_type": "audio", "param": "audio"},
     "LoadVideo": {"input_type": "video", "param": "file"},
     "VHS_LoadVideo": {"input_type": "video", "param": "video"},
+    "VHS_LoadVideoFFmpeg": {"input_type": "video", "param": "video"},
 }
 
 WIDGET_CONTROL_MODES = {"fixed", "randomize"}

@@ -1,9 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type MouseEvent,
-} from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import {
   Box,
   Typography,
@@ -154,10 +149,7 @@ function LivePreview({
   fallbackUrl: string | null;
 }) {
   return (
-    <LivePreviewPlayback
-      animation={animation}
-      fallbackUrl={fallbackUrl}
-    />
+    <LivePreviewPlayback animation={animation} fallbackUrl={fallbackUrl} />
   );
 }
 
@@ -359,11 +351,7 @@ export function GenerationPanel() {
         warnings: workflowRuleWarnings,
       });
     }
-  }, [
-    hasInferredInputs,
-    selectedWorkflowId,
-    workflowRuleWarnings,
-  ]);
+  }, [hasInferredInputs, selectedWorkflowId, workflowRuleWarnings]);
 
   useEffect(() => {
     if (!editorOpen) {
@@ -504,9 +492,7 @@ export function GenerationPanel() {
   const showInlineWorkflowResolver =
     Boolean(workflowWarning) && comfyuiModelDownloadsEnabled;
   const showWorkflowWarningDialog =
-    Boolean(workflowWarning) &&
-    !editorOpen &&
-    !comfyuiModelDownloadsEnabled;
+    Boolean(workflowWarning) && !editorOpen && !comfyuiModelDownloadsEnabled;
   const displayPostprocessConfig = displayJob?.postprocessConfig ?? null;
   const replaceOutputsWithPostprocess =
     displayPostprocessConfig?.panel_preview === "replace_outputs";
@@ -725,432 +711,505 @@ export function GenerationPanel() {
         />
       ) : (
         <>
-      {/* Dynamic Workflow Inputs */}
-      {showSmartResolutionSelector && !isWorkflowLoading && (
-        <Box sx={{ px: 2, pb: 2 }}>
-          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.25 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel id="generation-resolution-label">
-                Resolution
-              </InputLabel>
-              <Select
-                labelId="generation-resolution-label"
-                value={currentResolution}
-                label="Resolution"
-                onChange={(event) =>
-                  setTargetResolution(Number(event.target.value))
-                }
-                sx={{ bgcolor: "#1a1a1a" }}
-              >
-                {resolutionOptions.map((resolution) => (
-                  <MenuItem key={resolution} value={resolution}>
-                    {`${resolution}p`}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {!hasAspectRatioWidget ? (
+          {/* Dynamic Workflow Inputs */}
+          {showSmartResolutionSelector && !isWorkflowLoading && (
+            <Box sx={{ px: 2, pb: 2 }}>
               <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.5,
-                  minHeight: 40,
-                  px: 0.25,
-                  flexShrink: 0,
-                }}
+                sx={{ display: "flex", alignItems: "flex-start", gap: 1.25 }}
               >
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: "text.secondary",
-                    letterSpacing: "0.12em",
-                  }}
-                >
-                  EXACT
-                </Typography>
-                <Checkbox
-                  checked={exactAspectRatio}
-                  onChange={(event) => setExactAspectRatio(event.target.checked)}
-                  size="small"
-                  inputProps={{
-                    "aria-label": "Use exact input aspect ratio",
-                  }}
-                  sx={{
-                    color: "rgba(255, 255, 255, 0.65)",
-                    p: 0.25,
-                    "&.Mui-checked": {
-                      color: "primary.main",
-                    },
-                  }}
-                />
-                <Tooltip title={EXACT_ASPECT_RATIO_TOOLTIP} arrow>
-                  <IconButton
-                    size="small"
-                    aria-label="Exact aspect ratio help"
-                    sx={{ color: "text.secondary", p: 0.25 }}
+                <FormControl fullWidth size="small">
+                  <InputLabel id="generation-resolution-label">
+                    Resolution
+                  </InputLabel>
+                  <Select
+                    labelId="generation-resolution-label"
+                    value={currentResolution}
+                    label="Resolution"
+                    onChange={(event) =>
+                      setTargetResolution(Number(event.target.value))
+                    }
+                    sx={{ bgcolor: "#1a1a1a" }}
                   >
-                    <InfoOutlined fontSize="inherit" />
-                  </IconButton>
-                </Tooltip>
+                    {resolutionOptions.map((resolution) => (
+                      <MenuItem key={resolution} value={resolution}>
+                        {`${resolution}p`}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                {!hasAspectRatioWidget ? (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.5,
+                      minHeight: 40,
+                      px: 0.25,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary",
+                        letterSpacing: "0.12em",
+                      }}
+                    >
+                      EXACT
+                    </Typography>
+                    <Checkbox
+                      checked={exactAspectRatio}
+                      onChange={(event) =>
+                        setExactAspectRatio(event.target.checked)
+                      }
+                      size="small"
+                      inputProps={{
+                        "aria-label": "Use exact input aspect ratio",
+                      }}
+                      sx={{
+                        color: "rgba(255, 255, 255, 0.65)",
+                        p: 0.25,
+                        "&.Mui-checked": {
+                          color: "primary.main",
+                        },
+                      }}
+                    />
+                    <Tooltip title={EXACT_ASPECT_RATIO_TOOLTIP} arrow>
+                      <IconButton
+                        size="small"
+                        aria-label="Exact aspect ratio help"
+                        sx={{ color: "text.secondary", p: 0.25 }}
+                      >
+                        <InfoOutlined fontSize="inherit" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                ) : null}
               </Box>
-            ) : null}
-          </Box>
-          <Typography
-            variant="caption"
-            sx={{ color: "text.secondary", display: "block", mt: 0.75 }}
-          >
-            Generation resolution controls the short edge before strided resize.
-          </Typography>
-        </Box>
-      )}
-
-      {isWorkflowLoading ? (
-        <Box
-          sx={{ px: 2, pb: 2, display: "flex", alignItems: "center", gap: 1 }}
-        >
-          <CircularProgress size={16} />
-          <Typography variant="caption" sx={{ color: "text.secondary" }}>
-            Loading inputs...
-          </Typography>
-        </Box>
-      ) : workflowLoadError ? (
-        <Box sx={{ px: 2, pb: 2 }}>
-          <Typography
-            variant="caption"
-            sx={{ color: "error.main", display: "block", mb: 1 }}
-          >
-            {workflowLoadError}
-          </Typography>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() => void handleRetryWorkflow()}
-            sx={{ textTransform: "none" }}
-          >
-            Retry workflow load
-          </Button>
-        </Box>
-      ) : !hasVisibleGenerationControls ? (
-        <Box sx={{ px: 2, pb: 2 }}>
-          <Typography variant="caption" sx={{ color: "text.secondary" }}>
-            No inputs detected (or workflow has no editable parameters).
-            <br />
-            Open the ComfyUI editor to inspect.
-          </Typography>
-        </Box>
-      ) : null}
-
-      {!isWorkflowLoading && !workflowLoadError ? (
-        <GenerationInputs
-          inputs={workflowInputs}
-          textValues={textValues}
-          onTextValueCommit={handleTextValueCommit}
-          mediaInputs={mediaInputs}
-          onInputDrop={handleInputDrop}
-          onExternalInputDrop={handleExternalInputDrop}
-          onInputClear={handleInputClear}
-          onSwapMediaInputs={handleSwapMediaInputs}
-          onClickSelect={handleClickSelect}
-          widgetInputs={widgetInputs}
-          widgetValues={widgetValues}
-          randomizeToggles={randomizeToggles}
-          onWidgetChange={handleWidgetChange}
-          onToggleRandomize={handleToggleRandomize}
-          showExactAspectRatioControl={showSmartResolutionSelector}
-          exactAspectRatio={exactAspectRatio}
-          onExactAspectRatioChange={setExactAspectRatio}
-          exactAspectRatioTooltip={EXACT_ASPECT_RATIO_TOOLTIP}
-        />
-      ) : null}
-
-      {/* Mask processing */}
-      {workflowMode === "smart" && hasMaskMappings && (
-        <Box sx={{ px: 2, pb: 2 }}>
-          <FormControl
-            fullWidth
-            size="small"
-            sx={{ mb: maskCropMode === "crop" ? 1.5 : 0 }}
-          >
-            <InputLabel id="mask-processing-mode-label">
-              Mask processing
-            </InputLabel>
-            <Select
-              labelId="mask-processing-mode-label"
-              value={maskCropMode}
-              label="Mask processing"
-              onChange={(event) =>
-                setMaskCropMode(event.target.value as "crop" | "full")
-              }
-              sx={{ bgcolor: "#1a1a1a" }}
-            >
-              <MenuItem value="full">Full</MenuItem>
-              <MenuItem value="crop">Crop</MenuItem>
-            </Select>
-          </FormControl>
-          {maskCropMode === "crop" ? (
-            <>
               <Typography
                 variant="caption"
-                sx={{ color: "text.secondary", display: "block", mb: 0.5 }}
+                sx={{ color: "text.secondary", display: "block", mt: 0.75 }}
               >
-                Mask crop padding: {Math.round(maskCropDilation * 100)}%
+                Generation resolution controls the short edge before strided
+                resize.
               </Typography>
-              <Slider
-                size="small"
-                value={maskCropDilation}
-                min={0}
-                max={0.5}
-                step={0.01}
-                onChange={(_, value) => setMaskCropDilation(value as number)}
-              />
-            </>
-          ) : null}
-        </Box>
-      )}
-
-      {workflowMode === "manual" ? (
-        <Box sx={{ px: 2, pb: 1 }}>
-          <Button
-            fullWidth
-            variant="outlined"
-            startIcon={<OpenInNew />}
-            onClick={() => setEditorOpen(true)}
-            sx={{ textTransform: "none" }}
-          >
-            Edit workflow
-          </Button>
-        </Box>
-      ) : null}
-
-      {/* Generate / Cancel Button */}
-      <Box sx={{ px: 2, py: 2 }}>
-        <Box sx={{ display: "flex", width: "100%" }}>
-          <Tooltip
-            title={
-              !canGenerate && inputValidationFailures.length > 0
-                ? inputValidationFailures
-                    .slice(0, 4)
-                    .map((f) => f.message)
-                    .join("\n")
-                : ""
-            }
-            placement="top"
-            arrow
-            slotProps={{
-              tooltip: { sx: { whiteSpace: "pre-line" } },
-            }}
-          >
-            <span style={{ display: "flex", flex: 1, minWidth: 0 }}>
-              <Box sx={{ display: "flex", flex: 1, minWidth: 0 }}>
-                <Button
-                  data-testid="generation-generate-button"
-                  fullWidth
-                  variant="contained"
-                  startIcon={isExtractingSelection ? undefined : <PlayArrow />}
-                  disabled={!canGenerate}
-                  onPointerDown={blurActiveElement}
-                  onClick={() => handleGenerateCount(1)}
-                  sx={{
-                    borderBottomRightRadius: 0,
-                    borderTopRightRadius: 0,
-                    textTransform: "none",
-                  }}
-                >
-                  {generateButtonLabel}
-                </Button>
-                <Button
-                  aria-label="Queue multiple generations"
-                  disabled={!canGenerate}
-                  onClick={handleOpenGenerateMenu}
-                  sx={{
-                    borderBottomLeftRadius: 0,
-                    borderLeft: "1px solid rgba(255, 255, 255, 0.2)",
-                    borderBottomRightRadius: showRunningCancelControls ? 0 : 4,
-                    borderTopLeftRadius: 0,
-                    borderTopRightRadius: showRunningCancelControls ? 0 : 4,
-                    minWidth: 44,
-                    px: 1,
-                  }}
-                  variant="contained"
-                >
-                  <ArrowDropDown />
-                </Button>
-              </Box>
-            </span>
-          </Tooltip>
-          {showRunningCancelControls ? (
-            <>
-              <Tooltip title="Cancel current generation" arrow>
-                <span style={{ display: "flex" }}>
-                  <Button
-                    aria-label="Cancel current generation"
-                    color="warning"
-                    disabled={!canInterruptCurrentGeneration}
-                    onClick={handleInterruptCurrent}
-                    sx={{
-                      borderLeft: "1px solid rgba(255, 255, 255, 0.2)",
-                      borderRadius: 0,
-                      minWidth: 48,
-                      px: 1,
-                    }}
-                    variant="contained"
-                  >
-                    <Close />
-                  </Button>
-                </span>
-              </Tooltip>
-              <Tooltip title="Clear queue" arrow>
-                <span style={{ display: "flex" }}>
-                  <Button
-                    aria-label="Clear queue"
-                    color="error"
-                    disabled={!canClearQueuedGenerations}
-                    onClick={handleClearQueue}
-                    sx={{
-                      borderBottomLeftRadius: 0,
-                      borderLeft: "1px solid rgba(255, 255, 255, 0.2)",
-                      borderTopLeftRadius: 0,
-                      minWidth: 48,
-                      px: 1,
-                    }}
-                    variant="contained"
-                  >
-                    <Stop />
-                  </Button>
-                </span>
-              </Tooltip>
-            </>
-          ) : null}
-        </Box>
-        {pipelineStatusText ? (
-          <Typography
-            variant="caption"
-            sx={{ color: "text.secondary", display: "block", mt: 1 }}
-          >
-            {pipelineStatusText}
-          </Typography>
-        ) : null}
-      </Box>
-
-      <Menu
-        anchorEl={generateMenuAnchorEl}
-        open={Boolean(generateMenuAnchorEl)}
-        onClose={handleCloseGenerateMenu}
-      >
-        {[2, 4, 8, 16].map((count) => (
-          <MenuItem
-            key={count}
-            onClick={() => handleSelectGenerateCount(count)}
-          >
-            {`x ${count}`}
-          </MenuItem>
-        ))}
-        <MenuItem onClick={handleOpenCustomGenerateDialog}>
-          Queue custom...
-        </MenuItem>
-      </Menu>
-
-      {/* Progress */}
-      {isRunning && activeJob && (
-        <Box sx={{ px: 2, pb: 2 }}>
-          <LinearProgress
-            data-testid="generation-progress-bar"
-            variant={activeJob.progress > 0 ? "determinate" : "indeterminate"}
-            value={activeJob.progress}
-            sx={{ mb: 0.5, borderRadius: 1 }}
-          />
-          <Typography variant="caption" sx={{ color: "text.secondary" }}>
-            {activeJob.status === "queued"
-              ? "Queued..."
-              : `${activeJob.progress}%${activeNodeStatus ? ` — ${activeNodeStatus}` : ""}`}
-          </Typography>
-        </Box>
-      )}
-
-      {/* Live Preview */}
-      {(latestPreviewUrl || previewAnimation) && isRunning && (
-        <Box sx={{ px: 2, pb: 2 }}>
-          <LivePreview
-            animation={previewAnimation}
-            fallbackUrl={latestPreviewUrl}
-          />
-        </Box>
-      )}
-
-      {/* Postprocessed Preview */}
-      {displayJob?.postprocessedPreview && replaceOutputsWithPostprocess && (
-        <Box sx={{ px: 2, pb: 2 }}>
-          <Typography
-            variant="caption"
-            sx={{ color: "text.secondary", mb: 1, display: "block" }}
-          >
-            Postprocessed preview
-          </Typography>
-          {displayJob.postprocessedPreview.mediaKind === "video" ? (
-            <video
-              src={displayJob.postprocessedPreview.previewUrl}
-              controls
-              autoPlay
-              loop
-              muted
-              style={{ width: "100%", borderRadius: 4, display: "block" }}
-            />
-          ) : displayJob.postprocessedPreview.mediaKind === "audio" ? (
-            <audio
-              src={displayJob.postprocessedPreview.previewUrl}
-              controls
-              style={{ width: "100%", display: "block" }}
-            />
-          ) : (
-            <img
-              src={displayJob.postprocessedPreview.previewUrl}
-              alt={displayJob.postprocessedPreview.filename}
-              style={{ width: "100%", borderRadius: 4, display: "block" }}
-            />
+            </Box>
           )}
-          <Typography
-            variant="caption"
-            sx={{ color: "text.secondary", mt: 0.5, display: "block" }}
-          >
-            Auto-imported to library
-          </Typography>
-        </Box>
-      )}
 
-      {/* Outputs */}
-      {displayJob && shouldShowRawOutputs && (
-        <Box sx={{ px: 2, pb: 2 }}>
-          <Typography
-            variant="caption"
-            sx={{ color: "text.secondary", mb: 1, display: "block" }}
+          {isWorkflowLoading ? (
+            <Box
+              sx={{
+                px: 2,
+                pb: 2,
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+              }}
+            >
+              <CircularProgress size={16} />
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                Loading inputs...
+              </Typography>
+            </Box>
+          ) : workflowLoadError ? (
+            <Box sx={{ px: 2, pb: 2 }}>
+              <Typography
+                variant="caption"
+                sx={{ color: "error.main", display: "block", mb: 1 }}
+              >
+                {workflowLoadError}
+              </Typography>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => void handleRetryWorkflow()}
+                sx={{ textTransform: "none" }}
+              >
+                Retry workflow load
+              </Button>
+            </Box>
+          ) : !hasVisibleGenerationControls ? (
+            <Box sx={{ px: 2, pb: 2 }}>
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                No inputs detected (or workflow has no editable parameters).
+                <br />
+                Open the ComfyUI editor to inspect.
+              </Typography>
+            </Box>
+          ) : null}
+
+          {!isWorkflowLoading && !workflowLoadError ? (
+            <GenerationInputs
+              inputs={workflowInputs}
+              textValues={textValues}
+              onTextValueCommit={handleTextValueCommit}
+              mediaInputs={mediaInputs}
+              onInputDrop={handleInputDrop}
+              onExternalInputDrop={handleExternalInputDrop}
+              onInputClear={handleInputClear}
+              onSwapMediaInputs={handleSwapMediaInputs}
+              onClickSelect={handleClickSelect}
+              widgetInputs={widgetInputs}
+              widgetValues={widgetValues}
+              randomizeToggles={randomizeToggles}
+              onWidgetChange={handleWidgetChange}
+              onToggleRandomize={handleToggleRandomize}
+              showExactAspectRatioControl={showSmartResolutionSelector}
+              exactAspectRatio={exactAspectRatio}
+              onExactAspectRatioChange={setExactAspectRatio}
+              exactAspectRatioTooltip={EXACT_ASPECT_RATIO_TOOLTIP}
+            />
+          ) : null}
+
+          {/* Mask processing */}
+          {workflowMode === "smart" && hasMaskMappings && (
+            <Box sx={{ px: 2, pb: 2 }}>
+              <FormControl
+                fullWidth
+                size="small"
+                sx={{ mb: maskCropMode === "crop" ? 1.5 : 0 }}
+              >
+                <InputLabel id="mask-processing-mode-label">
+                  Mask processing
+                </InputLabel>
+                <Select
+                  labelId="mask-processing-mode-label"
+                  value={maskCropMode}
+                  label="Mask processing"
+                  onChange={(event) =>
+                    setMaskCropMode(event.target.value as "crop" | "full")
+                  }
+                  sx={{ bgcolor: "#1a1a1a" }}
+                >
+                  <MenuItem value="full">Full</MenuItem>
+                  <MenuItem value="crop">Crop</MenuItem>
+                </Select>
+              </FormControl>
+              {maskCropMode === "crop" ? (
+                <>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "text.secondary", display: "block", mb: 0.5 }}
+                  >
+                    Mask crop padding: {Math.round(maskCropDilation * 100)}%
+                  </Typography>
+                  <Slider
+                    size="small"
+                    value={maskCropDilation}
+                    min={0}
+                    max={0.5}
+                    step={0.01}
+                    onChange={(_, value) =>
+                      setMaskCropDilation(value as number)
+                    }
+                  />
+                </>
+              ) : null}
+            </Box>
+          )}
+
+          {workflowMode === "manual" ? (
+            <Box sx={{ px: 2, pb: 1 }}>
+              <Button
+                fullWidth
+                variant="outlined"
+                startIcon={<OpenInNew />}
+                onClick={() => setEditorOpen(true)}
+                sx={{ textTransform: "none" }}
+              >
+                Edit workflow
+              </Button>
+            </Box>
+          ) : null}
+
+          {/* Generate / Cancel Button */}
+          <Box sx={{ px: 2, py: 2 }}>
+            <Box sx={{ display: "flex", width: "100%" }}>
+              <Tooltip
+                title={
+                  !canGenerate && inputValidationFailures.length > 0
+                    ? inputValidationFailures
+                        .slice(0, 4)
+                        .map((f) => f.message)
+                        .join("\n")
+                    : ""
+                }
+                placement="top"
+                arrow
+                slotProps={{
+                  tooltip: { sx: { whiteSpace: "pre-line" } },
+                }}
+              >
+                <span style={{ display: "flex", flex: 1, minWidth: 0 }}>
+                  <Box sx={{ display: "flex", flex: 1, minWidth: 0 }}>
+                    <Button
+                      data-testid="generation-generate-button"
+                      fullWidth
+                      variant="contained"
+                      startIcon={
+                        isExtractingSelection ? undefined : <PlayArrow />
+                      }
+                      disabled={!canGenerate}
+                      onPointerDown={blurActiveElement}
+                      onClick={() => handleGenerateCount(1)}
+                      sx={{
+                        borderBottomRightRadius: 0,
+                        borderTopRightRadius: 0,
+                        textTransform: "none",
+                      }}
+                    >
+                      {generateButtonLabel}
+                    </Button>
+                    <Button
+                      aria-label="Queue multiple generations"
+                      disabled={!canGenerate}
+                      onClick={handleOpenGenerateMenu}
+                      sx={{
+                        borderBottomLeftRadius: 0,
+                        borderLeft: "1px solid rgba(255, 255, 255, 0.2)",
+                        borderBottomRightRadius: showRunningCancelControls
+                          ? 0
+                          : 4,
+                        borderTopLeftRadius: 0,
+                        borderTopRightRadius: showRunningCancelControls ? 0 : 4,
+                        minWidth: 44,
+                        px: 1,
+                      }}
+                      variant="contained"
+                    >
+                      <ArrowDropDown />
+                    </Button>
+                  </Box>
+                </span>
+              </Tooltip>
+              {showRunningCancelControls ? (
+                <>
+                  <Tooltip title="Cancel current generation" arrow>
+                    <span style={{ display: "flex" }}>
+                      <Button
+                        aria-label="Cancel current generation"
+                        color="warning"
+                        disabled={!canInterruptCurrentGeneration}
+                        onClick={handleInterruptCurrent}
+                        sx={{
+                          borderLeft: "1px solid rgba(255, 255, 255, 0.2)",
+                          borderRadius: 0,
+                          minWidth: 48,
+                          px: 1,
+                        }}
+                        variant="contained"
+                      >
+                        <Close />
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="Clear queue" arrow>
+                    <span style={{ display: "flex" }}>
+                      <Button
+                        aria-label="Clear queue"
+                        color="error"
+                        disabled={!canClearQueuedGenerations}
+                        onClick={handleClearQueue}
+                        sx={{
+                          borderBottomLeftRadius: 0,
+                          borderLeft: "1px solid rgba(255, 255, 255, 0.2)",
+                          borderTopLeftRadius: 0,
+                          minWidth: 48,
+                          px: 1,
+                        }}
+                        variant="contained"
+                      >
+                        <Stop />
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </>
+              ) : null}
+            </Box>
+            {pipelineStatusText ? (
+              <Typography
+                variant="caption"
+                sx={{ color: "text.secondary", display: "block", mt: 1 }}
+              >
+                {pipelineStatusText}
+              </Typography>
+            ) : null}
+          </Box>
+
+          <Menu
+            anchorEl={generateMenuAnchorEl}
+            open={Boolean(generateMenuAnchorEl)}
+            onClose={handleCloseGenerateMenu}
           >
-            {displayJob.status === "completed"
-              ? "Generated outputs"
-              : "Outputs so far"}
-          </Typography>
-          {displayJob.outputs.map((output, i) => (
-            <Box key={`${output.filename}-${i}`} sx={{ mb: 1 }}>
-              {getOutputMediaKindFromFilename(output.filename) === "video" ? (
+            {[2, 4, 8, 16].map((count) => (
+              <MenuItem
+                key={count}
+                onClick={() => handleSelectGenerateCount(count)}
+              >
+                {`x ${count}`}
+              </MenuItem>
+            ))}
+            <MenuItem onClick={handleOpenCustomGenerateDialog}>
+              Queue custom...
+            </MenuItem>
+          </Menu>
+
+          {/* Progress */}
+          {isRunning && activeJob && (
+            <Box sx={{ px: 2, pb: 2 }}>
+              <LinearProgress
+                data-testid="generation-progress-bar"
+                variant={
+                  activeJob.progress > 0 ? "determinate" : "indeterminate"
+                }
+                value={activeJob.progress}
+                sx={{ mb: 0.5, borderRadius: 1 }}
+              />
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                {activeJob.status === "queued"
+                  ? "Queued..."
+                  : `${activeJob.progress}%${activeNodeStatus ? ` — ${activeNodeStatus}` : ""}`}
+              </Typography>
+            </Box>
+          )}
+
+          {/* Live Preview */}
+          {(latestPreviewUrl || previewAnimation) && isRunning && (
+            <Box sx={{ px: 2, pb: 2 }}>
+              <LivePreview
+                animation={previewAnimation}
+                fallbackUrl={latestPreviewUrl}
+              />
+            </Box>
+          )}
+
+          {/* Postprocessed Preview */}
+          {displayJob?.postprocessedPreview &&
+            replaceOutputsWithPostprocess && (
+              <Box sx={{ px: 2, pb: 2 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "text.secondary", mb: 1, display: "block" }}
+                >
+                  Postprocessed preview
+                </Typography>
+                {displayJob.postprocessedPreview.mediaKind === "video" ? (
+                  <video
+                    src={displayJob.postprocessedPreview.previewUrl}
+                    controls
+                    autoPlay
+                    loop
+                    muted
+                    style={{ width: "100%", borderRadius: 4, display: "block" }}
+                  />
+                ) : displayJob.postprocessedPreview.mediaKind === "audio" ? (
+                  <audio
+                    src={displayJob.postprocessedPreview.previewUrl}
+                    controls
+                    style={{ width: "100%", display: "block" }}
+                  />
+                ) : (
+                  <img
+                    src={displayJob.postprocessedPreview.previewUrl}
+                    alt={displayJob.postprocessedPreview.filename}
+                    style={{ width: "100%", borderRadius: 4, display: "block" }}
+                  />
+                )}
+                <Typography
+                  variant="caption"
+                  sx={{ color: "text.secondary", mt: 0.5, display: "block" }}
+                >
+                  Auto-imported to library
+                </Typography>
+              </Box>
+            )}
+
+          {/* Outputs */}
+          {displayJob && shouldShowRawOutputs && (
+            <Box sx={{ px: 2, pb: 2 }}>
+              <Typography
+                variant="caption"
+                sx={{ color: "text.secondary", mb: 1, display: "block" }}
+              >
+                {displayJob.status === "completed"
+                  ? "Generated outputs"
+                  : "Outputs so far"}
+              </Typography>
+              {displayJob.outputs.map((output, i) => (
+                <Box key={`${output.filename}-${i}`} sx={{ mb: 1 }}>
+                  {getOutputMediaKindFromFilename(output.filename) ===
+                  "video" ? (
+                    <video
+                      src={output.viewUrl}
+                      controls
+                      autoPlay
+                      loop
+                      muted
+                      style={{
+                        width: "100%",
+                        borderRadius: 4,
+                        display: "block",
+                      }}
+                    />
+                  ) : getOutputMediaKindFromFilename(output.filename) ===
+                    "audio" ? (
+                    <audio
+                      src={output.viewUrl}
+                      controls
+                      style={{ width: "100%", display: "block" }}
+                    />
+                  ) : (
+                    <img
+                      src={output.viewUrl}
+                      alt={output.filename}
+                      style={{
+                        width: "100%",
+                        borderRadius: 4,
+                        display: "block",
+                      }}
+                    />
+                  )}
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "text.secondary", mt: 0.5, display: "block" }}
+                  >
+                    {displayJob.status === "completed"
+                      ? "Auto-imported to library"
+                      : output.filename}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          )}
+
+          {/* Imported Asset Preview */}
+          {displayJob && importedPreviewAsset && (
+            <Box sx={{ px: 2, pb: 2 }}>
+              <Typography
+                variant="caption"
+                sx={{ color: "text.secondary", mb: 1, display: "block" }}
+              >
+                Imported asset preview
+              </Typography>
+              {importedPreviewAsset.type === "video" ? (
                 <video
-                  src={output.viewUrl}
+                  src={importedPreviewSrc}
                   controls
                   autoPlay
                   loop
                   muted
                   style={{ width: "100%", borderRadius: 4, display: "block" }}
                 />
-              ) : getOutputMediaKindFromFilename(output.filename) ===
-                "audio" ? (
+              ) : importedPreviewAsset.type === "audio" ? (
                 <audio
-                  src={output.viewUrl}
+                  src={importedPreviewSrc}
                   controls
                   style={{ width: "100%", display: "block" }}
                 />
               ) : (
                 <img
-                  src={output.viewUrl}
-                  alt={output.filename}
+                  src={importedPreviewSrc}
+                  alt={importedPreviewAsset.name}
                   style={{ width: "100%", borderRadius: 4, display: "block" }}
                 />
               )}
@@ -1158,86 +1217,42 @@ export function GenerationPanel() {
                 variant="caption"
                 sx={{ color: "text.secondary", mt: 0.5, display: "block" }}
               >
-                {displayJob.status === "completed"
-                  ? "Auto-imported to library"
-                  : output.filename}
+                {importedPreviewAsset.name}
+                {importedAssets.length > 1
+                  ? ` (+${importedAssets.length - 1} more)`
+                  : ""}
               </Typography>
             </Box>
-          ))}
-        </Box>
-      )}
-
-      {/* Imported Asset Preview */}
-      {displayJob && importedPreviewAsset && (
-        <Box sx={{ px: 2, pb: 2 }}>
-          <Typography
-            variant="caption"
-            sx={{ color: "text.secondary", mb: 1, display: "block" }}
-          >
-            Imported asset preview
-          </Typography>
-          {importedPreviewAsset.type === "video" ? (
-            <video
-              src={importedPreviewSrc}
-              controls
-              autoPlay
-              loop
-              muted
-              style={{ width: "100%", borderRadius: 4, display: "block" }}
-            />
-          ) : importedPreviewAsset.type === "audio" ? (
-            <audio
-              src={importedPreviewSrc}
-              controls
-              style={{ width: "100%", display: "block" }}
-            />
-          ) : (
-            <img
-              src={importedPreviewSrc}
-              alt={importedPreviewAsset.name}
-              style={{ width: "100%", borderRadius: 4, display: "block" }}
-            />
           )}
-          <Typography
-            variant="caption"
-            sx={{ color: "text.secondary", mt: 0.5, display: "block" }}
-          >
-            {importedPreviewAsset.name}
-            {importedAssets.length > 1
-              ? ` (+${importedAssets.length - 1} more)`
-              : ""}
-          </Typography>
-        </Box>
-      )}
 
-      {/* Send to Timeline */}
-      {sendableAssets.length > 0 && (
-        <Box sx={{ px: 2, pb: 2 }}>
-          <Button
-            data-testid="generation-send-to-timeline-button"
-            fullWidth
-            variant="outlined"
-            size="small"
-            startIcon={<Timeline />}
-            onClick={handleSendToTimeline}
-            sx={{ textTransform: "none" }}
-          >
-            Send to Timeline
-          </Button>
-        </Box>
-      )}
+          {/* Send to Timeline */}
+          {sendableAssets.length > 0 && (
+            <Box sx={{ px: 2, pb: 2 }}>
+              <Button
+                data-testid="generation-send-to-timeline-button"
+                fullWidth
+                variant="outlined"
+                size="small"
+                startIcon={<Timeline />}
+                onClick={handleSendToTimeline}
+                sx={{ textTransform: "none" }}
+              >
+                Send to Timeline
+              </Button>
+            </Box>
+          )}
 
-      {/* Error */}
-      {(displayJob?.status === "error" || showPostprocessErrorOnly) && (
-        <Box sx={{ px: 2, pb: 2 }}>
-          <Typography color="error" variant="caption">
-            Error:{" "}
-            {displayJob?.status === "error"
-              ? displayJob.error
-              : displayJob?.postprocessError}
-          </Typography>
-        </Box>
-      )}
+          {/* Error */}
+          {(displayJob?.status === "error" || showPostprocessErrorOnly) && (
+            <Box sx={{ px: 2, pb: 2 }}>
+              <Typography color="error" variant="caption">
+                Error:{" "}
+                {displayJob?.status === "error"
+                  ? displayJob.error
+                  : displayJob?.postprocessError}
+              </Typography>
+            </Box>
+          )}
         </>
       )}
 
@@ -1332,8 +1347,8 @@ export function GenerationPanel() {
         <DialogTitle>Save workflow changes?</DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2">
-            Save the current ComfyUI workflow back to backend assets before
-            closing the editor?
+            Workflow successfully edited for current session. Do you you want to
+            save the changes for the future?
           </Typography>
         </DialogContent>
         <DialogActions>

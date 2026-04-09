@@ -173,3 +173,36 @@ def test_resolve_workflow_rules_uses_graph_data_for_randomized_control_after_gen
     assert widget["control_after_generate"] is True
     assert widget["default_randomize"] is True
     assert widget["value_type"] == "int"
+
+
+def test_parse_workflow_inputs_includes_vhs_load_video_ffmpeg_static_fallback(
+    monkeypatch,
+):
+    monkeypatch.setattr(comfyui, "build_input_node_map", lambda: {})
+
+    inputs = comfyui._parse_workflow_inputs(
+        {
+            "644": {
+                "class_type": "VHS_LoadVideoFFmpeg",
+                "inputs": {
+                    "video": "source.webm",
+                },
+                "_meta": {
+                    "title": "Source video",
+                },
+            }
+        }
+    )
+
+    assert inputs == [
+        {
+            "id": "644:video",
+            "nodeId": "644",
+            "classType": "VHS_LoadVideoFFmpeg",
+            "inputType": "video",
+            "param": "video",
+            "label": "Source video",
+            "description": None,
+            "currentValue": "source.webm",
+        }
+    ]

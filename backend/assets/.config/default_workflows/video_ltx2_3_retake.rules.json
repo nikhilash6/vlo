@@ -5,17 +5,6 @@
     "mode": "crop"
   },
   "nodes": {
-    "110": {
-      "widgets": {
-        "text": {
-          "label": "Negative Prompt",
-          "value_type": "string",
-          "group_id": "prompt",
-          "group_title": "Prompt",
-          "group_order": 2
-        }
-      }
-    },
     "115": {
       "widgets": {
         "noise_seed": {
@@ -50,17 +39,6 @@
         }
       }
     },
-    "487": {
-      "widgets": {
-        "value": {
-          "label": "Prompt",
-          "value_type": "string",
-          "group_id": "prompt",
-          "group_title": "Prompt",
-          "group_order": 0
-        }
-      }
-    },
     "497": {
       "widgets": {
         "value": {
@@ -85,59 +63,33 @@
       }
     },
     "626": {
-      "widgets": {
-        "text": {
-          "label": "Negative Audio Prompt",
-          "value_type": "string",
-          "group_id": "prompt",
-          "group_title": "Prompt",
-          "group_order": 3
-        }
+      "present": {
+        "enabled": false
       }
     },
     "644": {
       "present": {
-        "label": "Source video"
+        "label": "Source video",
+        "input_type": "video",
+        "param": "video",
+        "class_type": "VHS_LoadVideoFFmpeg"
       },
       "selection": {
         "export_fps": 24,
         "max_frames": 361
-      },
-      "widgets": {
-        "__derived_mask_video_treatment": {
-          "label": "Transparency handling",
-          "value_type": "enum",
-          "options": [
-            "Keep transparency",
-            "Fill transparent with neutral gray",
-            "Remove transparency"
-          ],
-          "default": "Remove transparency",
-          "frontend_only": true
-        }
       }
     },
     "661": {
       "widgets": {
         "value": {
-          "label": "Retake start",
-          "value_type": "float",
-          "unit": "s",
-          "group_id": "video_generation",
-          "group_title": "Video Generation",
-          "group_order": 1
+          "hidden": true
         }
       }
     },
     "662": {
       "widgets": {
         "value": {
-          "label": "Retake end",
-          "value_type": "float",
-          "unit": "s",
-          "group_id": "video_generation",
-          "group_title": "Video Generation",
-          "group_order": 2
+          "hidden": true
         }
       }
     },

@@ -1,7 +1,38 @@
 import { describe, expect, it } from "vitest";
-import { readWorkflowFromIframe } from "../workflowBridge";
+import { parseWorkflowInputs, readWorkflowFromIframe } from "../workflowBridge";
 
 describe("workflowBridge", () => {
+  it("falls back to VHS_LoadVideoFFmpeg as a discoverable video input", () => {
+    const inputs = parseWorkflowInputs({
+      "644": {
+        class_type: "VHS_LoadVideoFFmpeg",
+        inputs: {
+          video: "source.webm",
+        },
+        _meta: {
+          title: "Source video",
+        },
+      },
+    });
+
+    expect(inputs).toEqual([
+      {
+        id: "644:video",
+        nodeId: "644",
+        classType: "VHS_LoadVideoFFmpeg",
+        inputType: "video",
+        param: "video",
+        label: "Source video",
+        description: null,
+        currentValue: "source.webm",
+        origin: "inferred",
+        dispatch: {
+          kind: "node",
+        },
+      },
+    ]);
+  });
+
   it("prefers activeWorkflow.activeState as the persisted graph source", async () => {
     const activeState = {
       nodes: [{ id: 1, widgets_values: ["new-model.safetensors"] }],
