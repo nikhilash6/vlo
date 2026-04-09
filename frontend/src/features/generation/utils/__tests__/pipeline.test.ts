@@ -336,12 +336,14 @@ describe("generation pipeline", () => {
 
   it("forwards derived-mask video treatment into the selection renderer", async () => {
     const renderSpy = vi
-      .spyOn(inputSelection, "renderTimelineSelectionToWebmWithMask")
+      .spyOn(inputSelection, "renderTimelineSelectionToWebmWithDerivedMasks")
       .mockResolvedValue({
         video: new File(["video"], "selection.webm", { type: "video/webm" }),
-        mask: new File(["mask"], "selection-mask.webm", {
-          type: "video/webm",
-        }),
+        masks: {
+          video_binary: new File(["mask"], "selection-mask.webm", {
+            type: "video/webm",
+          }),
+        },
       });
 
     const request = await frontendPreprocess(
@@ -387,8 +389,18 @@ describe("generation pipeline", () => {
         end: 24,
         fps: 24,
       }),
-      "binary",
+      [
+        {
+          sourceNodeId: "video_input",
+          maskNodeId: "mask_input",
+          maskParam: "file",
+          maskType: "binary",
+        },
+      ],
       {
+        preparedDerivedMaskVideoTreatment: "preserve_transparency",
+        preparedMaskFile: undefined,
+        preparedVideoFile: undefined,
         signal: undefined,
         videoTreatment: "fill_transparent_with_neutral_gray",
       },
@@ -400,7 +412,7 @@ describe("generation pipeline", () => {
   it("reuses cached derived-mask renders when the requested treatment still matches", async () => {
     const renderSpy = vi.spyOn(
       inputSelection,
-      "renderTimelineSelectionToWebmWithMask",
+      "renderTimelineSelectionToWebmWithDerivedMasks",
     );
     const preparedVideoFile = new File(["video"], "prepared.webm", {
       type: "video/webm",
@@ -454,6 +466,74 @@ describe("generation pipeline", () => {
     expect(renderSpy).not.toHaveBeenCalled();
     expect(request.videoInputs.video_input).toBe(preparedVideoFile);
     expect(request.videoInputs.mask_input).toBe(preparedMaskFile);
+  });
+
+  it("routes audio-timing derived masks to their own hidden video inputs", async () => {
+    vi.spyOn(
+      inputSelection,
+      "renderTimelineSelectionToWebmWithDerivedMasks",
+    ).mockResolvedValue({
+      video: new File(["video"], "selection.webm", { type: "video/webm" }),
+      masks: {
+        video_binary: new File(["visual-mask"], "selection-mask.webm", {
+          type: "video/webm",
+        }),
+        audio_timing_binary_25: new File(
+          ["audio-mask"],
+          "selection-audio-mask.webm",
+          { type: "video/webm" },
+        ),
+      },
+    });
+
+    const request = await frontendPreprocess(
+      {},
+      "workflow.json",
+      [
+        {
+          nodeId: "video_input",
+          classType: "LoadVideo",
+          inputType: "video",
+          param: "file",
+          label: "Video Input",
+          currentValue: null,
+          origin: "rule",
+        },
+      ],
+      {
+        video_input: {
+          type: "video_selection",
+          selection: {
+            start: 0,
+            end: 24,
+            clips: [],
+            fps: 24,
+          },
+        },
+      },
+      "client-id",
+      [
+        {
+          sourceNodeId: "video_input",
+          maskNodeId: "mask_input",
+          maskParam: "file",
+          maskType: "binary",
+        },
+        {
+          sourceNodeId: "video_input",
+          maskNodeId: "audio_mask_input",
+          maskParam: "file",
+          maskType: "binary",
+          purpose: "audio_timing",
+        },
+      ],
+    );
+
+    expect(request.videoInputs.video_input.name).toBe("selection.webm");
+    expect(request.videoInputs.mask_input.name).toBe("selection-mask.webm");
+    expect(request.videoInputs.audio_mask_input.name).toBe(
+      "selection-audio-mask.webm",
+    );
   });
 
   it("forwards abort signals into timeline-selection render helpers", async () => {

@@ -455,6 +455,81 @@ describe("useGenerationStore workflow editor sync", () => {
     ]);
   });
 
+  it("maps binary_audio_derived_mask_of rules into hidden audio-timing mask inputs", async () => {
+    vi.spyOn(comfyApi, "resolveWorkflowRules").mockResolvedValue({
+      workflow_id: "ltx.json",
+      rules: createDefaultWorkflowRules({
+        nodes: {
+          "202": {
+            binary_audio_derived_mask_of: "98",
+            audio_derived_mask_fps: 17,
+          },
+        },
+      }),
+      warnings: [],
+    });
+
+    useGenerationStore.setState({
+      selectedWorkflowId: "ltx.json",
+      availableWorkflows: [{ id: "ltx.json", name: "LTX" }],
+      activeRulesWarnings: [],
+      activeWorkflowRules: createDefaultWorkflowRules({
+        nodes: {
+          "202": {
+            binary_audio_derived_mask_of: "98",
+            audio_derived_mask_fps: 17,
+          },
+        },
+      }),
+      rulesWorkflowSourceId: "ltx.json",
+    });
+
+    await useGenerationStore.getState().registerWorkflowFromEditor(
+      {
+        "98": { class_type: "LoadVideo", inputs: { video: "source.mov" } },
+        "202": { class_type: "LoadVideo", inputs: { video: "audio-mask.mov" } },
+      },
+      {
+        nodes: [{ id: 98, type: "LoadVideo" }],
+      },
+      [
+        {
+          nodeId: "98",
+          classType: "LoadVideo",
+          inputType: "video",
+          param: "video",
+          label: "Video",
+          currentValue: null,
+          origin: "inferred",
+        },
+        {
+          nodeId: "202",
+          classType: "LoadVideo",
+          inputType: "video",
+          param: "video",
+          label: "Audio Mask Video",
+          currentValue: null,
+          origin: "inferred",
+        },
+      ],
+      "__temp__.json",
+    );
+
+    const state = useGenerationStore.getState();
+    expect(state.workflowInputs.map((input) => input.nodeId)).toEqual(["98"]);
+    expect(state.derivedMaskMappings).toEqual([
+      {
+        maskNodeId: "202",
+        maskParam: "video",
+        sourceNodeId: "98",
+        sourceInputId: "98:video",
+        maskType: "binary",
+        purpose: "audio_timing",
+        renderFps: 17,
+      },
+    ]);
+  });
+
   it("drops incompatible persisted rules when a different workflow is loaded into the editor tab", async () => {
     useGenerationStore.setState({
       selectedWorkflowId: "video_ltx2_3_i2v.json",

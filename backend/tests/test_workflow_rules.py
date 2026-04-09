@@ -2561,6 +2561,42 @@ def test_collect_mask_crop_pairs_allows_runtime_mode_override(tmp_path: Path):
     assert collect_mask_crop_pairs(rules, "full") == []
 
 
+def test_load_rules_for_workflow_normalizes_binary_audio_derived_masks(tmp_path: Path):
+    workflow_path = tmp_path / "example.json"
+    workflow_path.write_text("{}")
+    sidecar_path = tmp_path / "example.rules.json"
+    sidecar_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "nodes": {
+                    "2": {
+                        "binary_audio_derived_mask_of": "1",
+                        "audio_derived_mask_fps": 17,
+                    }
+                },
+            }
+        )
+    )
+
+    rules, warnings = load_rules_for_workflow(tmp_path, "example.json")
+
+    assert warnings == []
+    assert rules["nodes"]["2"]["binary_audio_derived_mask_of"] == "1"
+    assert rules["nodes"]["2"]["audio_derived_mask_fps"] == 17
+
+
+def test_collect_mask_crop_pairs_ignores_binary_audio_derived_masks():
+    rules = {
+        "nodes": {
+            "2": {"binary_audio_derived_mask_of": "1"},
+            "3": {"binary_derived_mask_of": "1"},
+        }
+    }
+
+    assert collect_mask_crop_pairs(rules) == [("1", "3")]
+
+
 def test_normalize_rules_model_compiles_v2_pipeline_and_typed_validation():
     raw_rules = {
         "version": 2,

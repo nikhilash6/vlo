@@ -7,8 +7,9 @@ import { getAssetById } from "../../userAssets/publicApi";
 import type { DerivedMaskMapping } from "../pipeline/types";
 import {
   captureFramePngAtTick,
+  pickPrimaryPreparedMaskFile,
   renderTimelineSelectionToWebm,
-  renderTimelineSelectionToWebmWithMask,
+  renderTimelineSelectionToWebmWithDerivedMasks,
 } from "../utils/inputSelection";
 import {
   createAudioSelectionPlaceholderFile,
@@ -272,9 +273,17 @@ export async function restoreMediaInputsFromMetadata(
     );
 
     if (derivedMaskMapping) {
-      const { video, mask } = await renderTimelineSelectionToWebmWithMask(
+      const sourceMappings = derivedMaskMappings.filter(
+        (mapping) =>
+          mapping.sourceInputId === inputId ||
+          (!mapping.sourceInputId && mapping.sourceNodeId === workflowInput.nodeId),
+      );
+      const cachedVisualMasks = sourceMappings.filter(
+        (mapping) => mapping.purpose !== "audio_timing",
+      );
+      const { video, masks } = await renderTimelineSelectionToWebmWithDerivedMasks(
         input.timelineSelection,
-        derivedMaskMapping.maskType,
+        cachedVisualMasks,
         {
           videoTreatment: DEFAULT_DERIVED_MASK_SOURCE_VIDEO_TREATMENT,
         },
@@ -289,7 +298,7 @@ export async function restoreMediaInputsFromMetadata(
           isExtracting: false,
           extractionRequestId: 1,
           preparedVideoFile: video,
-          preparedMaskFile: mask,
+          preparedMaskFile: pickPrimaryPreparedMaskFile(cachedVisualMasks, masks),
           preparedDerivedMaskVideoTreatment:
             DEFAULT_DERIVED_MASK_SOURCE_VIDEO_TREATMENT,
         },
@@ -411,6 +420,9 @@ export function findPreparedMaskFallback(
   }
 
   for (const mapping of derivedMaskMappings) {
+    if (mapping.purpose === "audio_timing") {
+      continue;
+    }
     if (mapping.sourceInputId) {
       const sourceInput = inputById.get(mapping.sourceInputId);
       const value = sourceInput

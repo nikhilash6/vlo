@@ -3,7 +3,13 @@ import { ExportRenderer } from "../../../renderer";
 import { useProjectStore } from "../../../project/useProjectStore";
 import { useTimelineStore } from "../../../timeline";
 import { useAssetStore } from "../../../userAssets";
-import { renderTimelineSelectionToWebmWithMask } from "../inputSelection";
+import {
+  AUDIO_TIMING_MASK_OUTPUT_SIZE,
+  DEFAULT_AUDIO_TIMING_MASK_EXPORT_FPS,
+  renderTimelineSelectionToMaskWebm,
+  renderTimelineSelectionToWebmWithDerivedMasks,
+  renderTimelineSelectionToWebmWithMask,
+} from "../inputSelection";
 
 describe("inputSelection", () => {
   beforeEach(() => {
@@ -129,5 +135,96 @@ describe("inputSelection", () => {
 
     expect(result.video.type).toBe("video/webm");
     expect(result.mask.type).toBe("video/webm");
+  });
+
+  it("renders mask-only outputs at explicit small dimensions when requested", async () => {
+    const renderSpy = vi.fn().mockResolvedValue({
+      video: new Blob(["mask"], { type: "video/webm" }),
+      outputs: {
+        mask: new Blob(["mask"], { type: "video/webm" }),
+      },
+    });
+    const createSpy = vi
+      .spyOn(ExportRenderer, "create")
+      .mockResolvedValue({ render: renderSpy } as unknown as ExportRenderer);
+
+    const timelineSelection = {
+      start: 0,
+      end: 24,
+      clips: useTimelineStore.getState().clips,
+      fps: 25,
+    };
+
+    const result = await renderTimelineSelectionToMaskWebm(
+      timelineSelection,
+      "binary",
+      {
+        outputWidth: AUDIO_TIMING_MASK_OUTPUT_SIZE,
+        outputHeight: AUDIO_TIMING_MASK_OUTPUT_SIZE,
+      },
+    );
+
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outputWidth: AUDIO_TIMING_MASK_OUTPUT_SIZE,
+        outputHeight: AUDIO_TIMING_MASK_OUTPUT_SIZE,
+      }),
+    );
+    expect(renderSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        outputWidth: AUDIO_TIMING_MASK_OUTPUT_SIZE,
+        outputHeight: AUDIO_TIMING_MASK_OUTPUT_SIZE,
+      }),
+      expect.any(Function),
+      expect.objectContaining({
+        outputs: [expect.objectContaining({ id: "mask" })],
+      }),
+    );
+    expect(result.type).toBe("video/webm");
+  });
+
+  it("uses the configured audio timing mask fps and defaults to 25 when omitted", async () => {
+    const renderSpy = vi.fn().mockResolvedValue({
+      video: new Blob(["video"], { type: "video/webm" }),
+      outputs: {
+        video: new Blob(["video"], { type: "video/webm" }),
+        mask: new Blob(["mask"], { type: "video/webm" }),
+      },
+    });
+    vi.spyOn(ExportRenderer, "create").mockResolvedValue({
+      render: renderSpy,
+    } as unknown as ExportRenderer);
+
+    const timelineSelection = {
+      start: 0,
+      end: 24,
+      clips: useTimelineStore.getState().clips,
+      fps: 24,
+    };
+
+    await renderTimelineSelectionToWebmWithDerivedMasks(timelineSelection, [
+      {
+        maskType: "binary",
+        purpose: "audio_timing",
+        renderFps: 17,
+      },
+    ]);
+
+    await renderTimelineSelectionToWebmWithDerivedMasks(timelineSelection, [
+      {
+        maskType: "binary",
+        purpose: "audio_timing",
+      },
+    ]);
+
+    expect(renderSpy.mock.calls[1]?.[3]).toMatchObject({
+      timelineSelection: expect.objectContaining({ fps: 17 }),
+    });
+    expect(renderSpy.mock.calls[3]?.[3]).toMatchObject({
+      timelineSelection: expect.objectContaining({
+        fps: DEFAULT_AUDIO_TIMING_MASK_EXPORT_FPS,
+      }),
+    });
   });
 });

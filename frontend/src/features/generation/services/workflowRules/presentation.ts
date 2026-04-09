@@ -252,9 +252,22 @@ export function resolvePresentedInputsFromRules(
     // Nodes with a derived mask rule are hidden from the UI; they are
     // auto-populated during preprocessing with the rendered mask.
     const derivedMask = nodeRule?.binary_derived_mask_of
-      ? ({ sourceNodeId: nodeRule.binary_derived_mask_of, maskType: "binary" } as const)
+      ? ({
+          sourceNodeId: nodeRule.binary_derived_mask_of,
+          maskType: "binary",
+        } as const)
       : nodeRule?.soft_derived_mask_of
-        ? ({ sourceNodeId: nodeRule.soft_derived_mask_of, maskType: "soft" } as const)
+        ? ({
+            sourceNodeId: nodeRule.soft_derived_mask_of,
+            maskType: "soft",
+          } as const)
+        : nodeRule?.binary_audio_derived_mask_of
+          ? ({
+              sourceNodeId: nodeRule.binary_audio_derived_mask_of,
+              maskType: "binary",
+              purpose: "audio_timing",
+              renderFps: nodeRule.audio_derived_mask_fps ?? undefined,
+            } as const)
         : null;
     if (derivedMask) {
       derivedMaskMappings.push({
@@ -268,6 +281,8 @@ export function resolvePresentedInputsFromRules(
               )
             : undefined,
         maskType: derivedMask.maskType,
+        purpose: derivedMask.purpose,
+        renderFps: derivedMask.renderFps,
       });
       continue;
     }

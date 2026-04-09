@@ -666,10 +666,26 @@ def _normalize_rules_dict(raw: Any) -> tuple[WorkflowRules, list[WorkflowRuleWar
             if selection:
                 node_rule["selection"] = selection
 
-        for mask_key in ("binary_derived_mask_of", "soft_derived_mask_of"):
+        for mask_key in (
+            "binary_derived_mask_of",
+            "soft_derived_mask_of",
+            "binary_audio_derived_mask_of",
+        ):
             raw_val = raw_node_rule.get(mask_key)
             if isinstance(raw_val, str) and raw_val.strip():
                 node_rule[mask_key] = raw_val.strip()
+
+        audio_derived_mask_fps = _to_positive_int(raw_node_rule.get("audio_derived_mask_fps"))
+        if audio_derived_mask_fps is not None:
+            node_rule["audio_derived_mask_fps"] = audio_derived_mask_fps
+        elif "audio_derived_mask_fps" in raw_node_rule:
+            warnings.append(
+                _warning(
+                    "invalid_audio_derived_mask_fps",
+                    "Node audio_derived_mask_fps must be a positive integer",
+                    node_id=node_id,
+                )
+            )
 
         normalized_nodes[node_id] = node_rule
 

@@ -388,6 +388,24 @@ function normalizeNodeRules(
     if (typeof nodeRuleUnknown.soft_derived_mask_of === "string") {
       nodeRule.soft_derived_mask_of = nodeRuleUnknown.soft_derived_mask_of;
     }
+    if (typeof nodeRuleUnknown.binary_audio_derived_mask_of === "string") {
+      nodeRule.binary_audio_derived_mask_of =
+        nodeRuleUnknown.binary_audio_derived_mask_of;
+    }
+    const audioDerivedMaskFps = toPositiveInteger(
+      nodeRuleUnknown.audio_derived_mask_fps,
+    );
+    if (audioDerivedMaskFps !== null) {
+      nodeRule.audio_derived_mask_fps = audioDerivedMaskFps;
+    } else if (nodeRuleUnknown.audio_derived_mask_fps !== undefined) {
+      warnings.push(
+        toRulesWarning(
+          "invalid_audio_derived_mask_fps",
+          `Node '${nodeId}' has invalid audio_derived_mask_fps`,
+          nodeId,
+        ),
+      );
+    }
 
     nodes[nodeId] = nodeRule;
   }

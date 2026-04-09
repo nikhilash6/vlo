@@ -125,6 +125,30 @@
           "default": null,
           "title": "Binary Derived Mask Of"
         },
+        "binary_audio_derived_mask_of": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Binary Audio Derived Mask Of"
+        },
+        "audio_derived_mask_fps": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audio Derived Mask Fps"
+        },
         "ignore": {
           "default": false,
           "title": "Ignore",

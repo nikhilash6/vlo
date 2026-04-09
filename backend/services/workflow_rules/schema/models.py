@@ -100,6 +100,8 @@ class WorkflowRuleNodeBase(WorkflowRuleBaseModel):
     selection: WorkflowRuleSelectionConfig | None = None
     binary_derived_mask_of: str | None = None
     soft_derived_mask_of: str | None = None
+    binary_audio_derived_mask_of: str | None = None
+    audio_derived_mask_fps: int | None = None
 
 
 class AuthoredWorkflowRuleNodeV1(WorkflowRuleNodeBase):

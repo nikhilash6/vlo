@@ -3,7 +3,8 @@ import type { WorkflowSelectionConfig } from "../../types";
 import { DEFAULT_DERIVED_MASK_SOURCE_VIDEO_TREATMENT } from "../../derivedMaskVideoTreatment";
 import {
   renderTimelineSelectionToWebm,
-  renderTimelineSelectionToWebmWithMask,
+  getDerivedMaskRenderKey,
+  renderTimelineSelectionToWebmWithDerivedMasks,
 } from "../../utils/inputSelection";
 import {
   buildWorkflowInputLookup,
@@ -13,7 +14,6 @@ import { prepareNormalizedSelection } from "./selectionHelpers";
 import { throwIfAborted } from "../utils/abort";
 import type {
   DerivedMaskMapping,
-  DerivedMaskType,
   FrontendPreprocessContext,
   Processor,
 } from "../types";
@@ -74,29 +74,45 @@ export const collectVideoInputs: Processor<FrontendPreprocessContext> = {
       );
     }
 
-    async function normalizeVideoSelectionWithMask(
+    async function normalizeVideoSelectionWithDerivedMasks(
       selection: TimelineSelection,
-      maskType: DerivedMaskType,
+      masks: readonly DerivedMaskMapping[],
       videoTreatment = DEFAULT_DERIVED_MASK_SOURCE_VIDEO_TREATMENT,
       preparedVideoFile?: File,
       preparedMaskFile?: File,
       preparedVideoTreatment = DEFAULT_DERIVED_MASK_SOURCE_VIDEO_TREATMENT,
       config?: WorkflowSelectionConfig,
-    ): Promise<{ video: File; mask: File }> {
+    ) {
+      const visualMasks = masks.filter((mask) => mask.purpose !== "audio_timing");
+      const hasAudioTimingMasks = visualMasks.length !== masks.length;
+      const uniqueVisualMaskKeys = new Set(
+        visualMasks.map((mask) => getDerivedMaskRenderKey(mask)),
+      );
       if (
+        !hasAudioTimingMasks &&
+        uniqueVisualMaskKeys.size === 1 &&
         preparedVideoFile &&
         preparedMaskFile &&
         preparedVideoTreatment === videoTreatment
       ) {
-        return { video: preparedVideoFile, mask: preparedMaskFile };
+        const [visualMaskKey] = [...uniqueVisualMaskKeys];
+        return {
+          video: preparedVideoFile,
+          masks: {
+            [visualMaskKey]: preparedMaskFile,
+          },
+        };
       }
       throwIfAborted(ctx.signal);
-      return renderTimelineSelectionToWebmWithMask(
+      return renderTimelineSelectionToWebmWithDerivedMasks(
         prepareNormalizedSelection(selection, projectFps, config),
-        maskType,
+        masks,
         {
           signal: ctx.signal,
           videoTreatment,
+          preparedVideoFile,
+          preparedMaskFile,
+          preparedDerivedMaskVideoTreatment: preparedVideoTreatment,
         },
       );
     }
@@ -119,9 +135,9 @@ export const collectVideoInputs: Processor<FrontendPreprocessContext> = {
           const videoTreatment =
             value.derivedMaskVideoTreatment ??
             DEFAULT_DERIVED_MASK_SOURCE_VIDEO_TREATMENT;
-          const result = await normalizeVideoSelectionWithMask(
+          const result = await normalizeVideoSelectionWithDerivedMasks(
             value.selection,
-            masks[0].maskType,
+            masks,
             videoTreatment,
             value.preparedVideoFile,
             value.preparedMaskFile,
@@ -140,7 +156,13 @@ export const collectVideoInputs: Processor<FrontendPreprocessContext> = {
             const maskRequestKey = maskInput
               ? getNodeInputRequestKey(maskInput, inputById)
               : mask.maskNodeId;
-            ctx.videoInputs[maskRequestKey] = result.mask;
+            const renderedMask = result.masks[getDerivedMaskRenderKey(mask)];
+            if (!renderedMask) {
+              throw new Error(
+                `Derived mask render '${getDerivedMaskRenderKey(mask)}' was requested but not produced`,
+              );
+            }
+            ctx.videoInputs[maskRequestKey] = renderedMask;
           }
         } else {
           ctx.videoInputs[getNodeInputRequestKey(input, inputById)] =

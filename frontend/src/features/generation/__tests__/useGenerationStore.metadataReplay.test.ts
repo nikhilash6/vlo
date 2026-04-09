@@ -8,7 +8,8 @@ import type { Asset } from "../../../types/Asset";
 const mocks = vi.hoisted(() => ({
   captureFramePngAtTick: vi.fn(),
   renderTimelineSelectionToWebm: vi.fn(),
-  renderTimelineSelectionToWebmWithMask: vi.fn(),
+  renderTimelineSelectionToWebmWithDerivedMasks: vi.fn(),
+  pickPrimaryPreparedMaskFile: vi.fn(),
   extractAudioFromSelection: vi.fn(),
   createAudioSelectionPlaceholderFile: vi.fn(),
   injectWorkflowAndRead: vi.fn(),
@@ -17,8 +18,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../utils/inputSelection", () => ({
   captureFramePngAtTick: mocks.captureFramePngAtTick,
   renderTimelineSelectionToWebm: mocks.renderTimelineSelectionToWebm,
-  renderTimelineSelectionToWebmWithMask:
-    mocks.renderTimelineSelectionToWebmWithMask,
+  renderTimelineSelectionToWebmWithDerivedMasks:
+    mocks.renderTimelineSelectionToWebmWithDerivedMasks,
+  pickPrimaryPreparedMaskFile: mocks.pickPrimaryPreparedMaskFile,
 }));
 
 vi.mock("../utils/manualSlotMedia", () => ({
@@ -35,7 +37,8 @@ describe("useGenerationStore metadata replay", () => {
     vi.restoreAllMocks();
     mocks.captureFramePngAtTick.mockReset();
     mocks.renderTimelineSelectionToWebm.mockReset();
-    mocks.renderTimelineSelectionToWebmWithMask.mockReset();
+    mocks.renderTimelineSelectionToWebmWithDerivedMasks.mockReset();
+    mocks.pickPrimaryPreparedMaskFile.mockReset();
     mocks.extractAudioFromSelection.mockReset();
     mocks.createAudioSelectionPlaceholderFile.mockReset();
     mocks.injectWorkflowAndRead.mockReset();
@@ -69,12 +72,19 @@ describe("useGenerationStore metadata replay", () => {
     mocks.renderTimelineSelectionToWebm.mockResolvedValue(
       new File(["video"], "selection.webm", { type: "video/webm" }),
     );
-    mocks.renderTimelineSelectionToWebmWithMask.mockResolvedValue({
+    mocks.renderTimelineSelectionToWebmWithDerivedMasks.mockResolvedValue({
       video: new File(["video"], "selection.webm", { type: "video/webm" }),
-      mask: new File(["mask"], "selection-mask.webm", {
+      masks: {
+        video_binary: new File(["mask"], "selection-mask.webm", {
+          type: "video/webm",
+        }),
+      },
+    });
+    mocks.pickPrimaryPreparedMaskFile.mockReturnValue(
+      new File(["mask"], "selection-mask.webm", {
         type: "video/webm",
       }),
-    });
+    );
     mocks.extractAudioFromSelection.mockResolvedValue(
       new File(["audio"], "selection.wav", { type: "audio/wav" }),
     );

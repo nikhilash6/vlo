@@ -23,7 +23,8 @@ import type { SlotValue } from "../utils/pipeline";
 import {
   captureFramePngAtTick,
   renderTimelineSelectionToWebm,
-  renderTimelineSelectionToWebmWithMask,
+  pickPrimaryPreparedMaskFile,
+  renderTimelineSelectionToWebmWithDerivedMasks,
 } from "../utils/inputSelection";
 import {
   createAudioSelectionPlaceholderFile,
@@ -208,13 +209,18 @@ async function extractVideoTimelineSelection({
         );
 
   if (nodeMasks.length > 0) {
+    const cachedVisualMasks = nodeMasks.filter(
+      (mask) => mask.purpose !== "audio_timing",
+    );
     const videoTreatment =
       derivedMaskVideoTreatmentBySourceNodeId[inputNodeId ?? inputId] ??
       DEFAULT_DERIVED_MASK_SOURCE_VIDEO_TREATMENT;
-    const { video, mask } = await renderTimelineSelectionToWebmWithMask(
+    const { video, masks } = await renderTimelineSelectionToWebmWithDerivedMasks(
       timelineSelection,
-      nodeMasks[0].maskType,
+      cachedVisualMasks,
       {
+        preparedVideoFile: undefined,
+        preparedMaskFile: undefined,
         videoTreatment,
       },
     );
@@ -226,7 +232,7 @@ async function extractVideoTimelineSelection({
       isExtracting: false,
       extractionRequestId,
       preparedVideoFile: video,
-      preparedMaskFile: mask,
+      preparedMaskFile: pickPrimaryPreparedMaskFile(cachedVisualMasks, masks),
       preparedDerivedMaskVideoTreatment: videoTreatment,
     });
     return;

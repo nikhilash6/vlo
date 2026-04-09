@@ -417,7 +417,11 @@ def _apply_default_required_input_validation(
             continue
         if node_rule.get("ignore"):
             continue
-        if node_rule.get("binary_derived_mask_of") or node_rule.get("soft_derived_mask_of"):
+        if (
+            node_rule.get("binary_derived_mask_of")
+            or node_rule.get("soft_derived_mask_of")
+            or node_rule.get("binary_audio_derived_mask_of")
+        ):
             continue
 
         present = node_rule.get("present")

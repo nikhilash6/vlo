@@ -22,6 +22,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 export type DerivedMaskType = "binary" | "soft";
+export type DerivedMaskPurpose = "video" | "audio_timing";
 
 export interface DerivedMaskMapping {
   /** Node ID of the mask input (the one that receives the rendered mask) */
@@ -34,6 +35,10 @@ export interface DerivedMaskMapping {
   sourceInputId?: string;
   /** The type of mask transform to apply during rendering */
   maskType: DerivedMaskType;
+  /** How the rendered mask will be used by the workflow. */
+  purpose?: DerivedMaskPurpose;
+  /** Optional export FPS override for temporal/audio timing masks. */
+  renderFps?: number;
 }
 
 // ---------------------------------------------------------------------------
