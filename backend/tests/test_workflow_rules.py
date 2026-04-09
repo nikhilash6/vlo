@@ -1462,6 +1462,34 @@ def test_real_vace_inpaint_discovers_seed_widget_for_ksampler():
     assert sampler_widgets["seed"]["control_after_generate"] is True
 
 
+def test_real_ltx_retake_rules_define_dual_masks_and_primary_seed():
+    base = Path(__file__).resolve().parents[1] / "assets" / ".config" / "default_workflows"
+    workflow_path = base / "video_ltx2_3_retake.json"
+    workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+
+    set_object_info_cache(None)
+    try:
+        rules_model, warnings = load_rules_model_for_workflow(base, workflow_path.name)
+        assert warnings == []
+        rules_model = enrich_rules_with_object_info(rules_model, workflow)
+        rules = dump_resolved_rules(rules_model)
+    finally:
+        set_object_info_cache(None)
+
+    assert rules["mask_cropping"]["mode"] == "crop"
+    assert rules["nodes"]["689"]["binary_derived_mask_of"] == "644"
+    assert rules["nodes"]["691"]["binary_audio_derived_mask_of"] == "644"
+    assert rules["nodes"]["691"]["audio_derived_mask_fps"] == 25
+
+    sampler_widgets = rules["nodes"]["115"]["widgets"]
+    upscale_widgets = rules["nodes"]["243"]["widgets"]
+    prompt_widgets = rules["nodes"]["594"]["widgets"]
+    assert sampler_widgets["noise_seed"]["control_after_generate"] is True
+    assert sampler_widgets["noise_seed"].get("hidden") is not True
+    assert upscale_widgets["noise_seed"]["hidden"] is True
+    assert prompt_widgets["value"]["default"] is False
+
+
 def test_real_ltx_single_stage_discovers_resize_image_mask_node_as_ar_target():
     workflow_path = (
         Path(__file__).resolve().parents[2]

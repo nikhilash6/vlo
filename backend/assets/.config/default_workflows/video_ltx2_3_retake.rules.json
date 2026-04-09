@@ -1,0 +1,152 @@
+{
+  "name": "LTX2.3 ReTake",
+  "version": 1,
+  "mask_cropping": {
+    "mode": "crop"
+  },
+  "nodes": {
+    "110": {
+      "widgets": {
+        "text": {
+          "label": "Negative Prompt",
+          "value_type": "string",
+          "group_id": "prompt",
+          "group_title": "Prompt",
+          "group_order": 2
+        }
+      }
+    },
+    "115": {
+      "widgets": {
+        "noise_seed": {
+          "label": "Noise seed",
+          "control_after_generate": true,
+          "value_type": "int",
+          "group_id": "video_generation",
+          "group_title": "Video Generation",
+          "group_order": 3
+        }
+      }
+    },
+    "214": {
+      "widgets": {
+        "value": {
+          "label": "FPS",
+          "hidden": true,
+          "value_type": "float",
+          "group_id": "video_generation",
+          "group_title": "Video Generation",
+          "group_order": 4
+        }
+      }
+    },
+    "243": {
+      "widgets": {
+        "noise_seed": {
+          "label": "Upscale noise seed",
+          "control_after_generate": true,
+          "value_type": "int",
+          "hidden": true
+        }
+      }
+    },
+    "487": {
+      "widgets": {
+        "value": {
+          "label": "Prompt",
+          "value_type": "string",
+          "group_id": "prompt",
+          "group_title": "Prompt",
+          "group_order": 0
+        }
+      }
+    },
+    "497": {
+      "widgets": {
+        "value": {
+          "label": "Max Pixel Size (Longest Side)",
+          "value_type": "int",
+          "group_id": "video_generation",
+          "group_title": "Video Generation",
+          "group_order": 0
+        }
+      }
+    },
+    "594": {
+      "widgets": {
+        "value": {
+          "label": "Enable prompt enhancer",
+          "value_type": "boolean",
+          "default": false,
+          "group_id": "prompt",
+          "group_title": "Prompt",
+          "group_order": 1
+        }
+      }
+    },
+    "626": {
+      "widgets": {
+        "text": {
+          "label": "Negative Audio Prompt",
+          "value_type": "string",
+          "group_id": "prompt",
+          "group_title": "Prompt",
+          "group_order": 3
+        }
+      }
+    },
+    "644": {
+      "present": {
+        "label": "Source video"
+      },
+      "selection": {
+        "export_fps": 24,
+        "max_frames": 361
+      },
+      "widgets": {
+        "__derived_mask_video_treatment": {
+          "label": "Transparency handling",
+          "value_type": "enum",
+          "options": [
+            "Keep transparency",
+            "Fill transparent with neutral gray",
+            "Remove transparency"
+          ],
+          "default": "Remove transparency",
+          "frontend_only": true
+        }
+      }
+    },
+    "661": {
+      "widgets": {
+        "value": {
+          "label": "Retake start",
+          "value_type": "float",
+          "unit": "s",
+          "group_id": "video_generation",
+          "group_title": "Video Generation",
+          "group_order": 1
+        }
+      }
+    },
+    "662": {
+      "widgets": {
+        "value": {
+          "label": "Retake end",
+          "value_type": "float",
+          "unit": "s",
+          "group_id": "video_generation",
+          "group_title": "Video Generation",
+          "group_order": 2
+        }
+      }
+    },
+    "689": {
+      "binary_derived_mask_of": "644"
+    },
+    "691": {
+      "binary_audio_derived_mask_of": "644",
+      "audio_derived_mask_fps": 25
+    }
+  }
+}
