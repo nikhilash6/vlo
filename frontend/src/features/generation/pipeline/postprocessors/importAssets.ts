@@ -9,6 +9,17 @@ import {
 
 const pendingAutoFamilies = new Map<string, AssetFamily>();
 
+function getRawImportFiles(ctx: FrontendPostprocessContext): File[] {
+  const fetchedFiles = ctx.fetchedFiles.map(({ file }) => file);
+  if (fetchedFiles.length > 0) {
+    return fetchedFiles;
+  }
+
+  return ctx.previewFrameFiles.filter(
+    (file) => getOutputMediaKindFromFile(file) === "image",
+  );
+}
+
 /**
  * If a prepared mask file exists, ingest it as a separate asset first and
  * link it to the generation metadata so all subsequently ingested output
@@ -209,7 +220,9 @@ export const importAssets: Processor<FrontendPostprocessContext> = {
       return;
     }
 
-    for (const { file } of ctx.fetchedFiles) {
+    const rawImportFiles = getRawImportFiles(ctx);
+
+    for (const file of rawImportFiles) {
       const asset = await ingestGeneratedAsset(
         file,
         ctx,
@@ -225,28 +238,9 @@ export const importAssets: Processor<FrontendPostprocessContext> = {
     }
 
     if (ctx.stitchMessage) {
-      const fallbackFrame =
-        ctx.fetchedFiles
-          .map(({ file }) => file)
-          .find((file) => getOutputMediaKindFromFile(file) === "image") ??
-        ctx.previewFrameFiles.find(
-          (file) => getOutputMediaKindFromFile(file) === "image",
-        );
-
-      if (fallbackFrame && ctx.importedAssetIds.length === 0) {
-        const fallbackAsset = await ingestGeneratedAsset(
-          fallbackFrame,
-          ctx,
-          addLocalAsset,
-          getFamilies,
-          upsertFamily,
-          inspectAssetFamilyCompatibility,
-          pendingFamilies,
-        );
-        if (fallbackAsset) {
-          ctx.importedAssetIds.push(fallbackAsset.id);
-        }
-      }
+      const fallbackFrame = rawImportFiles.find(
+        (file) => getOutputMediaKindFromFile(file) === "image",
+      );
 
       if (
         fallbackFrame &&

@@ -881,6 +881,40 @@ describe("generation pipeline", () => {
     });
   });
 
+  it("imports a single websocket-only image output in auto mode", async () => {
+    const previewFrame = new File(["frame-1"], "ws_0001.png", {
+      type: "image/png",
+    });
+    mockAddLocalAsset.mockResolvedValue({ id: "asset-frame-only-auto" });
+
+    const result = await frontendPostprocess(
+      [],
+      {
+        postprocessing: {
+          mode: "auto",
+          panel_preview: "raw_outputs",
+          on_failure: "fallback_raw",
+        },
+        aspectRatioProcessing: null,
+        generationMetadata: makeGenerationMetadata(),
+        previewFrameFiles: [previewFrame],
+      },
+    );
+
+    expect(mockFetchOutputAsFile).not.toHaveBeenCalled();
+    expect(mockPackageFramesAndAudioToVideo).not.toHaveBeenCalled();
+    expect(mockAddLocalAsset).toHaveBeenCalledTimes(1);
+    expect(mockAddLocalAsset).toHaveBeenCalledWith(
+      previewFrame,
+      makeGenerationMetadata(),
+    );
+    expect(result).toEqual({
+      postprocessedPreview: null,
+      postprocessError: null,
+      importedAssetIds: ["asset-frame-only-auto"],
+    });
+  });
+
   it("returns websocket PNG with message when only one frame is available", async () => {
     const previewFrame = new File(["frame-1"], "ws_0001.png", {
       type: "image/png",
