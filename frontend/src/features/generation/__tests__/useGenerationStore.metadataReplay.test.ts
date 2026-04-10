@@ -838,6 +838,76 @@ describe("useGenerationStore metadata replay", () => {
     });
   });
 
+  it("sanitizes malformed saved timeline selections before audio replay", async () => {
+    const preparedAudioFile = new File(["audio"], "selection.wav", {
+      type: "audio/wav",
+    });
+    const placeholderFile = new File(
+      ["audio-selection-thumbnail-placeholder"],
+      "generation-audio-selection-placeholder.txt",
+      { type: "text/plain" },
+    );
+    const generatedAsset: Asset = {
+      id: "generated-audio-corrupt",
+      hash: "hash-generated-audio-corrupt",
+      name: "generated-audio.wav",
+      type: "audio",
+      src: "generated-audio.wav",
+      createdAt: Date.now(),
+      creationMetadata: {
+        source: "generated",
+        workflowName: "Original Workflow",
+        inputs: [
+          {
+            nodeId: "145",
+            kind: "timelineSelection",
+            timelineSelection: {
+              start: 10,
+              end: 40,
+              clips: [null as unknown as never],
+            },
+          },
+        ],
+        replayState: {
+          version: 1,
+          workflowInputs: [
+            {
+              nodeId: "145",
+              classType: "LoadAudio",
+              inputType: "audio",
+              param: "audio",
+              label: "Audio Input",
+              origin: "rule",
+            },
+          ],
+        },
+        comfyuiPrompt: {
+          "145": {
+            class_type: "LoadAudio",
+            inputs: { audio: "selection.wav" },
+          },
+        },
+      },
+    };
+
+    mocks.createAudioSelectionPlaceholderFile.mockReturnValue(placeholderFile);
+    mocks.extractAudioFromSelection.mockResolvedValue(preparedAudioFile);
+    vi.spyOn(comfyApi, "listWorkflows").mockResolvedValue([]);
+
+    await useGenerationStore
+      .getState()
+      .loadWorkflowFromAssetMetadata(generatedAsset);
+
+    expect(mocks.extractAudioFromSelection).toHaveBeenCalledWith(
+      {
+        start: 10,
+        end: 40,
+        clips: [],
+      },
+      { exportFps: undefined },
+    );
+  });
+
   it("falls back to the saved workflow name when no workflow snapshot is stored", async () => {
     const sourceAsset: Asset = {
       id: "source-asset",

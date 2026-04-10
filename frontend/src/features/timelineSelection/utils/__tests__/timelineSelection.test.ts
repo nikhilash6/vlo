@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getTicksPerFrame,
+  normalizeTimelineSelection,
   resolveSelectionFps,
   resolveSelectionFrameStep,
   snapFrameCountToStep,
@@ -31,5 +32,38 @@ describe("timelineSelection helpers", () => {
 
   it("computes ticks per frame from fps", () => {
     expect(getTicksPerFrame(30)).toBe(TICKS_PER_SECOND / 30);
+  });
+
+  it("filters malformed clips from saved selections and recovers from the timeline", () => {
+    const timelineClip = {
+      id: "clip-1",
+      type: "video" as const,
+      name: "Clip",
+      assetId: "asset-1",
+      sourceDuration: 100,
+      transformedDuration: 100,
+      transformedOffset: 0,
+      timelineDuration: 100,
+      croppedSourceDuration: 100,
+      offset: 0,
+      transformations: [],
+      trackId: "track-1",
+      start: 0,
+    };
+
+    expect(
+      normalizeTimelineSelection(
+        {
+          start: 0,
+          end: 100,
+          clips: [null as unknown as typeof timelineClip],
+        },
+        [timelineClip],
+      ),
+    ).toEqual({
+      start: 0,
+      end: 100,
+      clips: [timelineClip],
+    });
   });
 });

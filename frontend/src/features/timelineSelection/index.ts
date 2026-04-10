@@ -3,6 +3,7 @@ export { useTimelineSelectionStore } from "./useTimelineSelectionStore";
 export {
   getClipsInSelection,
   getTicksPerFrame,
+  normalizeTimelineSelection,
   resolveSelectionFps,
   resolveSelectionFrameStep,
   snapFrameCountToStep,

@@ -89,3 +89,42 @@ export function getClipsInSelection(
     return maxStart < minEnd;
   });
 }
+
+function isTimelineClip(value: unknown): value is TimelineClip {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const candidate = value as Partial<TimelineClip>;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.type === "string" &&
+    typeof candidate.start === "number" &&
+    typeof candidate.timelineDuration === "number"
+  );
+}
+
+export function normalizeTimelineSelection(
+  selection: TimelineSelection,
+  availableClips: TimelineClip[] = [],
+): TimelineSelection {
+  const rawClips = Array.isArray(selection.clips) ? selection.clips : [];
+  const validClips = rawClips.filter(isTimelineClip);
+
+  if (validClips.length === rawClips.length) {
+    return selection;
+  }
+
+  const recoveredClips =
+    availableClips.length > 0
+      ? getClipsInSelection(availableClips, {
+          ...selection,
+          clips: [],
+        })
+      : validClips;
+
+  return {
+    ...selection,
+    clips: recoveredClips,
+  };
+}

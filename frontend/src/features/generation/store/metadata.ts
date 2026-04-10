@@ -3,7 +3,10 @@ import type {
   GeneratedCreationReplayState,
   GeneratedCreationWorkflowInputSnapshot,
 } from "../../../types/Asset";
+import type { TimelineSelection } from "../../../types/TimelineTypes";
 import { getAssetById } from "../../userAssets/publicApi";
+import { useTimelineStore } from "../../timeline";
+import { normalizeTimelineSelection } from "../../timelineSelection";
 import type { DerivedMaskMapping } from "../pipeline/types";
 import {
   captureFramePngAtTick,
@@ -183,6 +186,7 @@ export async function restoreMediaInputsFromMetadata(
     | "setMediaInputTimelineSelection"
   >,
 ): Promise<void> {
+  const timelineClips = useTimelineStore.getState().clips;
   const workflowInputByNodeId = new Map<string, WorkflowInput>();
   for (const workflowInput of workflowInputs) {
     if (!workflowInputByNodeId.has(workflowInput.nodeId)) {
@@ -210,15 +214,20 @@ export async function restoreMediaInputsFromMetadata(
       continue;
     }
 
+    const timelineSelection = normalizeTimelineSelection(
+      input.timelineSelection,
+      timelineClips,
+    );
+
     if (workflowInput.inputType === "image") {
       const frameFile = await captureFramePngAtTick(
-        input.timelineSelection.start,
+        timelineSelection.start,
         "generation-frame",
       );
       actions.setMediaInputFrameWithSelection(
         inputId,
         frameFile,
-        input.timelineSelection,
+        timelineSelection,
       );
       continue;
     }
@@ -227,12 +236,12 @@ export async function restoreMediaInputsFromMetadata(
       workflowInput.inputType === "audio"
         ? createAudioSelectionPlaceholderFile()
         : await captureFramePngAtTick(
-            input.timelineSelection.start,
+            timelineSelection.start,
             "generation-selection-thumb",
           );
     actions.setMediaInputTimelineSelection(
       inputId,
-      input.timelineSelection,
+      timelineSelection,
       thumbnailFile,
       {
         mediaType: workflowInput.inputType === "audio" ? "audio" : "video",
@@ -242,15 +251,12 @@ export async function restoreMediaInputsFromMetadata(
     );
 
     if (workflowInput.inputType === "audio") {
-      const preparedAudioFile = await extractAudioFromSelection(
-        input.timelineSelection,
-        {
-          exportFps: workflowInput.dispatch?.selectionConfig?.exportFps,
-        },
-      );
+      const preparedAudioFile = await extractAudioFromSelection(timelineSelection, {
+        exportFps: workflowInput.dispatch?.selectionConfig?.exportFps,
+      });
       actions.setMediaInputTimelineSelection(
         inputId,
-        input.timelineSelection,
+        timelineSelection,
         thumbnailFile,
         {
           mediaType: "audio",
@@ -282,7 +288,7 @@ export async function restoreMediaInputsFromMetadata(
         (mapping) => mapping.purpose !== "audio_timing",
       );
       const { video, masks } = await renderTimelineSelectionToWebmWithDerivedMasks(
-        input.timelineSelection,
+        timelineSelection,
         cachedVisualMasks,
         {
           videoTreatment: DEFAULT_DERIVED_MASK_SOURCE_VIDEO_TREATMENT,
@@ -291,7 +297,7 @@ export async function restoreMediaInputsFromMetadata(
 
       actions.setMediaInputTimelineSelection(
         inputId,
-        input.timelineSelection,
+        timelineSelection,
         thumbnailFile,
         {
           mediaType: "video",
@@ -306,12 +312,10 @@ export async function restoreMediaInputsFromMetadata(
       continue;
     }
 
-    const preparedVideoFile = await renderTimelineSelectionToWebm(
-      input.timelineSelection,
-    );
+    const preparedVideoFile = await renderTimelineSelectionToWebm(timelineSelection);
     actions.setMediaInputTimelineSelection(
       inputId,
-      input.timelineSelection,
+      timelineSelection,
       thumbnailFile,
       {
         mediaType: "video",
@@ -354,7 +358,9 @@ export function buildGeneratedCreationMetadata(
       inputs.push({
         nodeId: workflowInput.nodeId,
         kind: "timelineSelection",
-        timelineSelection: value.timelineSelection,
+        timelineSelection: cloneTimelineSelectionForMetadata(
+          value.timelineSelection,
+        ),
       });
       continue;
     }
@@ -363,7 +369,9 @@ export function buildGeneratedCreationMetadata(
       inputs.push({
         nodeId: workflowInput.nodeId,
         kind: "timelineSelection",
-        timelineSelection: value.timelineSelection,
+        timelineSelection: cloneTimelineSelectionForMetadata(
+          value.timelineSelection,
+        ),
       });
       continue;
     }
@@ -404,6 +412,12 @@ export function buildGeneratedCreationMetadata(
   }
 
   return metadata;
+}
+
+function cloneTimelineSelectionForMetadata(
+  selection: TimelineSelection,
+): TimelineSelection {
+  return structuredClone(selection);
 }
 
 export function findPreparedMaskFallback(

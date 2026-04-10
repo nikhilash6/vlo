@@ -239,4 +239,114 @@ describe("generation metadata replay helpers", () => {
       },
     ]);
   });
+
+  it("snapshots shared clip selections independently for frame and audio inputs", () => {
+    const sharedClip = {
+      id: "clip-1",
+      type: "video" as const,
+      name: "Clip",
+      assetId: "asset-1",
+      sourceDuration: 100,
+      transformedDuration: 100,
+      transformedOffset: 0,
+      timelineDuration: 100,
+      croppedSourceDuration: 100,
+      offset: 0,
+      transformations: [],
+      trackId: "track-1",
+      start: 0,
+    };
+    const frameSelection = {
+      start: 10,
+      clips: [sharedClip],
+      fps: 24,
+    };
+    const audioSelection = {
+      start: 0,
+      end: 100,
+      clips: [sharedClip],
+      fps: 24,
+    };
+    const workflowInputs: WorkflowInput[] = [
+      {
+        id: "45:image",
+        nodeId: "45",
+        classType: "LoadImage",
+        inputType: "image",
+        param: "image",
+        label: "Start Frame",
+        currentValue: null,
+        origin: "rule",
+      },
+      {
+        id: "232:audio",
+        nodeId: "232",
+        classType: "LoadAudio",
+        inputType: "audio",
+        param: "audio",
+        label: "Custom Audio",
+        currentValue: null,
+        origin: "rule",
+      },
+    ];
+
+    const metadata = buildGeneratedCreationMetadata({
+      workflowName: "Workflow",
+      workflowSourceId: "video_ltx2_3_flf2v.json",
+      workflowInputs,
+      mediaInputs: {
+        "45:image": {
+          kind: "frame",
+          file: new File(["frame"], "frame.png", { type: "image/png" }),
+          previewUrl: "blob:frame",
+          timelineSelection: frameSelection,
+        },
+        "232:audio": {
+          kind: "timelineSelection",
+          mediaType: "audio",
+          timelineSelection: audioSelection,
+          thumbnailFile: new File(["thumb"], "thumb.txt", {
+            type: "text/plain",
+          }),
+          thumbnailUrl: "blob:thumb",
+          isExtracting: false,
+          extractionRequestId: 0,
+          preparedAudioFile: null,
+          extractionError: null,
+        },
+      },
+      slotValues: {},
+      targetResolution: 720,
+      exactAspectRatio: false,
+      maskCropMode: "crop",
+      maskCropDilation: 0.1,
+      widgetInputs: {},
+      widgetModes: {},
+      derivedWidgetInputs: {},
+    });
+
+    expect(metadata.inputs).toHaveLength(2);
+    expect(metadata.inputs[0]).toMatchObject({
+      nodeId: "45",
+      kind: "timelineSelection",
+      timelineSelection: frameSelection,
+    });
+    expect(metadata.inputs[1]).toMatchObject({
+      nodeId: "232",
+      kind: "timelineSelection",
+      timelineSelection: audioSelection,
+    });
+
+    if (
+      metadata.inputs[0]?.kind !== "timelineSelection" ||
+      metadata.inputs[1]?.kind !== "timelineSelection"
+    ) {
+      throw new Error("Expected timeline selection metadata inputs");
+    }
+
+    expect(metadata.inputs[0].timelineSelection).not.toBe(frameSelection);
+    expect(metadata.inputs[1].timelineSelection).not.toBe(audioSelection);
+    expect(metadata.inputs[0].timelineSelection.clips[0]).not.toBe(sharedClip);
+    expect(metadata.inputs[1].timelineSelection.clips[0]).not.toBe(sharedClip);
+  });
 });
