@@ -33,6 +33,37 @@ describe("workflowBridge", () => {
     ]);
   });
 
+  it("falls back to VLOMemoryLoadVideo as a discoverable video input", () => {
+    const inputs = parseWorkflowInputs({
+      "145": {
+        class_type: "VLOMemoryLoadVideo",
+        inputs: {
+          file: "memory-video-1",
+        },
+        _meta: {
+          title: "Source video",
+        },
+      },
+    });
+
+    expect(inputs).toEqual([
+      {
+        id: "145:file",
+        nodeId: "145",
+        classType: "VLOMemoryLoadVideo",
+        inputType: "video",
+        param: "file",
+        label: "Source video",
+        description: null,
+        currentValue: "memory-video-1",
+        origin: "inferred",
+        dispatch: {
+          kind: "node",
+        },
+      },
+    ]);
+  });
+
   it("prefers activeWorkflow.activeState as the persisted graph source", async () => {
     const activeState = {
       nodes: [{ id: 1, widgets_values: ["new-model.safetensors"] }],

@@ -22,7 +22,6 @@ from services.comfyui.comfyui_generate import (
     _upload_video_bytes_to_comfy,
     execute_generation,
     parse_widget_form_key,
-    upload_form_media_to_comfy,
 )
 from services.comfyui.comfyui_proxy import (
     PROXY_HTTP_METHODS,
@@ -766,9 +765,9 @@ async def generate(request: Request):
     derived_widget_values: dict[str, Any] = {}
     widget_modes: dict[str, dict[str, str]] = {}
 
-    # Video uploads are buffered so mask-crop preprocessing can run before
-    # forwarding to ComfyUI.
-    buffered_videos: dict[str, dict[str, Any]] = {}
+    # Media uploads are buffered so validation can run before dispatch, and
+    # video-specific preprocessors can still mutate bytes before upload.
+    buffered_media: dict[str, dict[str, Any]] = {}
 
     mask_crop_dilation_raw = form.get("mask_crop_dilation")
     mask_crop_dilation: float | None = None
@@ -786,6 +785,66 @@ async def generate(request: Request):
             mask_crop_mode = normalized_mask_crop_mode
 
     node_map = _resolve_input_node_map()
+
+    async def _buffer_uploaded_media(
+        *,
+        node_id: str,
+        explicit_param: str | None,
+        upload_file: Any,
+        media_type: str,
+    ) -> None:
+        if not hasattr(upload_file, "read"):
+            workflow_warnings.append(
+                {
+                    "code": "invalid_upload_field",
+                    "message": "Upload field is not a file-like object",
+                    "node_id": node_id,
+                    "details": {"media_type": media_type},
+                }
+            )
+            return
+
+        node = workflow.get(node_id)
+        if not isinstance(node, dict):
+            return
+
+        mapping = _find_node_input_mapping(
+            node_map.get(node.get("class_type", "")),
+            input_type=media_type,
+            param=explicit_param,
+        )
+        if mapping is None:
+            workflow_warnings.append(
+                {
+                    "code": "media_mapping_missing",
+                    "message": "Could not resolve media input mapping for uploaded media",
+                    "node_id": node_id,
+                    "details": {"received": media_type, "param": explicit_param},
+                }
+            )
+            return
+
+        file_obj = cast(UploadFile, upload_file)
+        media_bytes = await file_obj.read()
+        fallback_content_types = {
+            "image": "image/png",
+            "audio": "audio/wav",
+            "video": "video/mp4",
+        }
+        content_type = getattr(file_obj, "content_type", None) or fallback_content_types[
+            media_type
+        ]
+        filename_value = getattr(file_obj, "filename", f"upload.{media_type}")
+
+        buffered_media[f"{node_id}:{mapping['param']}"] = {
+            "node_id": node_id,
+            "param": mapping["param"],
+            "input_type": media_type,
+            "class_type": node.get("class_type", ""),
+            "bytes": media_bytes,
+            "content_type": content_type,
+            "filename": filename_value,
+        }
 
     for key, value in form.multi_items():
         # widget_mode_<nodeId>_<param> -> fixed|randomize
@@ -844,121 +903,35 @@ async def generate(request: Request):
                 if mapping:
                     injections.setdefault(node_id, {})[mapping["param"]] = value
 
-        # image_<nodeId>_<param> -> upload to ComfyUI immediately
+        # image_<nodeId>_<param> -> buffer image upload
         elif key.startswith("image_"):
             node_id, explicit_param = _parse_node_input_form_key(key[6:])
-            upload_file = value
-            filename, upload_warning = await upload_form_media_to_comfy(
-                client,
-                upload_file,
-                "image",
+            await _buffer_uploaded_media(
+                node_id=node_id,
+                explicit_param=explicit_param,
+                upload_file=value,
+                media_type="image",
             )
-            if upload_warning:
-                upload_warning["node_id"] = node_id
-                workflow_warnings.append(upload_warning)
-                continue
-            if not filename:
-                continue
 
-            node = workflow.get(node_id)
-            if node and isinstance(node, dict):
-                mapping = _find_node_input_mapping(
-                    node_map.get(node.get("class_type", "")),
-                    input_type="image",
-                    param=explicit_param,
-                )
-                if mapping and mapping.get("input_type") == "image":
-                    injections.setdefault(node_id, {})[mapping["param"]] = filename
-                elif mapping:
-                    workflow_warnings.append(
-                        {
-                            "code": "media_mapping_mismatch",
-                            "message": "Media input type does not match node mapping; default node value kept",
-                            "node_id": node_id,
-                            "details": {
-                                "expected": mapping.get("input_type"),
-                                "received": "image",
-                            },
-                        }
-                    )
-
-        # audio_<nodeId>_<param> -> upload to ComfyUI immediately
+        # audio_<nodeId>_<param> -> buffer audio upload
         elif key.startswith("audio_"):
             node_id, explicit_param = _parse_node_input_form_key(key[6:])
-            upload_file = value
-            filename, upload_warning = await upload_form_media_to_comfy(
-                client,
-                upload_file,
-                "audio",
+            await _buffer_uploaded_media(
+                node_id=node_id,
+                explicit_param=explicit_param,
+                upload_file=value,
+                media_type="audio",
             )
-            if upload_warning:
-                upload_warning["node_id"] = node_id
-                workflow_warnings.append(upload_warning)
-                continue
-            if not filename:
-                continue
 
-            node = workflow.get(node_id)
-            if node and isinstance(node, dict):
-                mapping = _find_node_input_mapping(
-                    node_map.get(node.get("class_type", "")),
-                    input_type="audio",
-                    param=explicit_param,
-                )
-                if mapping and mapping.get("input_type") == "audio":
-                    injections.setdefault(node_id, {})[mapping["param"]] = filename
-                elif mapping:
-                    workflow_warnings.append(
-                        {
-                            "code": "media_mapping_mismatch",
-                            "message": "Media input type does not match node mapping; default node value kept",
-                            "node_id": node_id,
-                            "details": {
-                                "expected": mapping.get("input_type"),
-                                "received": "audio",
-                            },
-                        }
-                    )
-
-        # video_<nodeId>_<param> -> buffer for potential mask crop before uploading
+        # video_<nodeId>_<param> -> buffer for potential mask crop before upload
         elif key.startswith("video_"):
             node_id, explicit_param = _parse_node_input_form_key(key[6:])
-            upload_file = value
-            if not hasattr(upload_file, "read"):
-                workflow_warnings.append({
-                    "code": "invalid_upload_field",
-                    "message": "Upload field is not a file-like object",
-                    "node_id": node_id,
-                    "details": {"media_type": "video"},
-                })
-                continue
-            node = workflow.get(node_id)
-            if not isinstance(node, dict):
-                continue
-            mapping = _find_node_input_mapping(
-                node_map.get(node.get("class_type", "")),
-                input_type="video",
-                param=explicit_param,
+            await _buffer_uploaded_media(
+                node_id=node_id,
+                explicit_param=explicit_param,
+                upload_file=value,
+                media_type="video",
             )
-            if mapping is None:
-                workflow_warnings.append({
-                    "code": "media_mapping_missing",
-                    "message": "Could not resolve video input mapping for uploaded media",
-                    "node_id": node_id,
-                    "details": {"received": "video", "param": explicit_param},
-                })
-                continue
-            file_obj = cast(UploadFile, upload_file)
-            video_bytes = await file_obj.read()
-            content_type = getattr(file_obj, "content_type", None) or "video/mp4"
-            filename_value = getattr(file_obj, "filename", "upload.video")
-            buffered_videos[f"{node_id}:{mapping['param']}"] = {
-                "node_id": node_id,
-                "param": mapping["param"],
-                "bytes": video_bytes,
-                "content_type": content_type,
-                "filename": filename_value,
-            }
 
     # --- Backend request assembly ends here ---
     # The generation service now runs the remaining backend phases explicitly:
@@ -977,7 +950,7 @@ async def generate(request: Request):
         widget_overrides=widget_overrides,
         derived_widget_values=derived_widget_values,
         widget_modes=widget_modes,
-        buffered_videos=buffered_videos,
+        buffered_media=buffered_media,
         graph_data=graph_data,
         workflow_warnings=workflow_warnings,
     )

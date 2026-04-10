@@ -26,9 +26,12 @@ export type InputNodeMap = Record<string, InputNodeMapEntry[]>;
  */
 export const INPUT_NODE_MAP: InputNodeMap = {
   LoadImage: [{ inputType: "image", param: "image", label: "Image" }],
+  VLOMemoryLoadImage: [{ inputType: "image", param: "image", label: "Image" }],
   CLIPTextEncode: [{ inputType: "text", param: "text", label: "Prompt" }],
   LoadAudio: [{ inputType: "audio", param: "audio", label: "Audio" }],
+  VLOMemoryLoadAudio: [{ inputType: "audio", param: "audio", label: "Audio" }],
   LoadVideo: [{ inputType: "video", param: "file", label: "Video" }],
+  VLOMemoryLoadVideo: [{ inputType: "video", param: "file", label: "Video" }],
   VHS_LoadVideo: [{ inputType: "video", param: "video", label: "Video" }],
   VHS_LoadVideoFFmpeg: [{ inputType: "video", param: "video", label: "Video" }],
 };

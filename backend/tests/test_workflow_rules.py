@@ -3444,9 +3444,12 @@ class _FakeResponse:
 class _FakeComfyClient:
     def __init__(self):
         self.prompt_payload = None
+        self.shared_upload_attempts = 0
+        self.memory_registration_payloads: list[dict[str, Any]] = []
 
     async def post(self, url: str, **kwargs):
         if url == "/upload/image":
+            self.shared_upload_attempts += 1
             files = kwargs.get("files")
             upload_entry = None
             if isinstance(files, dict) and files:
@@ -3463,6 +3466,14 @@ class _FakeComfyClient:
             if content_type and content_type.startswith("audio/"):
                 return _FakeResponse(200, {"name": "uploaded_audio.wav"})
             return _FakeResponse(200, {"name": "uploaded_image.png"})
+        if url == "/api/vlo-memory/register":
+            self.memory_registration_payloads.append(kwargs)
+            data = kwargs.get("data") if isinstance(kwargs.get("data"), dict) else {}
+            media_kind = data.get("kind", "media")
+            return _FakeResponse(
+                200,
+                {"media_id": f"memory-{media_kind}-{len(self.memory_registration_payloads)}"},
+            )
         if url == "/prompt":
             self.prompt_payload = kwargs.get("json")
             return _FakeResponse(200, {"prompt_id": "p1", "number": 1, "node_errors": {}})
@@ -3620,6 +3631,88 @@ async def test_generate_handles_audio_upload(tmp_path: Path, monkeypatch, fake_c
     assert fake_comfy_client.prompt_payload is not None
     prompt = fake_comfy_client.prompt_payload["prompt"]
     assert prompt["145"]["inputs"]["audio"] == "uploaded_audio.wav"
+
+
+@pytest.mark.anyio
+async def test_generate_handles_image_upload(tmp_path: Path, monkeypatch, fake_comfy_client):
+    monkeypatch.setattr(comfyui, "WORKFLOWS_DIR", tmp_path)
+
+    workflow = {
+        "145": {"class_type": "LoadImage", "inputs": {"image": "default.png"}},
+        "200": {"class_type": "ImageConsumer", "inputs": {"image": ["145", 0]}},
+    }
+
+    image_file = SpooledTemporaryFile()
+    image_file.write(b"image-bytes")
+    image_file.seek(0)
+
+    response = await comfyui.generate(
+        _as_request(
+            FormData(
+                [
+                    ("workflow", json.dumps(workflow)),
+                    (
+                        "image_145",
+                        UploadFile(
+                            file=_as_binary_io(image_file),
+                            filename="clip.png",
+                            headers=Headers({"content-type": "image/png"}),
+                        ),
+                    ),
+                ]
+            )
+        )
+    )
+
+    assert response.status_code == 200
+    assert fake_comfy_client.prompt_payload is not None
+    prompt = fake_comfy_client.prompt_payload["prompt"]
+    assert prompt["145"]["inputs"]["image"] == "uploaded_image.png"
+    assert fake_comfy_client.shared_upload_attempts == 1
+    assert fake_comfy_client.memory_registration_payloads == []
+
+
+@pytest.mark.anyio
+async def test_generate_routes_memory_video_nodes_to_memory_registration(
+    tmp_path: Path,
+    monkeypatch,
+    fake_comfy_client,
+):
+    monkeypatch.setattr(comfyui, "WORKFLOWS_DIR", tmp_path)
+
+    workflow = {
+        "145": {"class_type": "VLOMemoryLoadVideo", "inputs": {"file": "default.mp4"}},
+        "200": {"class_type": "GetVideoComponents", "inputs": {"video": ["145", 0]}},
+    }
+
+    video_file = SpooledTemporaryFile()
+    video_file.write(b"video-bytes")
+    video_file.seek(0)
+
+    response = await comfyui.generate(
+        _as_request(
+            FormData(
+                [
+                    ("workflow", json.dumps(workflow)),
+                    (
+                        "video_145",
+                        UploadFile(
+                            file=_as_binary_io(video_file),
+                            filename="clip.mp4",
+                            headers=Headers({"content-type": "video/mp4"}),
+                        ),
+                    ),
+                ]
+            )
+        )
+    )
+
+    assert response.status_code == 200
+    assert fake_comfy_client.prompt_payload is not None
+    prompt = fake_comfy_client.prompt_payload["prompt"]
+    assert prompt["145"]["inputs"]["file"] == "memory-video-1"
+    assert fake_comfy_client.shared_upload_attempts == 0
+    assert len(fake_comfy_client.memory_registration_payloads) == 1
 
 
 @pytest.mark.anyio

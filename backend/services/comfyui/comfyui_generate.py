@@ -27,9 +27,12 @@ DEFAULT_WORKFLOWS_DIR = Path(__file__).parent.parent / "assets" / ".config" / "d
 # Maps ComfyUI class_type -> discoverable input type
 INPUT_NODE_MAP = {
     "LoadImage": {"input_type": "image", "param": "image"},
+    "VLOMemoryLoadImage": {"input_type": "image", "param": "image"},
     "CLIPTextEncode": {"input_type": "text", "param": "text"},
     "LoadAudio": {"input_type": "audio", "param": "audio"},
+    "VLOMemoryLoadAudio": {"input_type": "audio", "param": "audio"},
     "LoadVideo": {"input_type": "video", "param": "file"},
+    "VLOMemoryLoadVideo": {"input_type": "video", "param": "file"},
     "VHS_LoadVideo": {"input_type": "video", "param": "video"},
     "VHS_LoadVideoFFmpeg": {"input_type": "video", "param": "video"},
 }
@@ -52,7 +55,7 @@ class GenerationInput:
     widget_overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
     derived_widget_values: dict[str, Any] = field(default_factory=dict)
     widget_modes: dict[str, dict[str, str]] = field(default_factory=dict)
-    buffered_videos: dict[str, dict[str, Any]] = field(default_factory=dict)
+    buffered_media: dict[str, dict[str, Any]] = field(default_factory=dict)
     graph_data: dict[str, Any] | None = None
     workflow_warnings: list[dict[str, Any]] = field(default_factory=list)
 
@@ -136,22 +139,23 @@ async def upload_form_media_to_comfy(
 
 async def _upload_video_bytes_to_comfy(
     client: httpx.AsyncClient,
-    video_bytes: bytes,
+    media_bytes: bytes,
     filename_value: str,
     content_type: str,
 ) -> tuple[str | None, dict[str, Any] | None]:
-    """Upload raw video bytes to ComfyUI's /upload/image endpoint."""
+    """Upload raw media bytes to ComfyUI's shared /upload/image endpoint."""
     upload_resp = await client.post(
         "/upload/image",
-        files={"image": (filename_value, video_bytes, content_type)},
+        files={"image": (filename_value, media_bytes, content_type)},
         data={"overwrite": "true"},
     )
 
+    media_type = content_type.split("/", 1)[0] if "/" in content_type else "media"
     if upload_resp.status_code != 200:
         return None, {
             "code": "media_upload_failed",
-            "message": "Failed to upload video to ComfyUI",
-            "details": {"media_type": "video", "status": upload_resp.status_code},
+            "message": "Failed to upload media to ComfyUI",
+            "details": {"media_type": media_type, "status": upload_resp.status_code},
         }
 
     try:
@@ -160,7 +164,7 @@ async def _upload_video_bytes_to_comfy(
         return None, {
             "code": "media_upload_failed",
             "message": "ComfyUI returned invalid JSON after upload",
-            "details": {"media_type": "video", "status": upload_resp.status_code},
+            "details": {"media_type": media_type, "status": upload_resp.status_code},
         }
 
     filename = upload_json.get("name") if isinstance(upload_json, dict) else None
@@ -168,10 +172,59 @@ async def _upload_video_bytes_to_comfy(
         return None, {
             "code": "media_upload_failed",
             "message": "ComfyUI upload response missing filename",
-            "details": {"media_type": "video", "status": upload_resp.status_code},
+            "details": {"media_type": media_type, "status": upload_resp.status_code},
         }
 
     return filename, None
+
+
+async def _register_media_bytes_in_comfy_memory(
+    client: httpx.AsyncClient,
+    media_bytes: bytes,
+    filename_value: str,
+    content_type: str,
+    media_type: str,
+    client_id: str | None = None,
+) -> tuple[str | None, dict[str, Any] | None]:
+    request_data: dict[str, str] = {
+        "kind": media_type,
+        "filename": filename_value,
+        "content_type": content_type,
+    }
+    if isinstance(client_id, str) and client_id.strip():
+        request_data["client_id"] = client_id
+
+    register_resp = await client.post(
+        "/api/vlo-memory/register",
+        files={"media": (filename_value, media_bytes, content_type)},
+        data=request_data,
+    )
+
+    if register_resp.status_code != 200:
+        return None, {
+            "code": "media_register_failed",
+            "message": "Failed to register media with ComfyUI memory loader",
+            "details": {"media_type": media_type, "status": register_resp.status_code},
+        }
+
+    try:
+        register_json = register_resp.json()
+    except ValueError:
+        return None, {
+            "code": "media_register_failed",
+            "message": "ComfyUI returned invalid JSON after memory registration",
+            "details": {"media_type": media_type, "status": register_resp.status_code},
+        }
+
+    media_id = register_json.get("media_id") if isinstance(register_json, dict) else None
+    if not isinstance(media_id, str) or media_id.strip() == "":
+        return None, {
+            "code": "media_register_failed",
+            "message": "ComfyUI memory registration response missing media_id",
+            "details": {"media_type": media_type, "status": register_resp.status_code},
+        }
+
+    return media_id, None
 
 
 def _build_postprocess_response(
@@ -252,7 +305,7 @@ def build_backend_context(
         widget_overrides=gen_input.widget_overrides,
         derived_widget_values=gen_input.derived_widget_values,
         widget_modes=gen_input.widget_modes,
-        buffered_videos=gen_input.buffered_videos,
+        buffered_media=gen_input.buffered_media,
         graph_data=gen_input.graph_data,
         warnings=gen_input.workflow_warnings,
     )
@@ -288,6 +341,7 @@ async def run_backend_preprocess(ctx: BackendPipelineContext) -> None:
         crop_video_fn=crop_video,
         get_video_dimensions_fn=get_video_dimensions,
         upload_video_bytes_fn=_upload_video_bytes_to_comfy,
+        register_media_bytes_fn=_register_media_bytes_in_comfy_memory,
         apply_aspect_ratio_processing_fn=apply_aspect_ratio_processing,
     )
     await run_processors(preprocessors, ctx)

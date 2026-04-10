@@ -23,11 +23,35 @@ from services.workflow_rules.node_introspection import iter_all_params
 
 
 _INPUT_NODE_FALLBACKS: dict[str, list[dict[str, Any]]] = {
+    "VLOMemoryLoadImage": [
+        {
+            "input_type": "image",
+            "param": "image",
+            "label": "Image",
+            "description": None,
+        }
+    ],
     "LoadAudio": [
         {
             "input_type": "audio",
             "param": "audio",
             "label": "Audio",
+            "description": None,
+        }
+    ],
+    "VLOMemoryLoadAudio": [
+        {
+            "input_type": "audio",
+            "param": "audio",
+            "label": "Audio",
+            "description": None,
+        }
+    ],
+    "VLOMemoryLoadVideo": [
+        {
+            "input_type": "video",
+            "param": "file",
+            "label": "Video",
             "description": None,
         }
     ],

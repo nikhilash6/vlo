@@ -30,11 +30,11 @@ def collect_provided_input_ids(
         if node_was_provided:
             provided_input_ids.add(str(node_id))
 
-    for video_info in ctx.buffered_videos.values():
-        if not isinstance(video_info, dict):
+    for media_info in ctx.buffered_media.values():
+        if not isinstance(media_info, dict):
             continue
-        node_id = video_info.get("node_id")
-        param = video_info.get("param")
+        node_id = media_info.get("node_id")
+        param = media_info.get("param")
         if isinstance(node_id, str):
             provided_input_ids.add(node_id)
             if isinstance(param, str):
@@ -46,7 +46,7 @@ def collect_provided_input_ids(
 class _ValidateInputsProcessor:
     meta = ProcessorMeta(
         name="validate_inputs",
-        reads=("rules", "injections", "buffered_videos"),
+        reads=("rules", "injections", "buffered_media"),
         writes=("provided_input_ids",),
         description="Evaluates input validation rules against the inputs currently supplied by the request",
     )

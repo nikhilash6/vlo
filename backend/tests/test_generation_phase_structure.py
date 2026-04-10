@@ -29,6 +29,17 @@ async def _noop_upload_video_bytes(
     return None, None
 
 
+async def _noop_register_media_bytes(
+    _client: Any,
+    _media_bytes: bytes,
+    _filename_value: str,
+    _content_type: str,
+    _media_type: str,
+    _client_id: str | None,
+) -> tuple[str | None, dict[str, Any] | None]:
+    return None, None
+
+
 def _noop_aspect_ratio_processing(
     _workflow: dict[str, Any],
     _rules: dict[str, Any],
@@ -47,6 +58,7 @@ def _build_preprocessors():
         crop_video_fn=lambda video_bytes, _crop: video_bytes,
         get_video_dimensions_fn=lambda _video_bytes: (1, 1),
         upload_video_bytes_fn=_noop_upload_video_bytes,
+        register_media_bytes_fn=_noop_register_media_bytes,
         apply_aspect_ratio_processing_fn=_noop_aspect_ratio_processing,
     )
 
@@ -83,6 +95,7 @@ def test_build_generation_processors_flattens_preprocess_and_dispatch_phases():
         crop_video_fn=lambda video_bytes, _crop: video_bytes,
         get_video_dimensions_fn=lambda _video_bytes: (1, 1),
         upload_video_bytes_fn=_noop_upload_video_bytes,
+        register_media_bytes_fn=_noop_register_media_bytes,
         apply_aspect_ratio_processing_fn=_noop_aspect_ratio_processing,
         prompt_id_factory=lambda: "prompt-1",
     )
@@ -169,6 +182,7 @@ def test_v2_pipeline_runs_aspect_ratio_during_mask_crop_when_declared_first():
         crop_video_fn=lambda video_bytes, _crop: video_bytes,
         get_video_dimensions_fn=lambda _video_bytes: (1, 1),
         upload_video_bytes_fn=_noop_upload_video_bytes,
+        register_media_bytes_fn=_noop_register_media_bytes,
         apply_aspect_ratio_processing_fn=apply_aspect_ratio_processing,
     )
     mask_processor = next(
@@ -184,9 +198,9 @@ def test_v2_pipeline_runs_aspect_ratio_during_mask_crop_when_declared_first():
         workflow={},
         rules=dump_resolved_rules(rules_model),
         rules_model=rules_model,
-        buffered_videos={
-            "source": {"node_id": "1", "bytes": b"source"},
-            "mask": {"node_id": "2", "bytes": b"mask"},
+        buffered_media={
+            "source": {"node_id": "1", "input_type": "video", "bytes": b"source"},
+            "mask": {"node_id": "2", "input_type": "video", "bytes": b"mask"},
         },
         target_aspect_ratio="16:9",
         target_resolution=720,
@@ -239,6 +253,7 @@ def test_v2_pipeline_without_mask_stage_skips_mask_cropping_effects():
         crop_video_fn=lambda video_bytes, _crop: video_bytes,
         get_video_dimensions_fn=lambda _video_bytes: (1, 1),
         upload_video_bytes_fn=_noop_upload_video_bytes,
+        register_media_bytes_fn=_noop_register_media_bytes,
         apply_aspect_ratio_processing_fn=apply_aspect_ratio_processing,
     )
     mask_processor = next(
@@ -254,9 +269,9 @@ def test_v2_pipeline_without_mask_stage_skips_mask_cropping_effects():
         workflow={},
         rules=dump_resolved_rules(rules_model),
         rules_model=rules_model,
-        buffered_videos={
-            "source": {"node_id": "1", "bytes": b"source"},
-            "mask": {"node_id": "2", "bytes": b"mask"},
+        buffered_media={
+            "source": {"node_id": "1", "input_type": "video", "bytes": b"source"},
+            "mask": {"node_id": "2", "input_type": "video", "bytes": b"mask"},
         },
         target_aspect_ratio="16:9",
         target_resolution=720,
