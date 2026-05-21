@@ -3758,7 +3758,7 @@
       ],
       "title": "Start Frame",
       "properties": {
-        "aux_id": "SRagy/ComfyUI-vlo",
+        "aux_id": "PxTicks/ComfyUI-vlo",
         "ver": "6f054dd1f09cc97ae4991c25792bf5d1c5f96e8b",
         "Node name for S&R": "vloMemoryLoadImage",
         "widget_ue_connectable": {}
@@ -3953,7 +3953,7 @@
       ],
       "title": "End Frame",
       "properties": {
-        "aux_id": "SRagy/ComfyUI-vlo",
+        "aux_id": "PxTicks/ComfyUI-vlo",
         "ver": "6f054dd1f09cc97ae4991c25792bf5d1c5f96e8b",
         "Node name for S&R": "vloMemoryLoadImage",
         "widget_ue_connectable": {}

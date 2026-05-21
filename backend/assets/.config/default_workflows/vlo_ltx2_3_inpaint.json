@@ -3690,7 +3690,7 @@
         }
       ],
       "properties": {
-        "aux_id": "SRagy/ComfyUI-vlo",
+        "aux_id": "PxTicks/ComfyUI-vlo",
         "ver": "b9f40e0df896fb96cf036b74c20260711aad6616",
         "Node name for S&R": "vloLatentCompositeMasked",
         "widget_ue_connectable": {}
@@ -3958,7 +3958,7 @@
         }
       ],
       "properties": {
-        "aux_id": "SRagy/ComfyUI-vlo",
+        "aux_id": "PxTicks/ComfyUI-vlo",
         "ver": "b9f40e0df896fb96cf036b74c20260711aad6616",
         "Node name for S&R": "vloLatentCompositeMasked",
         "widget_ue_connectable": {}
@@ -4024,7 +4024,7 @@
         }
       ],
       "properties": {
-        "aux_id": "SRagy/ComfyUI-vlo",
+        "aux_id": "PxTicks/ComfyUI-vlo",
         "ver": "22e85d963bd468f7c7b64ac3ab09d432cf428a16",
         "Node name for S&R": "LTXSetAudioLatentBinaryMasks",
         "widget_ue_connectable": {}
@@ -4148,7 +4148,7 @@
         }
       ],
       "properties": {
-        "aux_id": "SRagy/ComfyUI-vlo",
+        "aux_id": "PxTicks/ComfyUI-vlo",
         "ver": "1626905a17eed0dac58016fbe03597c3d0576acc",
         "widget_ue_connectable": {},
         "Node name for S&R": "vloVideoConvertFps"
@@ -4173,7 +4173,7 @@
       ],
       "title": "Load Video Mask",
       "properties": {
-        "aux_id": "SRagy/ComfyUI-vlo",
+        "aux_id": "PxTicks/ComfyUI-vlo",
         "ver": "1626905a17eed0dac58016fbe03597c3d0576acc",
         "widget_ue_connectable": {},
         "Node name for S&R": "vloMemoryLoadVideo"
@@ -4409,7 +4409,7 @@
         }
       ],
       "properties": {
-        "aux_id": "SRagy/ComfyUI-vlo",
+        "aux_id": "PxTicks/ComfyUI-vlo",
         "ver": "1626905a17eed0dac58016fbe03597c3d0576acc",
         "widget_ue_connectable": {},
         "Node name for S&R": "vloMemoryLoadVideo"
